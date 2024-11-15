@@ -9,7 +9,7 @@
     "name": "Stuart Robinson"
   },
   "engines": {
-    "vscode": "^1.20.0"
+    "vscode": "^1.95.0"
   },
   "repository": {
     "type": "git",
@@ -71,16 +71,13 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "postinstall": "node ./node_modules/vscode/bin/install",
-    "test": "npm run compile && node ./node_modules/vscode/bin/test"
+    "watch": "tsc -watch -p ./"
   },
   "devDependencies": {
-    "typescript": "^2.6.1",
-    "vscode": "^1.1.22",
-    "tslint": "^5.8.0",
-    "@types/node": "^8.10.25",
-    "@types/mocha": "^2.2.42"
+    "typescript": "^5.6.2",
+    "@types/node": "^20.x",
+    "@types/mocha": "^10.0.7",
+    "@types/vscode": "^1.90.0"
   },
   "dependencies": {
     "@types/color": "^3.0.0",
