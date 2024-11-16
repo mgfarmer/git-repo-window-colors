@@ -140,7 +140,6 @@ function doit() {
         ? undefined
         : titleBarTextColor.hex(),
     };
-    console.log("setting colors");
     workspace
       .getConfiguration("workbench")
       .update("colorCustomizations", { ...cc, ...newColors }, false);

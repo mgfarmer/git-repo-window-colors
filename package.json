@@ -1,9 +1,9 @@
 {
   "name": "git-repo-window-colors",
   "displayName": "Git Repo Window Colors",
-  "description": "Automatically adds a unique color to each window's activityBar and titleBar.",
+  "description": "Customize the color of each window's activityBar and titleBar based on the git repository name.",
   "icon": "img/icon_602.png",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "KevinMills",
   "author": {
     "name": "Kevin Mills"
