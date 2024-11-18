@@ -36,10 +36,10 @@ function doit() {
 
     let json = JSON.parse(JSON.stringify(obj));
 
-    for (const key in json) {
-        const val = json[key] as string;
-        console.log(val.replaceAll(' ', ''));
-    }
+    // for (const key in json) {
+    //     const val = json[key] as string;
+    //     console.log(val.replaceAll(' ', ''));
+    // }
 
     // if (json === undefined || json == "") {
     //   // No configuration found
@@ -107,7 +107,6 @@ function doit() {
                 try {
                     if (bColor !== undefined) {
                         branchColor = Color(bColor);
-                        startBranchPoll();
                     }
                 } catch (error) {
                     branchColor = undefined;
@@ -137,6 +136,7 @@ function doit() {
             // On the default branch
             branchColor = repoColor;
         }
+        startBranchPoll();
     } else {
         branchColor = repoColor;
     }
@@ -211,12 +211,12 @@ function getCurrentBranch(): string {
 let intervalId: NodeJS.Timeout | undefined = undefined;
 
 function stopBranchPoll() {
-    console.log('Polling: stopped');
+    //console.log('Polling: stopped');
     clearInterval(intervalId);
 }
 
 function startBranchPoll() {
-    console.log('Polling: started');
+    //console.log('Polling: started');
     intervalId = setInterval(function () {
         let branch = '';
         try {
@@ -226,7 +226,7 @@ function startBranchPoll() {
             branch = getCurrentBranch();
             if (currentBranch != branch) {
                 currentBranch = branch;
-                console.log('change to branch: ' + branch);
+                //console.log('change to branch: ' + branch);
                 doit();
             }
         } catch (error) {
@@ -299,7 +299,7 @@ export function activate(context: ExtensionContext) {
             branch = getCurrentBranch();
             if (currentBranch != branch) {
                 currentBranch = branch;
-                console.log('change to branch: ' + branch);
+                //console.log('change to branch: ' + branch);
                 doit();
             }
         } catch (error) {
@@ -339,12 +339,12 @@ const getColorWithLuminosity = (color: Color, min: number, max: number): Color =
         c = c.darken(0.01);
         iter++;
     }
-    console.log(iter);
+    //console.log(iter);
     iter = 0;
     while (c.luminosity() < min && iter < 10000) {
         c = c.lighten(0.01);
         iter++;
     }
-    console.log(iter);
+    //console.log(iter);
     return c;
 };
