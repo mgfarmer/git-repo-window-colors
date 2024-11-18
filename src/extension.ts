@@ -317,13 +317,19 @@ export function activate(context: ExtensionContext) {
     if (restart) {
       message += " Changing titleBarStyle requires vscode to be restarted.";
     }
-    vscode.window.showInformationMessage(message);
-    // workspace
-    //   .getConfiguration("window")
-    //   .update("customTitleBarVisibility", "auto", true);
-    // workspace
-    //   .getConfiguration("window")
-    //   .update("titleBarStyle", "custom", true);
+    vscode.window
+      .showInformationMessage(message, "Yes", "No")
+      .then((answer) => {
+        if (answer === "No") {
+          return;
+        }
+        workspace
+          .getConfiguration("window")
+          .update("customTitleBarVisibility", "auto", true);
+        workspace
+          .getConfiguration("window")
+          .update("titleBarStyle", "custom", true);
+      });
   }
 
   setInterval(function () {
