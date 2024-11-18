@@ -6,7 +6,7 @@ Color your VSCode Windows based on which git repo you are working in.
 
 This extension allow you to give your VSCode window a custom color based on the repository name of the git repository opened as your worksapce.  It does this by immediately writing the following settings in `.vscode/settings.json`:
 
-```javascript
+```json
   "workbench.colorCustomizations": {
     "activityBar.background": "#XXXXXX",
     "activityBar.foreground": "#XXXXXX",
@@ -16,6 +16,15 @@ This extension allow you to give your VSCode window a custom color based on the 
     "titleBar.inactiveForeground": "#XXXXXX"
   }
 ```
+This plugin works best with these two settings also set:
+
+```json
+"workbench.colorCustomizations": {
+    "window.customTitleBarVisibility": "auto",
+    "window.titleBarStyle": "custom"
+}
+```
+
 
 If you are like me and have multiple vscode windows opened all the time, working on different repositories, you know it can be hard to differentiate the windows visually.  By assigning custom colors to the title and activity bars, this plugin aims to alleviate this problem.  This also helps when viewing the thumbnail previews displayed by most docks (Windows Taskbar, Ubuntu Dock, etc...)
 

@@ -9,6 +9,7 @@ import { ColorThemeKind, ExtensionContext, window, workspace } from "vscode";
 let currentBranch: undefined | string = undefined;
 
 function doit() {
+  stopBranchPoll();
   // windowColors.configuration
   const obj = workspace
     .getConfiguration("windowColors")
@@ -124,6 +125,7 @@ function doit() {
         try {
           if (bColor !== undefined) {
             branchColor = Color(bColor);
+            startBranchPoll();
           }
         } catch (error) {
           branchColor = undefined;
@@ -240,6 +242,32 @@ function getCurrentBranch(): string {
   }
 }
 
+let intervalId: NodeJS.Timeout | undefined = undefined;
+
+function stopBranchPoll() {
+  clearInterval(intervalId);
+}
+
+function startBranchPoll() {
+  intervalId = setInterval(function () {
+    let branch = "";
+    try {
+      if (workspace.workspaceFolders === undefined) {
+        return;
+      }
+      branch = getCurrentBranch();
+      if (currentBranch != branch) {
+        currentBranch = branch;
+        console.log("change to branch: " + branch);
+        doit();
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      return;
+    }
+  }, 2000);
+}
+
 export function activate(context: ExtensionContext) {
   if (!workspace.workspaceFolders) {
     return;
@@ -263,6 +291,40 @@ export function activate(context: ExtensionContext) {
   );
 
   currentBranch = getCurrentBranch();
+
+  const style = workspace
+    .getConfiguration("window")
+    .get("titleBarStyle") as string;
+  let message = "";
+  let restart = false;
+  if (style !== "custom") {
+    message += "window.titleBarStyle='custom'";
+    restart = true;
+  }
+
+  const visibility = workspace
+    .getConfiguration("window")
+    .get("customTitleBarVisibility") as string;
+  if (visibility !== "auto") {
+    if (message !== "") {
+      message += " and ";
+    }
+    message += "window.customTitleBarVisibility='auto'";
+  }
+
+  if (message !== "") {
+    message = "This plugin works best with " + message;
+    if (restart) {
+      message += " Changing titleBarStyle requires vscode to be restarted.";
+    }
+    vscode.window.showInformationMessage(message);
+    // workspace
+    //   .getConfiguration("window")
+    //   .update("customTitleBarVisibility", "auto", true);
+    // workspace
+    //   .getConfiguration("window")
+    //   .update("titleBarStyle", "custom", true);
+  }
 
   setInterval(function () {
     let branch = "";
