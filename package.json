@@ -3,7 +3,7 @@
   "displayName": "Git Repo Window Colors",
   "description": "Customize the color of each window's activityBar and titleBar based on the git repository name.",
   "icon": "img/icon_602.png",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "KevinMills",
   "author": {
     "name": "Kevin Mills"
@@ -31,18 +31,63 @@
   ],
   "main": "./out/extension",
   "contributes": {
-    "configuration": {
-      "type": "object",
-      "title": "Git Repo Window Colors Configuration",
-      "properties": {
-        "windowColors.configuration": {
-          "type": "string",
-          "default": "[ { \"name\": \"repo-name\", \"color\" : \"red\" } ]",
-          "editPresentation": "multilineText",
-          "markdownDescription": "A json array of objects `{ 'name' : <repo-name>, 'color' : <color-specifier> }`.  Repository names are simple string search for the name in the repository URL as given by `git config --get remote.origin.url`. Colors can be specified in any form recognized by the Javascript Color class.  See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp)"
+    "configuration": [
+      {
+        "type": "object",
+        "title": "Git Repository Window Colors Configuration",
+        "properties": {
+          "windowColors.repoConfigurationList": {
+            "order": 1,
+            "markdownDescription": "Each entry in the ordered list has the form `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]` (i.e. `myrepo:blue` or `myrepo/main:blue/green`).  The `repo-qualifier` is required. The repository qualifier is a simple string. If this string is found in the repository URL as given by `git config --get remote.origin.url`, then a match is made.  The first match found  will be used.  The `primary-color` is the color associated with the repository.  This color will be used to color the window title bar and activity bar (when not using branch colors).\n\nThe `default-branch` is optional and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `#windowColors.automaticBranchIndicatorColorKnob#` setting. You can invert the branch coloring logic using `#windowColors.invertBranchColorLogic#`\n\nColors can be specified in any form recognized by the Javascript Color class.  See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).\n\nYou can use whitespace to make the list more readable.  All whitespace will be stripped for processing.\n\nFormat Reference: `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]`",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "scope": "application",
+            "uniqueItems": true
+          },
+          "windowColors.colorActiveTitlebar": {
+            "order": 2,
+            "type": "boolean",
+            "default": "true",
+            "description": "Check to apply color changes to the active window title bar.",
+            "scope": "application"
+          },
+          "windowColors.colorInactiveTitlebar": {
+            "order": 3,
+            "type": "boolean",
+            "default": "true",
+            "description": "Check to apply color changes to the inactive window title bar.",
+            "scope": "application"
+          },
+          "windowColors.activityBarColorKnob": {
+            "order": 4,
+            "type": "number",
+            "maximum": 10,
+            "minimum": -10,
+            "default": 0,
+            "description": "Lighten or darken the activity bar background color by this factor between -10 and 10. A value of zero is no difference.",
+            "scope": "application"
+          },
+          "windowColors.invertBranchColorLogic": {
+            "order": 5,
+            "type": "boolean",
+            "default": "false",
+            "description": "Use the branch color to indicate when you are working in the default branch.  This is only used when a default branch is specified for the repo.",
+            "scope": "application"
+          },
+          "windowColors.automaticBranchIndicatorColorKnob": {
+            "order": 6,
+            "type": "number",
+            "maximum": 359,
+            "minimum": -359,
+            "default": 60,
+            "description": "When repository settings does not spcify a branch color, use this knob to control the hue rotation of the repository color to automatically set the branch color.  Smaller values will be similar to the repository color.  A value of 180 is the 'opposite' of the repository color on the color wheel.",
+            "scope": "application"
+          }
         }
       }
-    }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -58,7 +103,7 @@
   },
   "dependencies": {
     "@types/color": "^3.0.0",
-    "color": "^3.1.0",
+    "color": "^3.2.1",
     "fs-extra": "^11.2.0"
   }
 }
