@@ -8,6 +8,58 @@ import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 
 let currentBranch: undefined | string = undefined;
 
+function validateData(json: any) {
+    for (const item in json) {
+        const setting = json[item];
+        const parts = setting.split(':');
+        if (parts.length < 2) {
+            // Invalid entry
+            vscode.window.showErrorMessage('Setting `' + setting + "': missing a color specifier");
+            continue;
+        }
+
+        const repoParts = parts[0].split('/');
+        let defBranch: string | undefined = undefined;
+        //const repo = repoParts[0].trim();
+        if (repoParts.length > 1) {
+            defBranch = repoParts[1].trim();
+        }
+
+        const colorParts = parts[1].split('/');
+        const rColor = colorParts[0].trim();
+        let bColor = undefined;
+        if (colorParts.length > 1) {
+            bColor = colorParts[1].trim();
+            if (defBranch === undefined) {
+                vscode.window.showErrorMessage(
+                    'Setting `' + setting + "': specifies a branch color, but not a default branch.",
+                );
+            }
+        }
+
+        // Test all the colors to ensure they are parseable
+        let colorMessage = '';
+        try {
+            Color(rColor);
+        } catch (error) {
+            colorMessage = '`' + rColor + '` is not a known color';
+        }
+        try {
+            if (bColor !== undefined) {
+                Color(bColor);
+            }
+        } catch (error) {
+            if (colorMessage != '') {
+                colorMessage += ' and ';
+            }
+            colorMessage += '`' + bColor + '` is not a known color';
+        }
+        if (colorMessage != '') {
+            vscode.window.showErrorMessage('Setting `' + setting + '`:' + colorMessage);
+        }
+    }
+}
+
 function doit() {
     stopBranchPoll();
     // windowColors.configuration
@@ -36,18 +88,8 @@ function doit() {
 
     let json = JSON.parse(JSON.stringify(obj));
 
-    // for (const key in json) {
-    //     const val = json[key] as string;
-    //     console.log(val.replaceAll(' ', ''));
-    // }
-
-    // if (json === undefined || json == "") {
-    //   // No configuration found
-    //   vscode.window.showInformationMessage(
-    //     "No custom git repo color settings defined, please set some up in the setting."
-    //   );
-    //   return;
-    // }
+    // This checks all settings items for valid data.
+    validateData(json);
 
     /** retain initial unrelated colorCustomizations*/
     const cc = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
@@ -94,6 +136,28 @@ function doit() {
         let bColor = undefined;
         if (colorParts.length > 1) {
             bColor = colorParts[1].trim();
+        }
+
+        // Test all the colors to ensure they are parseable
+        let colorMessage = '';
+        try {
+            Color(rColor);
+        } catch (error) {
+            colorMessage = '`' + rColor + '` is not a known color';
+        }
+        try {
+            if (bColor !== undefined) {
+                Color(bColor);
+            }
+        } catch (error) {
+            if (colorMessage != '') {
+                colorMessage += ' and ';
+            }
+            colorMessage = '`' + rColor + '` is not a known color';
+        }
+        if (colorMessage != '') {
+            vscode.window.showErrorMessage(colorMessage);
+            return;
         }
 
         if (repoName.includes(repo)) {
