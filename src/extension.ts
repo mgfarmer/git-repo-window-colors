@@ -345,7 +345,7 @@ function startBranchPoll() {
             console.error('Error:', error);
             return;
         }
-    }, 2000);
+    }, 1000);
 }
 
 export function activate(context: ExtensionContext) {
