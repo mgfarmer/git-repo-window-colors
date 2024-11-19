@@ -70,7 +70,9 @@ function doit() {
 
     const invertBranchColorLogic = workspace.getConfiguration('windowColors').get<boolean>('invertBranchColorLogic');
 
-    const doColorEditorTabs = workspace.getConfiguration('windowColors').get<boolean>('coloreditorTabs');
+    const doColorEditorTabs = workspace.getConfiguration('windowColors').get<boolean>('colorEditorTabs');
+
+    const doColorStatusBar = workspace.getConfiguration('windowColors').get<boolean>('colorStatusBar');
 
     if (obj === undefined || Object.keys(obj).length === 0) {
         return;
@@ -224,7 +226,7 @@ function doit() {
         titleBarColor = repoColor;
         inactiveTabColor = titleBarColor;
         activeTabColor = titleBarColor.lighten(0.4);
-        titleInactiveBarColor = titleBarColor.darken(0.25);
+        titleInactiveBarColor = titleBarColor.darken(0.5);
     } else if (theme === ColorThemeKind.Light) {
         sideBarColor = doColorActiveTitlebar ? branchColor.darken(activityBarColorKnob) : repoColor;
         // sideBarColor = doColorActiveTitlebar
@@ -255,6 +257,12 @@ function doit() {
         'titleBar.inactiveForeground': doColorInactiveTitlebar ? titleBarTextColor.hex() : undefined,
         'tab.inactiveBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
         'tab.activeBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
+        'tab.hoverBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
+        'tab.unfocusedHoverBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
+        'editorGroupHeader.tabsBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+        'titleBar.border': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+        'sideBarTitle.background': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+        'statusBar.background': doColorStatusBar ? inactiveTabColor.hex() : undefined,
     };
     workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
 }

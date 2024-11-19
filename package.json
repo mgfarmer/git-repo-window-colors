@@ -65,11 +65,18 @@
                         "description": "Check to apply color changes to the inactive window title bar.",
                         "scope": "application"
                     },
-                    "windowColors.coloreditorTabs": {
-                        "order": 3,
+                    "windowColors.colorEditorTabs": {
+                        "order": 4,
                         "type": "boolean",
-                        "default": "true",
-                        "description": "Check to apply color changes to editor tabs.",
+                        "default": "false",
+                        "description": "Check to apply color changes to editor tabs (and sidebar title area).",
+                        "scope": "application"
+                    },
+                    "windowColors.colorStatusBar": {
+                        "order": 5,
+                        "type": "boolean",
+                        "default": "false",
+                        "description": "Check to apply color changes to editor tabs (and sidebar title area).",
                         "scope": "application"
                     },
                     "windowColors.activityBarColorKnob": {
