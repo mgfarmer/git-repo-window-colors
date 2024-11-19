@@ -71,6 +71,8 @@ function doit() {
 
     const invertBranchColorLogic = workspace.getConfiguration('windowColors').get<boolean>('invertBranchColorLogic');
 
+    const doColorEditorTabs = workspace.getConfiguration('windowColors').get<boolean>('coloreditorTabs');
+
     if (obj === undefined || Object.keys(obj).length === 0) {
         return;
     }
@@ -210,6 +212,8 @@ function doit() {
     let titleInactiveBarColor: Color = Color('#ffffff');
     //let titleBarBorderColor: Color = Color("red");
     let sideBarColor: Color = Color('#ffffff');
+    let inactiveTabColor: Color = Color('#ffffff');
+    let activeTabColor: Color = Color('#ffffff');
 
     const theme: ColorThemeKind = window.activeColorTheme.kind;
 
@@ -224,6 +228,8 @@ function doit() {
         //   : repoColor;
         titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
         titleBarColor = repoColor;
+        inactiveTabColor = titleBarColor;
+        activeTabColor = titleBarColor.lighten(0.4);
         titleInactiveBarColor = titleBarColor.darken(0.25);
     } else if (theme === ColorThemeKind.Light) {
         sideBarColor = doColorActiveTitlebar ? branchColor.darken(activityBarColorKnob) : repoColor;
@@ -240,6 +246,8 @@ function doit() {
             titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
         }
         titleBarColor = repoColor;
+        inactiveTabColor = titleBarColor;
+        activeTabColor = titleBarColor.darken(0.4);
         titleInactiveBarColor = titleBarColor.lighten(0.15);
     }
 
@@ -251,6 +259,8 @@ function doit() {
         'titleBar.activeForeground': doColorActiveTitlebar ? titleBarTextColor.hex() : undefined,
         'titleBar.inactiveBackground': doColorInactiveTitlebar ? titleInactiveBarColor.hex() : undefined,
         'titleBar.inactiveForeground': doColorInactiveTitlebar ? titleBarTextColor.hex() : undefined,
+        'tab.inactiveBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+        'tab.activeBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
     };
     workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
 }
