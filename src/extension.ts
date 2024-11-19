@@ -2,7 +2,6 @@ import * as Color from 'color';
 //import * as fs from "fs-extra";
 //import * as os from "os";
 //import * as path from 'path';
-import { execSync } from 'child_process';
 import * as vscode from 'vscode';
 import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 
@@ -100,14 +99,9 @@ function doit() {
         return;
     }
 
-    let workspaceRoot: string = workspace.workspaceFolders[0].uri.fsPath;
-
     let repoName = '';
     try {
-        repoName = execSync('git config --get remote.origin.url', {
-            encoding: 'utf-8',
-            cwd: workspaceRoot,
-        }).trim();
+        repoName = getCurrentGitRemoteFetchUrl();
     } catch (error) {
         console.error('Error:', error);
         return;
@@ -265,21 +259,75 @@ function doit() {
     workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
 }
 
-function getCurrentBranch(): string {
-    try {
-        if (workspace.workspaceFolders === undefined) {
-            return '';
-        }
-        let workspaceRoot: string = workspace.workspaceFolders[0].uri.fsPath;
-        const branch = execSync('git rev-parse --abbrev-ref HEAD', {
-            encoding: 'utf-8',
-            cwd: workspaceRoot,
-        }).trim();
-        return branch;
-    } catch (error) {
-        console.error('Error:', error);
+function getCurrentGitRemoteFetchUrl(): string {
+    if (workspace.workspaceFolders === undefined) {
         return '';
     }
+    let workspaceRoot: vscode.Uri = workspace.workspaceFolders[0].uri;
+
+    const extension = vscode.extensions.getExtension('vscode.git');
+    if (!extension) {
+        console.warn('Git extension not available');
+        return '';
+    }
+    if (!extension.isActive) {
+        console.warn('Git extension not active');
+        return '';
+    }
+
+    // "1" == "Get version 1 of the API". Version one seems to be the latest when I
+    // type this.
+    const git = extension.exports.getAPI(1);
+    const repository = git.getRepository(workspaceRoot);
+
+    if (!repository) {
+        return '';
+    }
+
+    if (repository.state.remotes === undefined || repository.state.remotes.length < 1) {
+        return '';
+    }
+
+    return repository.state.remotes[0]['fetchUrl'];
+}
+
+function getCurrentGitBranch(): string {
+    if (workspace.workspaceFolders === undefined) {
+        return '';
+    }
+    let workspaceRoot: vscode.Uri = workspace.workspaceFolders[0].uri;
+
+    const extension = vscode.extensions.getExtension('vscode.git');
+    if (!extension) {
+        console.warn('Git extension not available');
+        return '';
+    }
+    if (!extension.isActive) {
+        console.warn('Git extension not active');
+        return '';
+    }
+
+    // "1" == "Get version 1 of the API". Version one seems to be the latest when I
+    // type this.
+    const git = extension.exports.getAPI(1);
+    const repository = git.getRepository(workspaceRoot);
+    if (!repository) {
+        return '';
+    }
+
+    const currentBranch = repository.state.HEAD;
+    if (!currentBranch) {
+        //console.warn('No HEAD branch for current document', docUri);
+        return '';
+    }
+
+    const branchName = currentBranch.name;
+    if (!branchName) {
+        //console.warn('Current branch has no name', docUri, currentBranch);
+        return '';
+    }
+
+    return branchName;
 }
 
 let intervalId: NodeJS.Timeout | undefined = undefined;
@@ -297,7 +345,7 @@ function startBranchPoll() {
             if (workspace.workspaceFolders === undefined) {
                 return;
             }
-            branch = getCurrentBranch();
+            branch = getCurrentGitBranch();
             if (currentBranch != branch) {
                 currentBranch = branch;
                 //console.log('change to branch: ' + branch);
@@ -307,7 +355,7 @@ function startBranchPoll() {
             console.error('Error:', error);
             return;
         }
-    }, 2000);
+    }, 1000);
 }
 
 export function activate(context: ExtensionContext) {
@@ -319,20 +367,16 @@ export function activate(context: ExtensionContext) {
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (
                 e.affectsConfiguration('windowColors') ||
-                // e.affectsConfiguration("windowColors.colorInactiveTitlebar") ||
-                // e.affectsConfiguration("windowColors.colorActiveTitlebar") ||
-                // e.affectsConfiguration("windowColors.activityBarColorKnob") ||
-                // e.affectsConfiguration("windowColors.invertBranchColorLogic") ||
-                // e.affectsConfiguration("windowColors.automaticBranchIndicatorColorKnob") ||
+                e.affectsConfiguration('window.titleBarStyle') ||
+                e.affectsConfiguration('window.customTitleBarVisibility') ||
                 e.affectsConfiguration('workbench.colorTheme')
-                //
             ) {
                 doit();
             }
         }),
     );
 
-    currentBranch = getCurrentBranch();
+    currentBranch = getCurrentGitBranch();
 
     const style = workspace.getConfiguration('window').get('titleBarStyle') as string;
     let message = '';
@@ -370,7 +414,7 @@ export function activate(context: ExtensionContext) {
             if (workspace.workspaceFolders === undefined) {
                 return;
             }
-            branch = getCurrentBranch();
+            branch = getCurrentGitBranch();
             if (currentBranch != branch) {
                 currentBranch = branch;
                 //console.log('change to branch: ' + branch);
