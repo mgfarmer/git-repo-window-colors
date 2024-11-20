@@ -7,13 +7,23 @@ import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 
 let currentBranch: undefined | string = undefined;
 
-function validateData(json: any) {
+type RepoConfig = {
+    repoQualifier: string;
+    defaultBranch: string | undefined;
+    primaryColor: string;
+    branchColor: string | undefined;
+};
+
+function validateRepoData(json: any): Array<RepoConfig> {
+    const result = new Array<RepoConfig>();
     for (const item in json) {
+        let error = false;
         const setting = json[item];
         const parts = setting.split(':');
         if (parts.length < 2) {
             // Invalid entry
             vscode.window.showErrorMessage('Setting `' + setting + "': missing a color specifier");
+            error = true;
             continue;
         }
 
@@ -33,6 +43,7 @@ function validateData(json: any) {
                 vscode.window.showErrorMessage(
                     'Setting `' + setting + "': specifies a branch color, but not a default branch.",
                 );
+                error = true;
             }
         }
 
@@ -55,51 +66,106 @@ function validateData(json: any) {
         }
         if (colorMessage != '') {
             vscode.window.showErrorMessage('Setting `' + setting + '`:' + colorMessage);
+            error = true;
+        }
+
+        const repoConfig: RepoConfig = {
+            repoQualifier: repoParts[0],
+            defaultBranch: defBranch,
+            primaryColor: rColor,
+            branchColor: bColor,
+        };
+
+        if (!error) {
+            result.push(repoConfig);
         }
     }
+
+    return result;
+}
+
+function getBranchData(json: any): Map<string, string> {
+    const result = new Map<string, string>();
+
+    for (const item in json) {
+        const setting = json[item];
+        const parts = setting.split(':');
+        if (parts.length < 2) {
+            // Invalid entry
+            vscode.window.showErrorMessage('Setting `' + setting + "': missing a color specifier");
+            continue;
+        }
+
+        const branchName = parts[0];
+        const branchColor = parts[1];
+
+        // Test all the colors to ensure they are parseable
+        let colorMessage = '';
+        try {
+            Color(branchColor);
+        } catch (error) {
+            colorMessage = '`' + branchColor + '` is not a known color';
+        }
+        if (colorMessage != '') {
+            vscode.window.showErrorMessage('Setting `' + setting + '`:' + colorMessage);
+        }
+
+        result.set(branchName, branchColor);
+    }
+
+    return result;
+}
+
+function getBooleanSetting(setting: string): boolean | undefined {
+    return workspace.getConfiguration('windowColors').get<boolean>(setting);
+}
+
+function getNumberSetting(setting: string): number | undefined {
+    return workspace.getConfiguration('windowColors').get<number>(setting);
+}
+
+function getObjectSetting(setting: string): object | undefined {
+    return workspace.getConfiguration('windowColors').get<object>(setting);
 }
 
 function doit() {
     stopBranchPoll();
-    // windowColors.configuration
-    const obj = workspace.getConfiguration('windowColors').get<object>('repoConfigurationList');
 
-    const doColorInactiveTitlebar = workspace.getConfiguration('windowColors').get<boolean>('colorInactiveTitlebar');
-
-    const doColorActiveTitlebar = workspace.getConfiguration('windowColors').get<boolean>('colorActiveTitlebar');
-
-    const invertBranchColorLogic = workspace.getConfiguration('windowColors').get<boolean>('invertBranchColorLogic');
-
-    const doColorEditorTabs = workspace.getConfiguration('windowColors').get<boolean>('colorEditorTabs');
-
-    const doColorStatusBar = workspace.getConfiguration('windowColors').get<boolean>('colorStatusBar');
-
-    if (obj === undefined || Object.keys(obj).length === 0) {
+    if (workspace.workspaceFolders === undefined) {
         return;
     }
 
-    let hueRotation = workspace.getConfiguration('windowColors').get<number>('automaticBranchIndicatorColorKnob');
+    const repoConfigObj = getObjectSetting('repoConfigurationList');
+    if (repoConfigObj === undefined || Object.keys(repoConfigObj).length === 0) {
+        return;
+    }
+    const repoJson = JSON.parse(JSON.stringify(repoConfigObj));
+    const repoConfigList = validateRepoData(repoJson);
+
+    const branchConfigObj = getObjectSetting('branchConfigurationList');
+    const branchJson = JSON.parse(JSON.stringify(branchConfigObj));
+    const branchMap = getBranchData(branchJson);
+
+    const doColorInactiveTitlebar = getBooleanSetting('colorInactiveTitlebar');
+    const doColorActiveTitlebar = getBooleanSetting('colorActiveTitlebar');
+    const invertBranchColorLogic = getBooleanSetting('invertBranchColorLogic');
+    const doColorEditorTabs = getBooleanSetting('colorEditorTabs');
+    const doColorStatusBar = getBooleanSetting('colorStatusBar');
+    const doApplyBranchcolorExtra = getBooleanSetting('applyBranchColorToTabsAndStatusBar');
+
+    let hueRotation = getNumberSetting('automaticBranchIndicatorColorKnob');
     if (hueRotation === undefined) {
         hueRotation = 60;
     }
 
-    let activityBarColorKnob = workspace.getConfiguration('windowColors').get<number>('activityBarColorKnob');
+    let activityBarColorKnob = getNumberSetting('activityBarColorKnob');
     if (activityBarColorKnob === undefined) {
         activityBarColorKnob = 3;
     }
     activityBarColorKnob = activityBarColorKnob / 10;
 
-    let json = JSON.parse(JSON.stringify(obj));
-
-    // This checks all settings items for valid data.
-    validateData(json);
-
     /** retain initial unrelated colorCustomizations*/
     const cc = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
-
-    if (workspace.workspaceFolders === undefined) {
-        return;
-    }
 
     let repoName = '';
     try {
@@ -116,64 +182,12 @@ function doit() {
     let branchColor = undefined;
     let defBranch = undefined;
 
-    for (const item in json) {
-        defBranch = undefined;
-        const parts = json[item].split(':');
-        if (parts.length !== 2) {
-            // Invalid entry
-            continue;
-        }
-        const repoParts = parts[0].split('/');
-        const repo = repoParts[0].trim();
-        if (repoParts.length > 1) {
-            defBranch = repoParts[1].trim();
-        }
-
-        const colorParts = parts[1].split('/');
-        const rColor = colorParts[0].trim();
-        let bColor = undefined;
-        if (colorParts.length > 1) {
-            bColor = colorParts[1].trim();
-        }
-
-        // Test all the colors to ensure they are parseable
-        let colorMessage = '';
-        try {
-            Color(rColor);
-        } catch (error) {
-            colorMessage = '`' + rColor + '` is not a known color';
-        }
-        try {
-            if (bColor !== undefined) {
-                Color(bColor);
-            }
-        } catch (error) {
-            if (colorMessage != '') {
-                colorMessage += ' and ';
-            }
-            colorMessage = '`' + rColor + '` is not a known color';
-        }
-        if (colorMessage != '') {
-            vscode.window.showErrorMessage(colorMessage);
-            return;
-        }
-
-        if (repoName.includes(repo)) {
-            try {
-                repoColor = Color(rColor);
-            } catch (error) {
-                repoColor = undefined;
-                vscode.window.showInformationMessage('Could not parse repo color: ' + rColor);
-            }
-            if (defBranch !== undefined) {
-                try {
-                    if (bColor !== undefined) {
-                        branchColor = Color(bColor);
-                    }
-                } catch (error) {
-                    branchColor = undefined;
-                    vscode.window.showInformationMessage('Could not parse branch color: ' + bColor);
-                }
+    let item: RepoConfig;
+    for (item of repoConfigList) {
+        if (repoName.includes(item.repoQualifier)) {
+            repoColor = Color(item.primaryColor);
+            if (item.defaultBranch !== undefined) {
+                branchColor = Color(item.branchColor);
             }
 
             break;
@@ -203,6 +217,14 @@ function doit() {
         branchColor = repoColor;
     }
 
+    // Now check the branch map to see if any apply
+    for (const [branch, color] of branchMap) {
+        if (currentBranch?.match(branch)) {
+            branchColor = Color(color);
+            break;
+        }
+    }
+
     let titleBarTextColor: Color = Color('#ffffff');
     let titleBarColor: Color = Color('#ffffff');
     let titleInactiveBarColor: Color = Color('#ffffff');
@@ -210,6 +232,7 @@ function doit() {
     let sideBarColor: Color = Color('#ffffff');
     let inactiveTabColor: Color = Color('#ffffff');
     let activeTabColor: Color = Color('#ffffff');
+    let tabBorderTop: Color = Color('#ffffff');
 
     const theme: ColorThemeKind = window.activeColorTheme.kind;
 
@@ -224,9 +247,10 @@ function doit() {
         //   : repoColor;
         titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
         titleBarColor = repoColor;
-        inactiveTabColor = titleBarColor;
-        activeTabColor = titleBarColor.lighten(0.4);
+        inactiveTabColor = doApplyBranchcolorExtra ? branchColor : titleBarColor;
+        activeTabColor = (doApplyBranchcolorExtra ? branchColor : titleBarColor).lighten(0.4);
         titleInactiveBarColor = titleBarColor.darken(0.5);
+        tabBorderTop = Color('white');
     } else if (theme === ColorThemeKind.Light) {
         sideBarColor = doColorActiveTitlebar ? branchColor.darken(activityBarColorKnob) : repoColor;
         // sideBarColor = doColorActiveTitlebar
@@ -242,9 +266,10 @@ function doit() {
             titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
         }
         titleBarColor = repoColor;
-        inactiveTabColor = titleBarColor;
-        activeTabColor = titleBarColor.darken(0.4);
+        inactiveTabColor = doApplyBranchcolorExtra ? branchColor : titleBarColor;
+        activeTabColor = (doApplyBranchcolorExtra ? branchColor : titleBarColor).darken(0.4);
         titleInactiveBarColor = titleBarColor.lighten(0.15);
+        tabBorderTop = Color('black');
     }
 
     const newColors = {
