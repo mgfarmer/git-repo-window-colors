@@ -232,7 +232,6 @@ function doit() {
     let sideBarColor: Color = Color('#ffffff');
     let inactiveTabColor: Color = Color('#ffffff');
     let activeTabColor: Color = Color('#ffffff');
-    let tabBorderTop: Color = Color('#ffffff');
 
     const theme: ColorThemeKind = window.activeColorTheme.kind;
 
