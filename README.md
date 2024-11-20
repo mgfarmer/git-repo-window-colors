@@ -69,5 +69,5 @@ When opening new vscode windows, you might see the relevant theme colors change 
 
 ## Credits
 
-This projects was inspired by and forked from https://github.com/stuartcrobinson/unique-window-colors.  More than 90% of the code has been rewritten.
+This projects was inspired by https://github.com/stuartcrobinson/unique-window-colors.
 
