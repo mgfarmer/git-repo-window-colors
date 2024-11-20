@@ -39,7 +39,7 @@
         "configuration": [
             {
                 "type": "object",
-                "title": "Git Repository Window Colors Configuration",
+                "title": "Git Repo Window Colors",
                 "properties": {
                     "windowColors.repoConfigurationList": {
                         "order": 1,
@@ -53,7 +53,7 @@
                     },
                     "windowColors.branchConfigurationList": {
                         "order": 2,
-                        "markdownDescription": "Each entry in the ordered list has the form `<branch-pattern>:<branch-color>` (i.e. `feature-.*:blue` or 'bug-.*:red' or 'mybranch').  If a branch pattern in this table is matched against the current working branch, then this setting will override any branch coloring from the repo configuration list above.  The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo whos working branch matches the pattern the coloring will be applied.\n\nFormat Reference: `<branch-name>:<branch-color>`",
+                        "markdownDescription": "Each entry in the ordered list has the form `<branch-pattern>:<branch-color>` (i.e. `feature-.*:blue` or 'bug-.*:red' or 'mybranch').  If a branch pattern in this table is matched against the current working branch, then this setting will override any branch coloring from the repo configuration list above.  The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo whos working branch matches the pattern the coloring will be applied.\n\nFormat Reference: `<branch-pattern>:<branch-color>`",
                         "type": "array",
                         "items": {
                             "type": "string"
