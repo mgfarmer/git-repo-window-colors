@@ -121,8 +121,8 @@
     "scripts": {
         "compile": "webpack --mode development",
         "watch": "webpack --mode development --watch",
-        "vscode:prepublish": "npm run package",
-        "package": "webpack --mode production --devtool hidden-source-map"
+        "vscode:prepublish": "yarn run compile",
+        "package": "vsce package --yarn"
     },
     "devDependencies": {
         "@types/color": "^4.2.0",
@@ -133,11 +133,11 @@
         "prettier": "^3.3.3",
         "ts-loader": "^9.5.1",
         "typescript": "^5.6.2",
-        "vsce": "^2.15.0",
         "webpack": "^5.96.1",
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
+        "@vscode/vsce": "^3.2.1",
         "color": "^3.2.1",
         "fs-extra": "^11.2.0"
     }
