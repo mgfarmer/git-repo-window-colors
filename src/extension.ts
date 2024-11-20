@@ -237,28 +237,13 @@ function doit() {
 
     if (theme === ColorThemeKind.Dark) {
         sideBarColor = doColorActiveTitlebar ? branchColor.lighten(activityBarColorKnob) : repoColor;
-        // sideBarColor = doColorActiveTitlebar
-        //   ? getColorWithLuminosity(
-        //       branchColor,
-        //       activityBarColorKnob,
-        //       activityBarColorKnob + 0.01
-        //     )
-        //   : repoColor;
         titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
         titleBarColor = repoColor;
         inactiveTabColor = doApplyBranchcolorExtra ? branchColor : titleBarColor;
         activeTabColor = (doApplyBranchcolorExtra ? branchColor : titleBarColor).lighten(0.4);
         titleInactiveBarColor = titleBarColor.darken(0.5);
-        tabBorderTop = Color('white');
     } else if (theme === ColorThemeKind.Light) {
         sideBarColor = doColorActiveTitlebar ? branchColor.darken(activityBarColorKnob) : repoColor;
-        // sideBarColor = doColorActiveTitlebar
-        //   ? getColorWithLuminosity(
-        //       branchColor,
-        //       activityBarColorKnob,
-        //       activityBarColorKnob + 0.01
-        //     )
-        //   : repoColor;
         if (repoColor.isDark()) {
             titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
         } else {
@@ -268,7 +253,6 @@ function doit() {
         inactiveTabColor = doApplyBranchcolorExtra ? branchColor : titleBarColor;
         activeTabColor = (doApplyBranchcolorExtra ? branchColor : titleBarColor).darken(0.4);
         titleInactiveBarColor = titleBarColor.lighten(0.15);
-        tabBorderTop = Color('black');
     }
 
     const newColors = {
