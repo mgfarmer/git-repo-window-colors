@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, and status bar based on the git repository name and branch.",
     "icon": "img/icon_602.png",
-    "version": "1.0.7",
+    "version": "1.0.9",
     "publisher": "KevinMills",
     "author": {
         "name": "Kevin Mills"
@@ -51,6 +51,13 @@
                         "scope": "application",
                         "uniqueItems": true
                     },
+                    "windowColors.invertBranchColorLogic": {
+                        "order": 2,
+                        "type": "boolean",
+                        "default": "false",
+                        "description": "Use the branch color to indicate when you are working in the default branch.  This is only used when a default branch is specified for the repo and does not apply to the branch colors defined in `#windowColors.branchConfigurationList#`",
+                        "scope": "application"
+                    },
                     "windowColors.branchConfigurationList": {
                         "order": 2,
                         "markdownDescription": "Each entry in the ordered list has the form `<branch-pattern>:<branch-color>` (i.e. `feature-.*:blue` or 'bug-.*:red' or 'mybranch').  If a branch pattern in this table is matched against the current working branch, then this setting will override any branch coloring from the repo configuration list above.  The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo whos working branch matches the pattern the coloring will be applied.\n\nFormat Reference: `<branch-pattern>:<branch-color>`",
@@ -60,13 +67,6 @@
                         },
                         "scope": "application",
                         "uniqueItems": true
-                    },
-                    "windowColors.colorActiveTitlebar": {
-                        "order": 5,
-                        "type": "boolean",
-                        "default": "true",
-                        "description": "Check to apply color changes to the active window title bar.",
-                        "scope": "application"
                     },
                     "windowColors.colorInactiveTitlebar": {
                         "order": 8,
@@ -95,7 +95,7 @@
                         "maximum": 10,
                         "minimum": -10,
                         "default": 0,
-                        "description": "Lighten or darken the activity bar background color by this factor between -10 and 10. A value of zero is no difference.",
+                        "description": "Lighten or darken the non-title bar colors by this factor between -10 and 10. A value of zero is no difference.",
                         "scope": "application"
                     },
                     "windowColors.applyBranchColorToTabsAndStatusBar": {
@@ -103,13 +103,6 @@
                         "type": "boolean",
                         "default": "false",
                         "description": "In addition to the Activity Bar, apply the branch color to the editor tabs and status bar",
-                        "scope": "application"
-                    },
-                    "windowColors.invertBranchColorLogic": {
-                        "order": 20,
-                        "type": "boolean",
-                        "default": "false",
-                        "description": "Use the branch color to indicate when you are working in the default branch.  This is only used when a default branch is specified for the repo.",
                         "scope": "application"
                     },
                     "windowColors.automaticBranchIndicatorColorKnob": {

@@ -29,7 +29,8 @@ function validateRepoData(json: any): Array<RepoConfig> {
 
         const repoParts = parts[0].split('/');
         let defBranch: string | undefined = undefined;
-        //const repo = repoParts[0].trim();
+        const branchQualifier = repoParts[0].trim();
+
         if (repoParts.length > 1) {
             defBranch = repoParts[1].trim();
         }
@@ -70,7 +71,7 @@ function validateRepoData(json: any): Array<RepoConfig> {
         }
 
         const repoConfig: RepoConfig = {
-            repoQualifier: repoParts[0],
+            repoQualifier: branchQualifier,
             defaultBranch: defBranch,
             primaryColor: rColor,
             branchColor: bColor,
@@ -96,8 +97,8 @@ function getBranchData(json: any): Map<string, string> {
             continue;
         }
 
-        const branchName = parts[0];
-        const branchColor = parts[1];
+        const branchName = parts[0].trim();
+        const branchColor = parts[1].trim();
 
         // Test all the colors to ensure they are parseable
         let colorMessage = '';
@@ -147,11 +148,10 @@ function doit() {
     const branchMap = getBranchData(branchJson);
 
     const doColorInactiveTitlebar = getBooleanSetting('colorInactiveTitlebar');
-    const doColorActiveTitlebar = getBooleanSetting('colorActiveTitlebar');
     const invertBranchColorLogic = getBooleanSetting('invertBranchColorLogic');
     const doColorEditorTabs = getBooleanSetting('colorEditorTabs');
     const doColorStatusBar = getBooleanSetting('colorStatusBar');
-    const doApplyBranchcolorExtra = getBooleanSetting('applyBranchColorToTabsAndStatusBar');
+    const doApplyBranchColorExtra = getBooleanSetting('applyBranchColorToTabsAndStatusBar');
 
     let hueRotation = getNumberSetting('automaticBranchIndicatorColorKnob');
     if (hueRotation === undefined) {
@@ -229,38 +229,48 @@ function doit() {
     let titleBarColor: Color = Color('#ffffff');
     let titleInactiveBarColor: Color = Color('#ffffff');
     //let titleBarBorderColor: Color = Color("red");
-    let sideBarColor: Color = Color('#ffffff');
+    let activityBarColor: Color = Color('#ffffff');
     let inactiveTabColor: Color = Color('#ffffff');
     let activeTabColor: Color = Color('#ffffff');
 
     const theme: ColorThemeKind = window.activeColorTheme.kind;
 
     if (theme === ColorThemeKind.Dark) {
-        sideBarColor = doColorActiveTitlebar ? branchColor.lighten(activityBarColorKnob) : repoColor;
-        titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
+        // Primary colors
         titleBarColor = repoColor;
-        inactiveTabColor = doApplyBranchcolorExtra ? branchColor : titleBarColor;
-        activeTabColor = (doApplyBranchcolorExtra ? branchColor : titleBarColor).lighten(0.4);
+        if (repoColor.isDark()) {
+            titleBarTextColor = getColorWithLuminosity(titleBarColor, 0.95, 1);
+        } else {
+            titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
+        }
         titleInactiveBarColor = titleBarColor.darken(0.5);
+
+        // Branch colors (which my be primary color too)
+        activityBarColor = branchColor.lighten(activityBarColorKnob);
+        inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.lighten(activityBarColorKnob);
+        activeTabColor = inactiveTabColor.lighten(0.5);
     } else if (theme === ColorThemeKind.Light) {
-        sideBarColor = doColorActiveTitlebar ? branchColor.darken(activityBarColorKnob) : repoColor;
+        // Primary colors
+        titleBarColor = repoColor;
+        titleInactiveBarColor = titleBarColor.lighten(0.15);
         if (repoColor.isDark()) {
             titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
         } else {
             titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
         }
-        titleBarColor = repoColor;
-        inactiveTabColor = doApplyBranchcolorExtra ? branchColor : titleBarColor;
-        activeTabColor = (doApplyBranchcolorExtra ? branchColor : titleBarColor).darken(0.4);
-        titleInactiveBarColor = titleBarColor.lighten(0.15);
+
+        // Branch colors (which my be primary color too)
+        activityBarColor = branchColor.darken(activityBarColorKnob);
+        inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.darken(activityBarColorKnob);
+        activeTabColor = inactiveTabColor.darken(0.4);
     }
 
     const newColors = {
         //"titleBar.border": titleBarBorderColor.hex(),
-        'activityBar.background': sideBarColor.hex(),
+        'activityBar.background': activityBarColor.hex(),
         'activityBar.foreground': titleBarTextColor.hex(),
-        'titleBar.activeBackground': doColorActiveTitlebar ? titleBarColor.hex() : undefined,
-        'titleBar.activeForeground': doColorActiveTitlebar ? titleBarTextColor.hex() : undefined,
+        'titleBar.activeBackground': titleBarColor.hex(),
+        'titleBar.activeForeground': titleBarTextColor.hex(),
         'titleBar.inactiveBackground': doColorInactiveTitlebar ? titleInactiveBarColor.hex() : undefined,
         'titleBar.inactiveForeground': doColorInactiveTitlebar ? titleBarTextColor.hex() : undefined,
         'tab.inactiveBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
