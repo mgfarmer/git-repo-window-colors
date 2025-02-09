@@ -140,15 +140,16 @@ function getObjectSetting(setting: string): object | undefined {
 
 function doit() {
     stopBranchPoll();
+    outputChannel.appendLine('Color update triggered...');
 
     if (workspace.workspaceFolders === undefined) {
-        outputChannel.appendLine('No workspace folders');
+        outputChannel.appendLine('Empty workspace folders. Cannot do anything.');
         return;
     }
 
     const repoConfigObj = getObjectSetting('repoConfigurationList');
     if (repoConfigObj === undefined || Object.keys(repoConfigObj).length === 0) {
-        outputChannel.appendLine('No settings found. Weird!');
+        outputChannel.appendLine('No settings found. Weird!  You should add some...');
         return;
     }
 
@@ -212,6 +213,8 @@ function doit() {
         outputChannel.appendLine('No rules match this repo: ' + repoName);
         return;
     }
+
+    outputChannel.appendLine('Found configuration for: ' + repoName);
 
     if (defBranch !== undefined) {
         if (
@@ -421,6 +424,7 @@ export function activate(context: ExtensionContext) {
                 e.affectsConfiguration('window.customTitleBarVisibility') ||
                 e.affectsConfiguration('workbench.colorTheme')
             ) {
+                outputChannel.appendLine('\nConfiguration change detected...');
                 doit();
             }
         }),

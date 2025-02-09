@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, and status bar based on the git repository name and branch.",
     "icon": "img/icon_602.png",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "publisher": "KevinMills",
     "author": {
         "name": "Kevin Mills"
