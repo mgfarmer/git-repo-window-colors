@@ -16,13 +16,16 @@ type RepoConfig = {
 
 function validateRepoData(json: any): Array<RepoConfig> {
     const result = new Array<RepoConfig>();
+    const isActive = vscode.window.state.active;
     for (const item in json) {
         let error = false;
         const setting = json[item];
         const parts = setting.split(':');
-        if (parts.length < 2) {
+        if (isActive && parts.length < 2) {
             // Invalid entry
-            vscode.window.showErrorMessage('Setting `' + setting + "': missing a color specifier");
+            const msg = 'Setting `' + setting + "': missing a color specifier";
+            vscode.window.showErrorMessage(msg);
+            outputChannel.appendLine(msg);
             error = true;
             continue;
         }
@@ -40,10 +43,10 @@ function validateRepoData(json: any): Array<RepoConfig> {
         let bColor = undefined;
         if (colorParts.length > 1) {
             bColor = colorParts[1].trim();
-            if (defBranch === undefined) {
-                vscode.window.showErrorMessage(
-                    'Setting `' + setting + "': specifies a branch color, but not a default branch.",
-                );
+            if (isActive && defBranch === undefined) {
+                const msg = 'Setting `' + setting + "': specifies a branch color, but not a default branch.";
+                vscode.window.showErrorMessage(msg);
+                outputChannel.appendLine(msg);
                 error = true;
             }
         }
@@ -65,8 +68,10 @@ function validateRepoData(json: any): Array<RepoConfig> {
             }
             colorMessage += '`' + bColor + '` is not a known color';
         }
-        if (colorMessage != '') {
-            vscode.window.showErrorMessage('Setting `' + setting + '`:' + colorMessage);
+        if (isActive && colorMessage != '') {
+            const msg = 'Setting `' + setting + '`:' + colorMessage;
+            vscode.window.showErrorMessage(msg);
+            outputChannel.appendLine(msg);
             error = true;
         }
 
@@ -93,7 +98,9 @@ function getBranchData(json: any): Map<string, string> {
         const parts = setting.split(':');
         if (parts.length < 2) {
             // Invalid entry
-            vscode.window.showErrorMessage('Setting `' + setting + "': missing a color specifier");
+            const msg = 'Setting `' + setting + "': missing a color specifier";
+            vscode.window.showErrorMessage(msg);
+            outputChannel.appendLine(msg);
             continue;
         }
 
@@ -108,7 +115,9 @@ function getBranchData(json: any): Map<string, string> {
             colorMessage = '`' + branchColor + '` is not a known color';
         }
         if (colorMessage != '') {
-            vscode.window.showErrorMessage('Setting `' + setting + '`:' + colorMessage);
+            const msg = 'Setting `' + setting + '`:' + colorMessage;
+            vscode.window.showErrorMessage(msg);
+            outputChannel.appendLine(msg);
         }
 
         result.set(branchName, branchColor);
@@ -133,13 +142,16 @@ function doit() {
     stopBranchPoll();
 
     if (workspace.workspaceFolders === undefined) {
+        outputChannel.appendLine('No workspace folders');
         return;
     }
 
     const repoConfigObj = getObjectSetting('repoConfigurationList');
     if (repoConfigObj === undefined || Object.keys(repoConfigObj).length === 0) {
+        outputChannel.appendLine('No settings found. Weird!');
         return;
     }
+
     const repoJson = JSON.parse(JSON.stringify(repoConfigObj));
     const repoConfigList = validateRepoData(repoJson);
 
@@ -171,10 +183,12 @@ function doit() {
     try {
         repoName = getCurrentGitRemoteFetchUrl();
     } catch (error) {
+        outputChannel.appendLine('Error fetching git url: ' + error);
         console.error('Error:', error);
         return;
     }
     if (repoName === undefined || repoName === '') {
+        outputChannel.appendLine('No git repo found for this workspace.');
         return;
     }
 
@@ -195,6 +209,7 @@ function doit() {
     }
 
     if (repoColor === undefined) {
+        outputChannel.appendLine('No rules to match this repo: ' + repoName);
         return;
     }
 
@@ -207,13 +222,16 @@ function doit() {
             if (branchColor === undefined) {
                 // No color specified, use modified repo color
                 branchColor = repoColor.rotate(hueRotation);
+                outputChannel.appendLine('No branch name rule, using rotated color for this repo: ' + repoName);
             }
         } else {
             // On the default branch
+            outputChannel.appendLine('Using default branch color for this repo: ' + repoName);
             branchColor = repoColor;
         }
         startBranchPoll();
     } else {
+        outputChannel.appendLine('Using repo color, because no default branch is specified for this repo: ' + repoName);
         branchColor = repoColor;
     }
 
@@ -221,6 +239,7 @@ function doit() {
     for (const [branch, color] of branchMap) {
         if (currentBranch?.match(branch)) {
             branchColor = Color(color);
+            outputChannel.appendLine('Branch rule matched: ' + branch);
             break;
         }
     }
@@ -282,6 +301,7 @@ function doit() {
         'sideBarTitle.background': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
         'statusBar.background': doColorStatusBar ? inactiveTabColor.hex() : undefined,
     };
+    outputChannel.appendLine('Applying colors for this repo:' + 'repoName');
     workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
 }
 
@@ -374,18 +394,22 @@ function startBranchPoll() {
             branch = getCurrentGitBranch();
             if (currentBranch != branch) {
                 currentBranch = branch;
-                //console.log('change to branch: ' + branch);
+                outputChannel.appendLine('Change to branch: ' + branch);
                 doit();
             }
         } catch (error) {
+            outputChannel.appendLine('Branch Poll Error: ' + error);
             console.error('Error:', error);
             return;
         }
     }, 1000);
 }
 
+const outputChannel = vscode.window.createOutputChannel('Tabs Color');
+
 export function activate(context: ExtensionContext) {
     if (!workspace.workspaceFolders) {
+        outputChannel.appendLine('No workspace folders.  Cannot color an empty workspace.');
         return;
     }
 
@@ -425,7 +449,7 @@ export function activate(context: ExtensionContext) {
         if (restart) {
             message += ' Changing titleBarStyle requires vscode to be restarted.';
         }
-        vscode.window.showInformationMessage(message, 'Yes', 'No').then((answer) => {
+        vscode.window.showInformationMessage(message, 'Yes', 'No').then((answer: any) => {
             if (answer === 'No') {
                 return;
             }
@@ -434,23 +458,23 @@ export function activate(context: ExtensionContext) {
         });
     }
 
-    setInterval(function () {
-        let branch = '';
-        try {
-            if (workspace.workspaceFolders === undefined) {
-                return;
-            }
-            branch = getCurrentGitBranch();
-            if (currentBranch != branch) {
-                currentBranch = branch;
-                //console.log('change to branch: ' + branch);
-                doit();
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            return;
-        }
-    }, 2000);
+    // setInterval(function () {
+    //     let branch = '';
+    //     try {
+    //         if (workspace.workspaceFolders === undefined) {
+    //             return;
+    //         }
+    //         branch = getCurrentGitBranch();
+    //         if (currentBranch != branch) {
+    //             currentBranch = branch;
+    //             //console.log('change to branch: ' + branch);
+    //             doit();
+    //         }
+    //     } catch (error) {
+    //         console.error('Error:', error);
+    //         return;
+    //     }
+    // }, 2000);
 
     // const gitExtension = extensions.getExtension("vscode.git")!.exports;
     // //const gitBaseExtension = extensions.getExtension("vscode.git-base")!.exports;
