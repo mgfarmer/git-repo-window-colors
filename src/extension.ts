@@ -69,7 +69,7 @@ function validateRepoData(json: any): Array<RepoConfig> {
             colorMessage += '`' + bColor + '` is not a known color';
         }
         if (isActive && colorMessage != '') {
-            const msg = 'Setting `' + setting + '`:' + colorMessage;
+            const msg = 'Setting `' + setting + '`: ' + colorMessage;
             vscode.window.showErrorMessage(msg);
             outputChannel.appendLine(msg);
             error = true;
@@ -115,7 +115,7 @@ function getBranchData(json: any): Map<string, string> {
             colorMessage = '`' + branchColor + '` is not a known color';
         }
         if (colorMessage != '') {
-            const msg = 'Setting `' + setting + '`:' + colorMessage;
+            const msg = 'Setting `' + setting + '`: ' + colorMessage;
             vscode.window.showErrorMessage(msg);
             outputChannel.appendLine(msg);
         }
@@ -184,7 +184,7 @@ function doit() {
         repoName = getCurrentGitRemoteFetchUrl();
     } catch (error) {
         outputChannel.appendLine('Error fetching git url: ' + error);
-        console.error('Error:', error);
+        console.error('Error: ', error);
         return;
     }
     if (repoName === undefined || repoName === '') {
@@ -209,7 +209,7 @@ function doit() {
     }
 
     if (repoColor === undefined) {
-        outputChannel.appendLine('No rules to match this repo: ' + repoName);
+        outputChannel.appendLine('No rules match this repo: ' + repoName);
         return;
     }
 
@@ -301,7 +301,7 @@ function doit() {
         'sideBarTitle.background': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
         'statusBar.background': doColorStatusBar ? inactiveTabColor.hex() : undefined,
     };
-    outputChannel.appendLine('Applying colors for this repo:' + 'repoName');
+    outputChannel.appendLine('Applying colors for this repo: ' + 'repoName');
     workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
 }
 
@@ -399,13 +399,13 @@ function startBranchPoll() {
             }
         } catch (error) {
             outputChannel.appendLine('Branch Poll Error: ' + error);
-            console.error('Error:', error);
+            console.error('Error: ', error);
             return;
         }
     }, 1000);
 }
 
-const outputChannel = vscode.window.createOutputChannel('Tabs Color');
+const outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
 
 export function activate(context: ExtensionContext) {
     if (!workspace.workspaceFolders) {
@@ -458,45 +458,6 @@ export function activate(context: ExtensionContext) {
         });
     }
 
-    // setInterval(function () {
-    //     let branch = '';
-    //     try {
-    //         if (workspace.workspaceFolders === undefined) {
-    //             return;
-    //         }
-    //         branch = getCurrentGitBranch();
-    //         if (currentBranch != branch) {
-    //             currentBranch = branch;
-    //             //console.log('change to branch: ' + branch);
-    //             doit();
-    //         }
-    //     } catch (error) {
-    //         console.error('Error:', error);
-    //         return;
-    //     }
-    // }, 2000);
-
-    // const gitExtension = extensions.getExtension("vscode.git")!.exports;
-    // //const gitBaseExtension = extensions.getExtension("vscode.git-base")!.exports;
-
-    // const git = gitExtension.getAPI(1);
-    // //const gitbase = gitBaseExtension.getAPI(1);
-
-    // git.onDidChangeState(() => {
-    //   console.log("repo state change!");
-    //   if (git.repositories.length > 0) {
-    //     try {
-    //       const repo = git.repositories[0];
-    //       console.log(repo);
-    //       repo.state.onDidChange(() => {
-    //         console.log("repo!");
-    //       });
-    //     } catch (error) {
-    //       console.log(error);
-    //     }
-    //   }
-    // });
-
     doit();
 }
 
@@ -507,12 +468,10 @@ const getColorWithLuminosity = (color: Color, min: number, max: number): Color =
         c = c.darken(0.01);
         iter++;
     }
-    //console.log(iter);
     iter = 0;
     while (c.luminosity() < min && iter < 10000) {
         c = c.lighten(0.01);
         iter++;
     }
-    //console.log(iter);
     return c;
 };
