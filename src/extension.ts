@@ -163,7 +163,6 @@ export function activate(context: ExtensionContext) {
                         (item) => item.repoQualifier !== repoConfig.repoQualifier,
                     );
                     const newArray = newRepoConfigList.map((item) => repoConfigAsString(item));
-                    //console.log('New repo config list: ', newArray);
                     workspace.getConfiguration('windowColors').update('repoConfigurationList', newArray, true);
                     currentConfig = getRepoConfigList();
                     undoColors();
@@ -389,7 +388,6 @@ function undoColors() {
             delete settings[key];
         }
     }
-    console.log('Undoing colors: ', settings);
     workspace.getConfiguration('workbench').update('colorCustomizations', settings, false);
 }
 
@@ -640,12 +638,10 @@ function getCurrentGitBranch(): string {
 let intervalId: NodeJS.Timeout | undefined = undefined;
 
 function stopBranchPoll() {
-    //console.log('Polling: stopped');
     clearInterval(intervalId);
 }
 
 function startBranchPoll() {
-    //console.log('Polling: started');
     intervalId = setInterval(function () {
         let branch = '';
         try {

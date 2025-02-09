@@ -6,7 +6,9 @@ If you find this extension useful you can <a href="https://www.buymeacoffee.com/
 
 ## What it does
 
-This extension allow you to give your VSCode window a custom color frame based on the repository name of the git repository opened as your worksapce. It does this by immediately writing color settings in `.vscode/settings.json` file.
+This extension allow you to give your VSCode window a custom color "frame" based on the name of the git repository opened as your worksapce. It does this by immediately writing color settings in `.vscode/settings.json` file.
+
+If you are like me and have multiple vscode windows opened all the time, working on different repositories, you know it can be hard to differentiate the windows visually. By assigning custom colors to the title and activity bars, this plugin aims to alleviate this problem. This also helps when viewing the thumbnail previews displayed by most docks (Windows Taskbar, Ubuntu Dock, etc...)
 
 This plugin works best with these two settings also set:
 
@@ -17,17 +19,20 @@ This plugin works best with these two settings also set:
 }
 ```
 
-If you are like me and have multiple vscode windows opened all the time, working on different repositories, you know it can be hard to differentiate the windows visually. By assigning custom colors to the title and activity bars, this plugin aims to alleviate this problem. This also helps when viewing the thumbnail previews displayed by most docks (Windows Taskbar, Ubuntu Dock, etc...)
-
 ## Usage
 
 LET IT BE KNOWN: Any custom color settings managed by this plugin that you may have defined previously in a workspace .vscode/settings.json will be overwritten by this extension.
 
-To configure this extension, open the Settings UI and look for "Git Repo Window Colors" extension settings.
+This extension creates the following commands, accessible from the Command Palatte:
+
+- "Colorize this repo" Use this command to add a coloring rule for the repo in you current workspace. If a rule already matches this repo, this command will fill in the values for the current rule, allowing you to modify the rule.
+- "Decolorize this repo" Use this command to remove the rule (if any) that currently applies to your workspace.
+
+Advanced configuration can be done via User Settings UI or directly in the User Settings JSON file.
 
 ### Status Reporting
 
-Status reporting for this extension can be found in the 'Git Repo Window Colors" output channel. Go there if things are not working as you expect.
+Status reporting for this extension can be found in the 'Git Repo Window Colors" output channel. Go there if things are not working as you expect.  Maybe there will be enough information to help you out.
 
 ### Repo Configuration Setting
 
@@ -35,16 +40,16 @@ At a minimum you need to add entries to the 'Repo Configuration List'.
 
 This setting is a configurable list of string entries. Each string has this format schema:
 
-`<repo-qualifier>[/<default-branch>] : <primary-color>[/<branch-color>]`
+`<repo-qualifier>[|<default-branch>] : <primary-color>[|<branch-color>]`
 
 Where:
 
--   `<repo-qualifier>`: This is required. The repository qualifier is a simple string. If this string is found in the repository fetch URL (what you'd get with `git config --get remote.origin.url`), then a match is made. The first match found will be used.
--   `<default-branch>`: This is optional. and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `Automatic Branch Indicator Color Knob` in settings. You can invert the branch coloring logic in the settings as well.
+- `<repo-qualifier>`: This is required. The repository qualifier is a simple string. If this string is found in the repository fetch URL (what you'd get with `git config --get remote.origin.url`), then a match is made. The first match found will be used.
+- `<default-branch>`: This is optional. and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `Automatic Branch Indicator Color Knob` in settings. You can invert the branch coloring logic in the settings as well.
 
--   `<primary-color>`: This is required. The primary color is the color associated with the repository. This color will be used to color the window title bar and activity bar (when not using branch colors).
+- `<primary-color>`: This is required. The primary color is the color associated with the repository. This color will be used to color the window title bar and activity bar (when not using branch colors).
 
--   `<branch-color>`: This is a color that will be used for the activity bar when working on a non-default branch, or on the default branch, depending on the `Invert Branch Color Logic` setting.
+- `<branch-color>`: This is a color that will be used for the activity bar when working on a non-default branch, or on the default branch, depending on the `Invert Branch Color Logic` setting.
 
 The color value can be any color string code recognized by javascript `Color()`.
 
@@ -72,6 +77,14 @@ Workspaces containing multiple root folders may not behave predictably. The curr
 
 When opening new vscode windows, you might see the relevant theme colors change as they are updated to the new workspace. This is normal.
 
+## Release Notes
+
+### 1.1.14
+
+- Added "Colorize this repo" command
+- Added "Decolorize this repo" command
+- In the rule format string, the '/' separator character was changed to '|' so that repo qualifier strings could include '/' characters (typically used to separate org from repo name).  If your pre-1.1.14 rules use '/' separators you will need to manually edit the rules and change them to '|' characters.
+
 ## Credits
 
-This projects was inspired by https://github.com/stuartcrobinson/unique-window-colors.
+This projects was inspired by <https://github.com/stuartcrobinson/unique-window-colors>.
