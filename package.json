@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, and status bar based on the git repository name and branch.",
     "icon": "img/icon_602.png",
-    "version": "1.0.13",
+    "version": "1.1.0",
     "publisher": "KevinMills",
     "author": {
         "name": "Kevin Mills"
@@ -132,7 +132,8 @@
         "compile": "webpack --mode development",
         "watch": "webpack --mode development --watch",
         "vscode:prepublish": "yarn run compile",
-        "package": "vsce package --yarn"
+        "package": "vsce package --yarn",
+        "publish": "vsce publish --yarn"
     },
     "devDependencies": {
         "@types/color": "^4.2.0",
