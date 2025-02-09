@@ -36,6 +36,16 @@
         "printWidth": 120
     },
     "contributes": {
+        "commands": [
+            {
+                "command": "windowColors.colorize",
+                "title": "Colorize this repo"
+            },
+            {
+                "command": "windowColors.decolorize",
+                "title": "Decolorize this repo"
+            }
+        ],
         "configuration": [
             {
                 "type": "object",

@@ -14,14 +14,228 @@ type RepoConfig = {
     branchColor: string | undefined;
 };
 
-function validateRepoData(json: any): Array<RepoConfig> {
+const managedColors = [
+    'activityBar.background',
+    'activityBar.foreground',
+    'titleBar.activeBackground',
+    'titleBar.activeForeground',
+    'titleBar.inactiveBackground',
+    'titleBar.inactiveForeground',
+    'tab.inactiveBackground',
+    'tab.activeBackground',
+    'tab.hoverBackground',
+    'tab.unfocusedHoverBackground',
+    'editorGroupHeader.tabsBackground',
+    'titleBar.border',
+    'sideBarTitle.background',
+    'statusBar.background',
+];
+
+const SEPARATOR = '|';
+
+function repoConfigAsString(repoConfig: RepoConfig): string {
+    let result = repoConfig.repoQualifier;
+    if (repoConfig.defaultBranch !== undefined) {
+        result += SEPARATOR + repoConfig.defaultBranch;
+    }
+    result += ': ' + repoConfig.primaryColor;
+    if (repoConfig.branchColor !== undefined) {
+        result += SEPARATOR + repoConfig.branchColor;
+    }
+    return result;
+}
+
+let outputChannel: vscode.OutputChannel;
+let currentConfig: Array<RepoConfig> | undefined = undefined;
+
+export function activate(context: ExtensionContext) {
+    outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
+    currentConfig = getRepoConfigList();
+
+    if (!workspace.workspaceFolders) {
+        outputChannel.appendLine('No workspace folders.  Cannot color an empty workspace.');
+        return;
+    }
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.colorize', async () => {
+            // Find matching rules for the current repo, or none if no match
+            const repoName = getCurrentGitRemoteFetchUrl();
+            if (repoName === undefined || repoName === '') {
+                vscode.window.showErrorMessage('This workspace is not a git repository.');
+                return;
+            }
+
+            let configList = getRepoConfigList(false);
+            if (configList === undefined) {
+                configList = new Array<RepoConfig>();
+            }
+
+            let isNewConfig: boolean = false;
+            let repoConfig = getMatchingRepoRule(configList);
+
+            if (repoConfig === undefined) {
+                isNewConfig = true;
+                // Create a fresh new rule
+                // git@github.com:mgfarmer/git-repo-window-colors.git
+                // https://github.com/mgfarmer/git-repo-window-colors.git
+                const p1 = repoName.split(':');
+                let repoQualifier = '';
+                if (p1.length > 1) {
+                    const parts = p1[1].split('/');
+                    if (parts.length > 1) {
+                        const lastPart = parts.slice(-2).join('/');
+                        if (lastPart !== undefined) {
+                            repoQualifier = lastPart.replace('.git', '');
+                        }
+                    }
+                }
+
+                repoConfig = {
+                    repoQualifier: repoQualifier,
+                    defaultBranch: undefined,
+                    primaryColor: '',
+                    branchColor: undefined,
+                };
+            }
+
+            // Let user change the repo qualifier, if desired
+            const newQualifier = await vscode.window.showInputBox({
+                prompt: 'Accept or edit the qualifier for this this repository',
+                value: repoConfig.repoQualifier,
+            });
+            if (newQualifier === undefined) {
+                return;
+            }
+            repoConfig.repoQualifier = newQualifier;
+
+            // Let the user enter a color for this rule
+            const newColor = await vscode.window.showInputBox({
+                prompt: 'Enter a color for this repository',
+                value: repoConfig.primaryColor,
+            });
+            if (newColor === undefined || newColor === '') {
+                return;
+            }
+            repoConfig.primaryColor = newColor;
+
+            // Add repoConfig to the list of rules
+            if (isNewConfig) {
+                configList.push(repoConfig);
+            }
+            const configArray = configList.map((item) => repoConfigAsString(item));
+            workspace.getConfiguration('windowColors').update('repoConfigurationList', configArray, true);
+            currentConfig = getRepoConfigList();
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.decolorize', async () => {
+            // Find matching rules for the current repo, or none if no match
+            const repoName = getCurrentGitRemoteFetchUrl();
+            if (repoName === undefined || repoName === '') {
+                vscode.window.showErrorMessage('This workspace is not a git repository.');
+                return;
+            }
+
+            let repoConfig = getMatchingRepoRule(getRepoConfigList(true));
+            if (repoConfig === undefined) {
+                vscode.window.showErrorMessage(
+                    'No rules match this git repository. If this window is colored, you may need to manually edit .vscode/settings.json',
+                );
+                return;
+            }
+
+            vscode.window
+                .showInformationMessage('Remove rule: ' + repoConfigAsString(repoConfig), 'Yes', 'No')
+                .then((answer: any) => {
+                    if (answer === 'No') {
+                        return;
+                    }
+
+                    const repoConfigList = getRepoConfigList();
+                    if (repoConfigList === undefined) {
+                        return;
+                    }
+
+                    // Remove the specified rule from the list
+                    const newRepoConfigList = repoConfigList.filter(
+                        (item) => item.repoQualifier !== repoConfig.repoQualifier,
+                    );
+                    const newArray = newRepoConfigList.map((item) => repoConfigAsString(item));
+                    //console.log('New repo config list: ', newArray);
+                    workspace.getConfiguration('windowColors').update('repoConfigurationList', newArray, true);
+                    currentConfig = getRepoConfigList();
+                    undoColors();
+                });
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(async (e) => {
+            if (
+                e.affectsConfiguration('windowColors') ||
+                e.affectsConfiguration('window.titleBarStyle') ||
+                e.affectsConfiguration('window.customTitleBarVisibility') ||
+                e.affectsConfiguration('workbench.colorTheme')
+            ) {
+                outputChannel.appendLine('\nConfiguration change detected...');
+                doit();
+            }
+        }),
+    );
+
+    currentBranch = getCurrentGitBranch();
+
+    const style = workspace.getConfiguration('window').get('titleBarStyle') as string;
+    let message = '';
+    let restart = false;
+    if (style !== 'custom') {
+        message += "window.titleBarStyle='custom'";
+        restart = true;
+    }
+
+    const visibility = workspace.getConfiguration('window').get('customTitleBarVisibility') as string;
+    if (visibility !== 'auto') {
+        if (message !== '') {
+            message += ' and ';
+        }
+        message += "window.customTitleBarVisibility='auto'";
+    }
+
+    if (message !== '') {
+        message = 'This plugin works best with ' + message;
+        if (restart) {
+            message += ' Changing titleBarStyle requires vscode to be restarted.';
+        }
+        vscode.window.showInformationMessage(message, 'Yes', 'No').then((answer: any) => {
+            if (answer === 'No') {
+                return;
+            }
+            workspace.getConfiguration('window').update('customTitleBarVisibility', 'auto', true);
+            workspace.getConfiguration('window').update('titleBarStyle', 'custom', true);
+        });
+    }
+
+    doit();
+}
+
+function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undefined {
+    const repoConfigObj = getObjectSetting('repoConfigurationList');
+    if (repoConfigObj === undefined || Object.keys(repoConfigObj).length === 0) {
+        outputChannel.appendLine('No settings found. Weird!  You should add some...');
+        return undefined;
+    }
+
+    const json = JSON.parse(JSON.stringify(repoConfigObj));
+
     const result = new Array<RepoConfig>();
     const isActive = vscode.window.state.active;
     for (const item in json) {
         let error = false;
         const setting = json[item];
         const parts = setting.split(':');
-        if (isActive && parts.length < 2) {
+        if (validate && isActive && parts.length < 2) {
             // Invalid entry
             const msg = 'Setting `' + setting + "': missing a color specifier";
             vscode.window.showErrorMessage(msg);
@@ -30,7 +244,7 @@ function validateRepoData(json: any): Array<RepoConfig> {
             continue;
         }
 
-        const repoParts = parts[0].split('/');
+        const repoParts = parts[0].split(SEPARATOR);
         let defBranch: string | undefined = undefined;
         const branchQualifier = repoParts[0].trim();
 
@@ -38,12 +252,12 @@ function validateRepoData(json: any): Array<RepoConfig> {
             defBranch = repoParts[1].trim();
         }
 
-        const colorParts = parts[1].split('/');
+        const colorParts = parts[1].split(SEPARATOR);
         const rColor = colorParts[0].trim();
         let bColor = undefined;
         if (colorParts.length > 1) {
             bColor = colorParts[1].trim();
-            if (isActive && defBranch === undefined) {
+            if (validate && isActive && defBranch === undefined) {
                 const msg = 'Setting `' + setting + "': specifies a branch color, but not a default branch.";
                 vscode.window.showErrorMessage(msg);
                 outputChannel.appendLine(msg);
@@ -68,7 +282,7 @@ function validateRepoData(json: any): Array<RepoConfig> {
             }
             colorMessage += '`' + bColor + '` is not a known color';
         }
-        if (isActive && colorMessage != '') {
+        if (validate && isActive && colorMessage != '') {
             const msg = 'Setting `' + setting + '`: ' + colorMessage;
             vscode.window.showErrorMessage(msg);
             outputChannel.appendLine(msg);
@@ -90,13 +304,16 @@ function validateRepoData(json: any): Array<RepoConfig> {
     return result;
 }
 
-function getBranchData(json: any): Map<string, string> {
+function getBranchData(validate: boolean = false): Map<string, string> {
+    const branchConfigObj = getObjectSetting('branchConfigurationList');
+    const json = JSON.parse(JSON.stringify(branchConfigObj));
+
     const result = new Map<string, string>();
 
     for (const item in json) {
         const setting = json[item];
         const parts = setting.split(':');
-        if (parts.length < 2) {
+        if (validate && parts.length < 2) {
             // Invalid entry
             const msg = 'Setting `' + setting + "': missing a color specifier";
             vscode.window.showErrorMessage(msg);
@@ -114,7 +331,7 @@ function getBranchData(json: any): Map<string, string> {
         } catch (error) {
             colorMessage = '`' + branchColor + '` is not a known color';
         }
-        if (colorMessage != '') {
+        if (validate && colorMessage != '') {
             const msg = 'Setting `' + setting + '`: ' + colorMessage;
             vscode.window.showErrorMessage(msg);
             outputChannel.appendLine(msg);
@@ -138,6 +355,44 @@ function getObjectSetting(setting: string): object | undefined {
     return workspace.getConfiguration('windowColors').get<object>(setting);
 }
 
+function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): RepoConfig | undefined {
+    if (workspace.workspaceFolders === undefined) {
+        return undefined;
+    }
+
+    const repoName = getCurrentGitRemoteFetchUrl();
+    if (repoName === undefined || repoName === '') {
+        return undefined;
+    }
+
+    if (repoConfigList === undefined) {
+        return undefined;
+    }
+
+    let repoConfig: RepoConfig | undefined = undefined;
+    let item: RepoConfig;
+    for (item of repoConfigList) {
+        if (repoName.includes(item.repoQualifier)) {
+            repoConfig = item;
+            break;
+        }
+    }
+
+    return repoConfig;
+}
+
+function undoColors() {
+    const settings = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
+    // Filter settings by removing managedColors
+    for (const key in settings) {
+        if (managedColors.includes(key)) {
+            delete settings[key];
+        }
+    }
+    console.log('Undoing colors: ', settings);
+    workspace.getConfiguration('workbench').update('colorCustomizations', settings, false);
+}
+
 function doit() {
     stopBranchPoll();
     outputChannel.appendLine('Color update triggered...');
@@ -147,18 +402,13 @@ function doit() {
         return;
     }
 
-    const repoConfigObj = getObjectSetting('repoConfigurationList');
-    if (repoConfigObj === undefined || Object.keys(repoConfigObj).length === 0) {
+    const repoConfigList = getRepoConfigList(true);
+    if (repoConfigList === undefined) {
         outputChannel.appendLine('No settings found. Weird!  You should add some...');
         return;
     }
 
-    const repoJson = JSON.parse(JSON.stringify(repoConfigObj));
-    const repoConfigList = validateRepoData(repoJson);
-
-    const branchConfigObj = getObjectSetting('branchConfigurationList');
-    const branchJson = JSON.parse(JSON.stringify(branchConfigObj));
-    const branchMap = getBranchData(branchJson);
+    const branchMap = getBranchData(true);
 
     const doColorInactiveTitlebar = getBooleanSetting('colorInactiveTitlebar');
     const invertBranchColorLogic = getBooleanSetting('invertBranchColorLogic');
@@ -211,6 +461,14 @@ function doit() {
 
     if (repoColor === undefined) {
         outputChannel.appendLine('No rules match this repo: ' + repoName);
+        // See if this is a freshly removed rule
+        const repoRule = getMatchingRepoRule(currentConfig);
+        if (repoRule !== undefined) {
+            outputChannel.appendLine('Removing managed color for this workspace.');
+            undoColors();
+            currentConfig = getRepoConfigList();
+            return;
+        }
         return;
     }
 
@@ -406,63 +664,6 @@ function startBranchPoll() {
             return;
         }
     }, 1000);
-}
-
-const outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
-
-export function activate(context: ExtensionContext) {
-    if (!workspace.workspaceFolders) {
-        outputChannel.appendLine('No workspace folders.  Cannot color an empty workspace.');
-        return;
-    }
-
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(async (e) => {
-            if (
-                e.affectsConfiguration('windowColors') ||
-                e.affectsConfiguration('window.titleBarStyle') ||
-                e.affectsConfiguration('window.customTitleBarVisibility') ||
-                e.affectsConfiguration('workbench.colorTheme')
-            ) {
-                outputChannel.appendLine('\nConfiguration change detected...');
-                doit();
-            }
-        }),
-    );
-
-    currentBranch = getCurrentGitBranch();
-
-    const style = workspace.getConfiguration('window').get('titleBarStyle') as string;
-    let message = '';
-    let restart = false;
-    if (style !== 'custom') {
-        message += "window.titleBarStyle='custom'";
-        restart = true;
-    }
-
-    const visibility = workspace.getConfiguration('window').get('customTitleBarVisibility') as string;
-    if (visibility !== 'auto') {
-        if (message !== '') {
-            message += ' and ';
-        }
-        message += "window.customTitleBarVisibility='auto'";
-    }
-
-    if (message !== '') {
-        message = 'This plugin works best with ' + message;
-        if (restart) {
-            message += ' Changing titleBarStyle requires vscode to be restarted.';
-        }
-        vscode.window.showInformationMessage(message, 'Yes', 'No').then((answer: any) => {
-            if (answer === 'No') {
-                return;
-            }
-            workspace.getConfiguration('window').update('customTitleBarVisibility', 'auto', true);
-            workspace.getConfiguration('window').update('titleBarStyle', 'custom', true);
-        });
-    }
-
-    doit();
 }
 
 const getColorWithLuminosity = (color: Color, min: number, max: number): Color => {
