@@ -25,6 +25,10 @@ LET IT BE KNOWN: Any custom color settings managed by this plugin that you may h
 
 To configure this extension, open the Settings UI and look for "Git Repo Window Colors" extension settings.
 
+### Status Reporting
+
+Status reporting for this extension can be found in the 'Git Repo Window Colors" output channel. Go there if things are not working as you expect.
+
 ### Repo Configuration Setting
 
 At a minimum you need to add entries to the 'Repo Configuration List'.
