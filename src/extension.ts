@@ -33,6 +33,20 @@ const managedColors = [
 
 const SEPARATOR = '|';
 
+// Function to test if the vscode git model exsists
+function isGitModelAvailable(): boolean {
+    const extension = vscode.extensions.getExtension('vscode.git');
+    if (!extension) {
+        console.warn('Git extension not available');
+        return false;
+    }
+    if (!extension.isActive) {
+        console.warn('Git extension not active');
+        return false;
+    }
+    return true;
+}
+
 function repoConfigAsString(repoConfig: RepoConfig): string {
     let result = repoConfig.repoQualifier;
     if (repoConfig.defaultBranch !== undefined) {
@@ -50,6 +64,13 @@ let currentConfig: Array<RepoConfig> | undefined = undefined;
 
 export function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
+
+    if (!isGitModelAvailable()) {
+        outputChannel.appendLine('Git extension not available.');
+        outputChannel.appendLine('Do you have git installed?');
+        return;
+    }
+
     currentConfig = getRepoConfigList();
 
     if (!workspace.workspaceFolders) {
