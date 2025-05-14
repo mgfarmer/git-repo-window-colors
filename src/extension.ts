@@ -62,13 +62,23 @@ function repoConfigAsString(repoConfig: RepoConfig): string {
 let outputChannel: vscode.OutputChannel;
 let currentConfig: Array<RepoConfig> | undefined = undefined;
 
-export function activate(context: ExtensionContext) {
+export async function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
 
     if (!isGitModelAvailable()) {
         outputChannel.appendLine('Git extension not available.');
         outputChannel.appendLine('Do you have git installed?');
         return;
+    }
+
+    const extension = vscode.extensions.getExtension('vscode.git');
+    if (!extension) {
+        console.warn('Git extension not available');
+        return '';
+    }
+    if (!extension.isActive) {
+        await extension.activate();
+        return '';
     }
 
     currentConfig = getRepoConfigList();

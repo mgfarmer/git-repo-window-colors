@@ -26,6 +26,9 @@
         "folder",
         "customization"
     ],
+    "extensionDependencies": [
+        "vscode.git"
+    ],
     "activationEvents": [
         "onStartupFinished"
     ],
