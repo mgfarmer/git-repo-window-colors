@@ -1,9 +1,9 @@
 {
     "name": "git-repo-window-colors",
     "displayName": "Git Repo Window Colors",
-    "description": "Customize the color of each window's activityBar, titleBar, and status bar based on the git repository name and branch.",
+    "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
     "icon": "img/icon_602.png",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "publisher": "KevinMills",
     "author": {
         "name": "Kevin Mills"
@@ -42,11 +42,13 @@
         "commands": [
             {
                 "command": "windowColors.colorize",
-                "title": "Colorize this repo"
+                "title": "Colorize this repo",
+                "category": "GRWC"
             },
             {
                 "command": "windowColors.decolorize",
-                "title": "Decolorize this repo"
+                "title": "Decolorize this repo",
+                "category": "GRWC"
             }
         ],
         "configuration": [
@@ -64,15 +66,22 @@
                         "scope": "application",
                         "uniqueItems": true
                     },
-                    "windowColors.invertBranchColorLogic": {
+                    "windowColors.removeManagedColors": {
                         "order": 2,
+                        "type": "boolean",
+                        "default": "true",
+                        "description": "When no rules match, remove any colors that were set by this extension.  This is useful if you want to use the default colors for a repo that is not in the list. If this is unchecked, then you will need to remove any managed colors manually.",
+                        "scope": "application"
+                    },
+                    "windowColors.invertBranchColorLogic": {
+                        "order": 3,
                         "type": "boolean",
                         "default": "false",
                         "description": "Use the branch color to indicate when you are working in the default branch.  This is only used when a default branch is specified for the repo and does not apply to the branch colors defined in `#windowColors.branchConfigurationList#`",
                         "scope": "application"
                     },
                     "windowColors.branchConfigurationList": {
-                        "order": 2,
+                        "order": 4,
                         "markdownDescription": "Each entry in the ordered list has the form `<branch-pattern>:<branch-color>` (i.e. `feature-.*:blue` or 'bug-.*:red' or 'mybranch').  If a branch pattern in this table is matched against the current working branch, then this setting will override any branch coloring from the repo configuration list above.  The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo whos working branch matches the pattern the coloring will be applied.\n\nFormat Reference: `<branch-pattern>:<branch-color>`",
                         "type": "array",
                         "items": {

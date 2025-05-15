@@ -32,11 +32,11 @@ Advanced configuration can be done via User Settings UI or directly in the User 
 
 ### Status Reporting
 
-Status reporting for this extension can be found in the 'Git Repo Window Colors" output channel. Go there if things are not working as you expect.  Maybe there will be enough information to help you out.
+Status reporting for this extension can be found in the 'Git Repo Window Colors" output channel. Go there if things are not working as you expect.  Maybe there will be enough information to help you (or me) out.  Please include the output in this channel in any bug reports.
 
 ### Repo Configuration Setting
 
-At a minimum you need to add entries to the 'Repo Configuration List'.
+This is optional.  This section defines settings that match repo urls and applies colors for the matched repo.
 
 This setting is a configurable list of string entries. Each string has this format schema:
 
@@ -65,26 +65,16 @@ Using this setting you can assign custom colors to specific branch names or bran
 
 Each entry in this section is a simple `<branch-pattern>:<color>` string. The `<branch-patter>` is a regular expression, or a simple string. If a branch-pattern in this table is matched against the current working branch of any repo your are working on, then this setting will override any branch coloring from the repo configuration list above, and be applied. The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo who's working branch matches the pattern the coloring will be applied. So if you have 3 vscode windows open on three repositories all working on the same feature or bug branch, you'll know right away which windows you should focus on.
 
+The settings in this section apply to any opened repo, regarless of the per-repo color settings.  This means you do not need to have a repo rule matched in order to use branch colors.  If you do have a matched repo rule then the repo color will be applied.  If a branch rule does not match the activity bar will take on the repo color, and if a branch rule matches the activity bar will take on the branch color.  If a repo rule does not match and a branch rule does match, then the branch color will be applied everywhere (like a repo color).
+
 ### Setting Sync
 
 If you use Settings Sync then these color configuraiton will apply everywhere you use vscode. It's pretty cool to change a color setting in one instance and see it updated in other instance.
 
 ## Notes
 
-This extension works best when you have .vscode/settings.jon in your .gitignore file (either locally or globally). It will work without this, but you may end up committing your custom colors to your repo which might be problematic to other people working in your repo that do not have this SUPER COOL extension installed. I highly recommend you just tell them to install it.
+This extension works best when you have .vscode/settings.jon in your .gitignore file (either locally or globally). It will work without this, but you may end up committing your custom colors to your repo which might be problematic to other people working in the repo that do not have this SUPER COOL extension installed. I highly recommend you just tell them to install it.
 
-Workspaces containing multiple root folders may not behave predictably. The current behavior for multi-folder workspaces is that the workspace color settings will be set by the first window opened.
+Workspaces containing multiple root folders may not behave predictably. The current behavior for multi-folder workspaces is that the workspace color settings will be set by the first folder opened.
 
 When opening new vscode windows, you might see the relevant theme colors change as they are updated to the new workspace. This is normal.
-
-## Release Notes
-
-### 1.1.14
-
-- Added "Colorize this repo" command
-- Added "Decolorize this repo" command
-- In the rule format string, the '/' separator character was changed to '|' so that repo qualifier strings could include '/' characters (typically used to separate org from repo name).  If your pre-1.1.14 rules use '/' separators you will need to manually edit the rules and change them to '|' characters.
-
-## Credits
-
-This projects was inspired by <https://github.com/stuartcrobinson/unique-window-colors>.

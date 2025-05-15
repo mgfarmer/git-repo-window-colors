@@ -60,7 +60,10 @@ function repoConfigAsString(repoConfig: RepoConfig): string {
 }
 
 let outputChannel: vscode.OutputChannel;
-let currentConfig: Array<RepoConfig> | undefined = undefined;
+let gitExt;
+let gitApi: any;
+let gitRepository: any;
+let gitRepoRemoteFetchUrl: string = '';
 
 export async function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
@@ -71,17 +74,17 @@ export async function activate(context: ExtensionContext) {
         return;
     }
 
-    const extension = vscode.extensions.getExtension('vscode.git');
-    if (!extension) {
+    gitExt = vscode.extensions.getExtension('vscode.git');
+    if (!gitExt) {
         console.warn('Git extension not available');
         return '';
     }
-    if (!extension.isActive) {
-        await extension.activate();
+    if (!gitExt.isActive) {
+        await gitExt.activate();
         return '';
     }
 
-    currentConfig = getRepoConfigList();
+    gitApi = gitExt.exports.getAPI(1);
 
     if (!workspace.workspaceFolders) {
         outputChannel.appendLine('No workspace folders.  Cannot color an empty workspace.');
@@ -90,9 +93,7 @@ export async function activate(context: ExtensionContext) {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.colorize', async () => {
-            // Find matching rules for the current repo, or none if no match
-            const repoName = getCurrentGitRemoteFetchUrl();
-            if (repoName === undefined || repoName === '') {
+            if (gitRepoRemoteFetchUrl === undefined || gitRepoRemoteFetchUrl === '') {
                 vscode.window.showErrorMessage('This workspace is not a git repository.');
                 return;
             }
@@ -103,14 +104,14 @@ export async function activate(context: ExtensionContext) {
             }
 
             let isNewConfig: boolean = false;
-            let repoConfig = getMatchingRepoRule(configList);
+            let repoConfig = await getMatchingRepoRule(configList);
 
             if (repoConfig === undefined) {
                 isNewConfig = true;
                 // Create a fresh new rule
                 // git@github.com:mgfarmer/git-repo-window-colors.git
                 // https://github.com/mgfarmer/git-repo-window-colors.git
-                const p1 = repoName.split(':');
+                const p1 = gitRepoRemoteFetchUrl.split(':');
                 let repoQualifier = '';
                 if (p1.length > 1) {
                     const parts = p1[1].split('/');
@@ -156,20 +157,17 @@ export async function activate(context: ExtensionContext) {
             }
             const configArray = configList.map((item) => repoConfigAsString(item));
             workspace.getConfiguration('windowColors').update('repoConfigurationList', configArray, true);
-            currentConfig = getRepoConfigList();
         }),
     );
 
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.decolorize', async () => {
-            // Find matching rules for the current repo, or none if no match
-            const repoName = getCurrentGitRemoteFetchUrl();
-            if (repoName === undefined || repoName === '') {
+            if (gitRepoRemoteFetchUrl === undefined || gitRepoRemoteFetchUrl === '') {
                 vscode.window.showErrorMessage('This workspace is not a git repository.');
                 return;
             }
 
-            let repoConfig = getMatchingRepoRule(getRepoConfigList(true));
+            let repoConfig = await getMatchingRepoRule(getRepoConfigList(true));
             if (repoConfig === undefined) {
                 vscode.window.showErrorMessage(
                     'No rules match this git repository. If this window is colored, you may need to manually edit .vscode/settings.json',
@@ -195,7 +193,6 @@ export async function activate(context: ExtensionContext) {
                     );
                     const newArray = newRepoConfigList.map((item) => repoConfigAsString(item));
                     workspace.getConfiguration('windowColors').update('repoConfigurationList', newArray, true);
-                    currentConfig = getRepoConfigList();
                     undoColors();
                 });
         }),
@@ -209,13 +206,10 @@ export async function activate(context: ExtensionContext) {
                 e.affectsConfiguration('window.customTitleBarVisibility') ||
                 e.affectsConfiguration('workbench.colorTheme')
             ) {
-                outputChannel.appendLine('\nConfiguration change detected...');
-                doit();
+                doit('settings change');
             }
         }),
     );
-
-    currentBranch = getCurrentGitBranch();
 
     const style = workspace.getConfiguration('window').get('titleBarStyle') as string;
     let message = '';
@@ -247,7 +241,35 @@ export async function activate(context: ExtensionContext) {
         });
     }
 
-    doit();
+    if (gitApi.state === 'initialized') {
+        await init();
+    } else {
+        outputChannel.appendLine('Git extension not initialized. Waiting for it to initialize...');
+        gitApi.onDidChangeState(async (newState: string) => {
+            outputChannel.appendLine(`Git extension state changed to: ${newState}`);
+            if (newState === 'initialized') {
+                await init();
+            }
+        });
+    }
+}
+
+async function init() {
+    gitRepository = getWorkspaceRepo();
+    if (gitRepository) {
+        gitRepoRemoteFetchUrl = gitRepository.state.remotes[0]['fetchUrl'];
+        outputChannel.appendLine('Git repository: ' + gitRepoRemoteFetchUrl);
+        currentBranch = getCurrentGitBranch();
+        if (currentBranch === undefined) {
+            outputChannel.appendLine('Could not determine current branch.');
+            return;
+        }
+        outputChannel.appendLine('Current branch: ' + currentBranch);
+
+        doit('initial activation');
+    } else {
+        outputChannel.appendLine('No git repository found for workspace.');
+    }
 }
 
 function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undefined {
@@ -385,16 +407,7 @@ function getObjectSetting(setting: string): object | undefined {
     return workspace.getConfiguration('windowColors').get<object>(setting);
 }
 
-function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): RepoConfig | undefined {
-    if (workspace.workspaceFolders === undefined) {
-        return undefined;
-    }
-
-    const repoName = getCurrentGitRemoteFetchUrl();
-    if (repoName === undefined || repoName === '') {
-        return undefined;
-    }
-
+async function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): Promise<RepoConfig | undefined> {
     if (repoConfigList === undefined) {
         return undefined;
     }
@@ -402,7 +415,7 @@ function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): Rep
     let repoConfig: RepoConfig | undefined = undefined;
     let item: RepoConfig;
     for (item of repoConfigList) {
-        if (repoName.includes(item.repoQualifier)) {
+        if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
             repoConfig = item;
             break;
         }
@@ -412,6 +425,7 @@ function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): Rep
 }
 
 function undoColors() {
+    outputChannel.appendLine('Removing managed color for this workspace.');
     const settings = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
     // Filter settings by removing managedColors
     for (const key in settings) {
@@ -422,19 +436,13 @@ function undoColors() {
     workspace.getConfiguration('workbench').update('colorCustomizations', settings, false);
 }
 
-function doit() {
+async function doit(reason: string) {
     stopBranchPoll();
-    outputChannel.appendLine('Color update triggered...');
-
-    if (workspace.workspaceFolders === undefined) {
-        outputChannel.appendLine('Empty workspace folders. Cannot do anything.');
-        return;
-    }
+    outputChannel.appendLine('\nColorizer triggered by ' + reason);
 
     const repoConfigList = getRepoConfigList(true);
     if (repoConfigList === undefined) {
-        outputChannel.appendLine('No settings found. Weird!  You should add some...');
-        return;
+        outputChannel.appendLine('  No repo settings found.  Using branch mode only.');
     }
 
     const branchMap = getBranchData(true);
@@ -459,79 +467,82 @@ function doit() {
     /** retain initial unrelated colorCustomizations*/
     const cc = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
 
-    let repoName = '';
-    try {
-        repoName = getCurrentGitRemoteFetchUrl();
-    } catch (error) {
-        outputChannel.appendLine('Error fetching git url: ' + error);
-        console.error('Error: ', error);
-        return;
-    }
-    if (repoName === undefined || repoName === '') {
-        outputChannel.appendLine('No git repo found for this workspace.');
-        return;
-    }
-
     let repoColor = undefined;
     let branchColor = undefined;
     let defBranch = undefined;
 
-    let item: RepoConfig;
-    for (item of repoConfigList) {
-        if (repoName.includes(item.repoQualifier)) {
-            repoColor = Color(item.primaryColor);
-            if (item.defaultBranch !== undefined) {
-                branchColor = Color(item.branchColor);
+    if (repoConfigList !== undefined) {
+        let item: RepoConfig;
+        for (item of repoConfigList) {
+            if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
+                repoColor = Color(item.primaryColor);
+                outputChannel.appendLine('  Repo rule matched: "' + item.repoQualifier + '", using ' + repoColor.hex());
+                if (item.defaultBranch !== undefined) {
+                    branchColor = Color(item.branchColor);
+                }
+
+                break;
             }
-
-            break;
         }
-    }
 
-    if (repoColor === undefined) {
-        outputChannel.appendLine('No rules match this repo: ' + repoName);
-        // See if this is a freshly removed rule
-        const repoRule = getMatchingRepoRule(currentConfig);
-        if (repoRule !== undefined) {
-            outputChannel.appendLine('Removing managed color for this workspace.');
-            undoColors();
-            currentConfig = getRepoConfigList();
-            return;
-        }
-        return;
-    }
-
-    outputChannel.appendLine('Found configuration for: ' + repoName);
-
-    if (defBranch !== undefined) {
-        if (
-            (!invertBranchColorLogic && currentBranch != defBranch) ||
-            (invertBranchColorLogic && currentBranch === defBranch)
-        ) {
-            // Not on the default branch
-            if (branchColor === undefined) {
-                // No color specified, use modified repo color
-                branchColor = repoColor.rotate(hueRotation);
-                outputChannel.appendLine('No branch name rule, using rotated color for this repo: ' + repoName);
-            }
+        if (repoColor === undefined) {
+            outputChannel.appendLine('  No repo rule matched');
         } else {
-            // On the default branch
-            outputChannel.appendLine('Using default branch color for this repo: ' + repoName);
-            branchColor = repoColor;
+            if (defBranch !== undefined) {
+                if (
+                    (!invertBranchColorLogic && currentBranch != defBranch) ||
+                    (invertBranchColorLogic && currentBranch === defBranch)
+                ) {
+                    // Not on the default branch
+                    if (branchColor === undefined) {
+                        // No color specified, use modified repo color
+                        branchColor = repoColor?.rotate(hueRotation);
+                        outputChannel.appendLine('  No branch name rule, using rotated color for this repo');
+                    }
+                } else {
+                    // On the default branch
+                    branchColor = repoColor;
+                    outputChannel.appendLine('  Using default branch color for this repo: ' + branchColor.hex());
+                }
+            } else {
+                outputChannel.appendLine('  No default branch specified, initializing branch color to repo color');
+                branchColor = repoColor;
+            }
         }
-        startBranchPoll();
-    } else {
-        outputChannel.appendLine('Using repo color, because no default branch is specified for this repo: ' + repoName);
-        branchColor = repoColor;
     }
 
     // Now check the branch map to see if any apply
+    let branchMatch = false;
     for (const [branch, color] of branchMap) {
         if (currentBranch?.match(branch)) {
             branchColor = Color(color);
-            outputChannel.appendLine('Branch rule matched: ' + branch);
+            outputChannel.appendLine('  Branch rule matched: "' + branch + '" with color: ' + branchColor.hex());
+            branchMatch = true;
+            if (repoColor === undefined) {
+                outputChannel.appendLine('  No repo color specified, using branch color as repo color');
+                // No repo config, so use the branch color as the repo color
+                repoColor = branchColor;
+            }
+
             break;
         }
+    }
+
+    if (!branchMatch) {
+        if (repoColor === undefined) {
+            outputChannel.appendLine('  No branch rule matched');
+        } else {
+            outputChannel.appendLine('  No branch rule matched, using repo color for branch color');
+        }
+    }
+
+    if (branchColor === undefined || repoColor === undefined) {
+        // No color specified, so do nothing
+        outputChannel.appendLine('  No color configuration data specified for this repo or branch.');
+        if (getBooleanSetting('removeManagedColors')) {
+            undoColors();
+        }
+        return;
     }
 
     let titleBarTextColor: Color = Color('#ffffff');
@@ -591,79 +602,59 @@ function doit() {
         'sideBarTitle.background': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
         'statusBar.background': doColorStatusBar ? inactiveTabColor.hex() : undefined,
     };
-    outputChannel.appendLine('Applying colors for this repo: ' + 'repoName');
+
+    if (repoColor === branchColor) {
+        // If the repo color and branch color are the same, remove the branch color
+        outputChannel.appendLine(`  Applying color for this repo: ${repoColor.hex()}`);
+    } else {
+        outputChannel.appendLine(
+            `  Applying colors for this repo: repo ${repoColor.hex()}, branch ${branchColor.hex()}`,
+        );
+    }
     workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
+
+    outputChannel.appendLine('\nLoving this extension? https://www.buymeacoffee.com/KevinMills');
+    outputChannel.appendLine(
+        'If you have any issues or suggestions, please file them at\n  https://github.com/mgfarmer/git-repo-window-colors/issues',
+    );
+    startBranchPoll();
 }
 
-function getCurrentGitRemoteFetchUrl(): string {
-    if (workspace.workspaceFolders === undefined) {
-        return '';
+function getWorkspaceRepo() {
+    let workspaceRoot: vscode.Uri | undefined = undefined;
+    const editor = vscode.window.activeTextEditor;
+    if (editor && editor.document.uri) {
+        const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+        if (folder) {
+            workspaceRoot = folder.uri;
+        }
     }
-    let workspaceRoot: vscode.Uri = workspace.workspaceFolders[0].uri;
-
-    const extension = vscode.extensions.getExtension('vscode.git');
-    if (!extension) {
-        console.warn('Git extension not available');
-        return '';
+    // Fallback to the first workspace folder
+    if (!workspaceRoot && workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+        workspaceRoot = workspace.workspaceFolders[0].uri;
     }
-    if (!extension.isActive) {
-        console.warn('Git extension not active');
-        return '';
-    }
-
-    // "1" == "Get version 1 of the API". Version one seems to be the latest when I
-    // type this.
-    const git = extension.exports.getAPI(1);
-    const repository = git.getRepository(workspaceRoot);
-
-    if (!repository) {
+    if (!workspaceRoot) {
         return '';
     }
 
-    if (repository.state.remotes === undefined || repository.state.remotes.length < 1) {
-        return '';
-    }
-
-    return repository.state.remotes[0]['fetchUrl'];
+    // Find the repository that matches the workspaceRoot
+    return gitApi.getRepository(workspaceRoot);
 }
 
-function getCurrentGitBranch(): string {
-    if (workspace.workspaceFolders === undefined) {
-        return '';
-    }
-    let workspaceRoot: vscode.Uri = workspace.workspaceFolders[0].uri;
-
-    const extension = vscode.extensions.getExtension('vscode.git');
-    if (!extension) {
-        console.warn('Git extension not available');
-        return '';
-    }
-    if (!extension.isActive) {
-        console.warn('Git extension not active');
-        return '';
+function getCurrentGitBranch(): string | undefined {
+    const head = gitRepository.state.HEAD;
+    if (!head) {
+        console.warn('No HEAD found for repository.');
+        return undefined;
     }
 
-    // "1" == "Get version 1 of the API". Version one seems to be the latest when I
-    // type this.
-    const git = extension.exports.getAPI(1);
-    const repository = git.getRepository(workspaceRoot);
-    if (!repository) {
-        return '';
+    if (!head.name) {
+        // Detached HEAD state
+        console.warn('Repository is in a detached HEAD state.');
+        return undefined;
     }
 
-    const currentBranch = repository.state.HEAD;
-    if (!currentBranch) {
-        //console.warn('No HEAD branch for current document', docUri);
-        return '';
-    }
-
-    const branchName = currentBranch.name;
-    if (!branchName) {
-        //console.warn('Current branch has no name', docUri, currentBranch);
-        return '';
-    }
-
-    return branchName;
+    return head.name;
 }
 
 let intervalId: NodeJS.Timeout | undefined = undefined;
@@ -674,16 +665,16 @@ function stopBranchPoll() {
 
 function startBranchPoll() {
     intervalId = setInterval(function () {
-        let branch = '';
+        let branch: string | undefined = undefined;
         try {
-            if (workspace.workspaceFolders === undefined) {
+            branch = getCurrentGitBranch();
+            if (branch === undefined) {
                 return;
             }
-            branch = getCurrentGitBranch();
             if (currentBranch != branch) {
+                const reason = `branch change '${currentBranch}' ==> '${branch}'`;
                 currentBranch = branch;
-                outputChannel.appendLine('Change to branch: ' + branch);
-                doit();
+                doit(reason);
             }
         } catch (error) {
             outputChannel.appendLine('Branch Poll Error: ' + error);
