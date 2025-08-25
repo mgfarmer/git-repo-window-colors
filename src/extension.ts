@@ -518,11 +518,11 @@ async function doit(reason: string) {
             branchColor = Color(color);
             outputChannel.appendLine('  Branch rule matched: "' + branch + '" with color: ' + branchColor.hex());
             branchMatch = true;
-            if (repoColor === undefined) {
-                outputChannel.appendLine('  No repo color specified, using branch color as repo color');
-                // No repo config, so use the branch color as the repo color
-                repoColor = branchColor;
-            }
+            // if (repoColor === undefined) {
+            //     outputChannel.appendLine('  No repo color specified, using branch color as repo color');
+            //     // No repo config, so use the branch color as the repo color
+            //     repoColor = branchColor;
+            // }
 
             break;
         }
