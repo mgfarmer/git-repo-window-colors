@@ -23,12 +23,78 @@ This plugin works best with these two settings also set:
 
 LET IT BE KNOWN: Any custom color settings managed by this plugin that you may have defined previously in a workspace .vscode/settings.json will be overwritten by this extension.
 
-This extension creates the following commands, accessible from the Command Palatte:
+### Configuration UI (Recommended)
 
-- "Colorize this repo" Use this command to add a coloring rule for the repo in you current workspace. If a rule already matches this repo, this command will fill in the values for the current rule, allowing you to modify the rule.
-- "Decolorize this repo" Use this command to remove the rule (if any) that currently applies to your workspace.
+The easiest way to configure this extension is through the **Configuration UI**:
 
-Advanced configuration can be done via User Settings UI or directly in the User Settings JSON file.
+1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+2. Run the command: **"Git Repo Window Colors: Open Configuration"**
+3. Use the intuitive webview interface to:
+   - Add and edit repository rules with drag-and-drop reordering
+   - Add and edit branch pattern rules
+   - Configure colors using built-in color pickers
+   - Test your configuration with comprehensive validation
+   - Preview changes in real-time
+
+**Keyboard Shortcuts in Configuration UI:**
+
+- `Ctrl+Alt+R` - Add Repository Rule
+- `Ctrl+Alt+B` - Add Branch Rule  
+- `Ctrl+Alt+T` - Run Configuration Tests
+- `Ctrl+Alt+S` - Save Configuration
+- `Escape` - Close tooltips
+
+**Accessibility Features:**
+
+- Full keyboard navigation support
+- Screen reader compatibility with ARIA labels
+- High contrast mode support
+- Comprehensive tooltips and help text
+- Focus management and visual indicators
+
+### Command Palette Commands
+
+This extension creates the following commands, accessible from the Command Palette:
+
+- **"Git Repo Window Colors: Open Configuration"** - Opens the full configuration webview (recommended)
+- **"Colorize this repo"** - Quick command to add a coloring rule for the current workspace repo
+- **"Decolorize this repo"** - Remove any rule that currently applies to your workspace
+
+Advanced configuration can also be done via User Settings UI or directly in the User Settings JSON file.
+
+### Configuration UI Features
+
+The webview configuration interface provides a rich set of features for managing your color rules:
+
+**Repository Rules Panel:**
+
+- Define color rules for specific repositories
+- Drag and drop reordering (first match wins)
+- Support for repository qualifiers, default branches, primary colors, and branch colors
+- Real-time validation with detailed error messages
+- Built-in color picker with support for hex, named colors, RGB, and HSL formats
+
+**Branch Rules Panel:**
+
+- Create patterns to match branch names across all repositories
+- Regular expression support for flexible pattern matching
+- Override repository colors for specific branches
+- Visual examples and pattern documentation
+
+**Other Settings Panel:**
+
+- Activity Bar Color Knob adjustment (-10 to +10)
+- Branch Hue Rotation settings (-359° to +359°)
+- Toggle switches for UI element coloring
+- Real-time preview of setting changes
+
+**Testing and Validation:**
+
+- Comprehensive configuration testing suite
+- Performance testing with large configurations
+- Edge case and invalid configuration detection
+- Color format validation and helpful error messages
+- Test data restoration ensures your real configuration is preserved
 
 ### Status Reporting
 

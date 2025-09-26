@@ -49,6 +49,11 @@
                 "command": "windowColors.decolorize",
                 "title": "Decolorize this repo",
                 "category": "GRWC"
+            },
+            {
+                "command": "windowColors.openConfig",
+                "title": "Open Configuration",
+                "category": "GRWC"
             }
         ],
         "configuration": [
@@ -58,7 +63,7 @@
                 "properties": {
                     "windowColors.repoConfigurationList": {
                         "order": 1,
-                        "markdownDescription": "Each entry in the ordered list has the form `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]` (i.e. `myrepo:blue` or `myrepo/main:blue/green`).  The `repo-qualifier` is required. The repository qualifier is a simple string. If this string is found in the repository URL as given by `git config --get remote.origin.url`, then a match is made.  The first match found  will be used.  The `primary-color` is the color associated with the repository.  This color will be used to color the window title bar and activity bar (when not using branch colors).\n\nThe `default-branch` is optional and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `#windowColors.automaticBranchIndicatorColorKnob#` setting. You can invert the branch coloring logic using `#windowColors.invertBranchColorLogic#`\n\nColors can be specified in any form recognized by the Javascript Color class.  See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).\n\nYou can use whitespace to make the list more readable.  All whitespace will be stripped for processing.\n\nFormat Reference: `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]`",
+                        "markdownDescription": "Entries in this list are optional. Each entry in the ordered list has the form `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]` (i.e. `myrepo:blue` or `myrepo/main:blue/green`).  The `repo-qualifier` is required. The repository qualifier is a simple string. If this string is found in the repository URL as given by `git config --get remote.origin.url`, then a match is made.  The first match found  will be used.  The `primary-color` is the color associated with the repository.  This color will be used to color the window title bar and activity bar (when not using branch colors).\n\nThe `default-branch` is optional and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `#windowColors.automaticBranchIndicatorColorKnob#` setting. You can invert the branch coloring logic using `#windowColors.invertBranchColorLogic#`\n\nColors can be specified in any form recognized by the Javascript Color class.  See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).\n\nYou can use whitespace to make the list more readable.  All whitespace will be stripped for processing.\n\nFormat Reference: `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]`",
                         "type": "array",
                         "items": {
                             "type": "string"
@@ -134,6 +139,13 @@
                         "minimum": -359,
                         "default": 60,
                         "description": "When repository settings does not spcify a branch color, use this knob to control the hue rotation of the repository color to automatically set the branch color.  Smaller values will be similar to the repository color.  A value of 180 is the 'opposite' of the repository color on the color wheel.",
+                        "scope": "application"
+                    },
+                    "windowColors.showBranchColumns": {
+                        "order": 25,
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Show the Default Branch and Branch Color columns in the Repository Rules table. When unchecked, these branch-related columns are hidden to provide a more compact view.",
                         "scope": "application"
                     }
                 }

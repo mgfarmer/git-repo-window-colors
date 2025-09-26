@@ -4,6 +4,7 @@ import * as Color from 'color';
 //import * as path from 'path';
 import * as vscode from 'vscode';
 import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
+import { ConfigWebviewProvider } from './webview/configWebview';
 
 let currentBranch: undefined | string = undefined;
 
@@ -64,6 +65,7 @@ let gitExt;
 let gitApi: any;
 let gitRepository: any;
 let gitRepoRemoteFetchUrl: string = '';
+let configProvider: ConfigWebviewProvider;
 
 export async function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
@@ -198,6 +200,23 @@ export async function activate(context: ExtensionContext) {
         }),
     );
 
+    // Register the configuration webview command
+    configProvider = new ConfigWebviewProvider(context.extensionUri);
+    context.subscriptions.push(configProvider);
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.openConfig', () => {
+            configProvider.show(context.extensionUri);
+        }),
+    );
+
+    // Register internal command for webview to trigger color updates
+    context.subscriptions.push(
+        vscode.commands.registerCommand('_grwc.internal.applyColors', (reason: string) => {
+            doit(reason || 'internal command');
+        }),
+    );
+
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (
@@ -265,6 +284,11 @@ async function init() {
             return;
         }
         outputChannel.appendLine('Current branch: ' + currentBranch);
+
+        // Update workspace info for the configuration webview
+        if (configProvider) {
+            configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
+        }
 
         doit('initial activation');
     } else {
@@ -674,6 +698,12 @@ function startBranchPoll() {
             if (currentBranch != branch) {
                 const reason = `branch change '${currentBranch}' ==> '${branch}'`;
                 currentBranch = branch;
+
+                // Update workspace info for the configuration webview
+                if (configProvider) {
+                    configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
+                }
+
                 doit(reason);
             }
         } catch (error) {
