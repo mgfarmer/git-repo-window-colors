@@ -102,6 +102,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
         const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(branchRules, workspaceInfo.currentBranch);
 
+        console.log('[DEBUG] Sending matching indexes:', {
+            repoRule: matchingRepoRuleIndex,
+            branchRule: matchingBranchRuleIndex,
+        });
+
         this.currentConfig = {
             repoRules,
             branchRules,
@@ -130,8 +135,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _parseRepoRule(ruleString: string): RepoRule | null {
         try {
-            // Format: <repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]
-            // Example: "myrepo/main:blue/green" or "myrepo:blue"
+            // Format: <repo-qualifier>[|<default-branch>]:<primary-color>[|<branch-color>]
+            // Example: "myrepo|main:blue|green" or "myrepo:blue"
             const colonIndex = ruleString.indexOf(':');
             if (colonIndex === -1) {
                 return null;
@@ -144,15 +149,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 return null;
             }
 
-            // Parse repo section: repo-qualifier[/default-branch]
-            const repoSlashIndex = repoSection.indexOf('/');
-            const repoQualifier = repoSlashIndex === -1 ? repoSection : repoSection.substring(0, repoSlashIndex);
-            const defaultBranch = repoSlashIndex === -1 ? undefined : repoSection.substring(repoSlashIndex + 1);
+            // Parse repo section: repo-qualifier[|default-branch]
+            const repoPipeIndex = repoSection.indexOf('|');
+            const repoQualifier = repoPipeIndex === -1 ? repoSection : repoSection.substring(0, repoPipeIndex);
+            const defaultBranch = repoPipeIndex === -1 ? undefined : repoSection.substring(repoPipeIndex + 1);
 
-            // Parse color section: primary-color[/branch-color]
-            const colorSlashIndex = colorSection.indexOf('/');
-            const primaryColor = colorSlashIndex === -1 ? colorSection : colorSection.substring(0, colorSlashIndex);
-            const branchColor = colorSlashIndex === -1 ? undefined : colorSection.substring(colorSlashIndex + 1);
+            // Parse color section: primary-color[|branch-color]
+            const colorPipeIndex = colorSection.indexOf('|');
+            const primaryColor = colorPipeIndex === -1 ? colorSection : colorSection.substring(0, colorPipeIndex);
+            const branchColor = colorPipeIndex === -1 ? undefined : colorSection.substring(colorPipeIndex + 1);
 
             return {
                 repoQualifier: repoQualifier.trim(),
@@ -217,12 +222,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return -1;
         }
 
+        console.log('[DEBUG] Matching repo rules:', {
+            repoRules: repoRules.map((r, i) => `${i}: ${r.repoQualifier}`),
+            repositoryUrl: repositoryUrl,
+        });
+
         for (let i = 0; i < repoRules.length; i++) {
+            console.log(`[DEBUG] Testing repo rule ${i}: "${repoRules[i].repoQualifier}" against "${repositoryUrl}"`);
             if (repositoryUrl.includes(repoRules[i].repoQualifier)) {
+                console.log(`[DEBUG] Repo rule ${i} matched! Returning index ${i}`);
                 return i;
             }
         }
 
+        console.log('[DEBUG] No repo rule matched, returning -1');
         return -1;
     }
 
@@ -231,18 +244,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return -1;
         }
 
+        console.log('[DEBUG] Matching branch rules:', {
+            branchRules: branchRules.map((r, i) => `${i}: ${r.pattern}`),
+            currentBranch: currentBranch,
+        });
+
         for (let i = 0; i < branchRules.length; i++) {
+            console.log(`[DEBUG] Testing branch rule ${i}: "${branchRules[i].pattern}" against "${currentBranch}"`);
             try {
                 const regex = new RegExp(branchRules[i].pattern);
                 if (regex.test(currentBranch)) {
+                    console.log(`[DEBUG] Branch rule ${i} matched! Returning index ${i}`);
                     return i;
                 }
             } catch (error) {
+                console.log(`[DEBUG] Branch rule ${i} has invalid regex, skipping`);
                 // Invalid regex, skip this rule
                 continue;
             }
         }
 
+        console.log('[DEBUG] No branch rule matched, returning -1');
         return -1;
     }
 
@@ -1801,10 +1823,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     } else {
                         // Use backend-calculated matching indexes (first match wins)
                         const firstMatchIndex = matchingIndexes.repoRule;
+                        console.log('[DEBUG] Using repo rule matching index:', firstMatchIndex);
                         
                         rules.forEach((rule, index) => {
                             // Only highlight the first matching rule as determined by the backend
                             const isMatched = index === firstMatchIndex;
+                            console.log('[DEBUG] Repo rule ' + index + ': isMatched=' + isMatched + ' (' + rule.repoQualifier + ')');
                             const matchedClass = isMatched ? ' matched-rule' : '';
                             html += \`
                                 <tr role="row" data-index="\${index}" class="rule-row\${matchedClass}" draggable="true" aria-label="Repository rule \${index + 1}">
@@ -1945,10 +1969,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     } else {
                         // Use backend-calculated matching indexes (first match wins)
                         const firstMatchIndex = matchingIndexes.branchRule;
+                        console.log('[DEBUG] Using branch rule matching index:', firstMatchIndex);
                         
                         rules.forEach((rule, index) => {
                             // Only highlight the first matching rule as determined by the backend
                             const isMatched = index === firstMatchIndex;
+                            console.log('[DEBUG] Branch rule ' + index + ': isMatched=' + isMatched + ' (' + rule.pattern + ')');
                             const matchedClass = isMatched ? ' matched-rule' : '';
                             html += \`
                                 <tr role="row" data-index="\${index}" class="rule-row\${matchedClass}" draggable="true" aria-label="Branch rule \${index + 1}">
@@ -2203,6 +2229,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             // Update matching indexes from backend
                             if (message.data.matchingIndexes) {
                                 matchingIndexes = message.data.matchingIndexes;
+                                console.log('[DEBUG] Received matching indexes:', matchingIndexes);
                             }
                             
                             displayRepoRules(message.data.repoRules);
