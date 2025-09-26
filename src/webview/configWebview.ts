@@ -98,6 +98,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const otherSettings = this._getOtherSettings();
         const workspaceInfo = this._getWorkspaceInfo();
 
+        // Calculate matching rule indexes using the same logic as the extension
+        const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
+        const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(branchRules, workspaceInfo.currentBranch);
+
         this.currentConfig = {
             repoRules,
             branchRules,
@@ -109,6 +113,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             data: {
                 ...this.currentConfig,
                 workspaceInfo,
+                matchingIndexes: {
+                    repoRule: matchingRepoRuleIndex,
+                    branchRule: matchingBranchRuleIndex,
+                },
             },
         });
     }
@@ -202,6 +210,40 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string } {
         return this._workspaceInfo;
+    }
+
+    private _getMatchingRepoRuleIndex(repoRules: RepoRule[], repositoryUrl: string): number {
+        if (!repoRules || !repositoryUrl) {
+            return -1;
+        }
+
+        for (let i = 0; i < repoRules.length; i++) {
+            if (repositoryUrl.includes(repoRules[i].repoQualifier)) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private _getMatchingBranchRuleIndex(branchRules: BranchRule[], currentBranch: string): number {
+        if (!branchRules || !currentBranch) {
+            return -1;
+        }
+
+        for (let i = 0; i < branchRules.length; i++) {
+            try {
+                const regex = new RegExp(branchRules[i].pattern);
+                if (regex.test(currentBranch)) {
+                    return i;
+                }
+            } catch (error) {
+                // Invalid regex, skip this rule
+                continue;
+            }
+        }
+
+        return -1;
     }
 
     private _updateConfiguration(data: any): void {
@@ -1056,6 +1098,101 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     initializeAccessibility();
                 }
                 
+                // Helper functions for smart defaults
+                function extractRepoNameFromUrl(repositoryUrl) {
+                    if (!repositoryUrl) return '';
+                    
+                    // Handle various Git repository URL formats
+                    // https://github.com/owner/repo.git -> owner/repo
+                    // git@github.com:owner/repo.git -> owner/repo
+                    // https://github.com/owner/repo -> owner/repo
+                    
+                    // Use string-based approach to avoid regex escaping issues in webview
+                    try {
+                        // Try GitHub pattern first
+                        let match = repositoryUrl.match(new RegExp('github\\\\.com[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
+                        if (match && match[1]) return match[1];
+                        
+                        // Try GitLab pattern
+                        match = repositoryUrl.match(new RegExp('gitlab\\\\.com[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
+                        if (match && match[1]) return match[1];
+                        
+                        // Try Bitbucket pattern
+                        match = repositoryUrl.match(new RegExp('bitbucket\\\\.org[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
+                        if (match && match[1]) return match[1];
+                        
+                        // Generic pattern as fallback
+                        match = repositoryUrl.match(new RegExp('[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
+                        if (match && match[1]) return match[1];
+                        
+                    } catch (e) {
+                        console.warn('Error parsing repository URL:', e);
+                    }
+                    
+                    return '';
+                }
+                
+                function isThemeDark() {
+                    // Check VS Code theme by looking at computed styles
+                    const body = document.body;
+                    const backgroundColor = getComputedStyle(body).backgroundColor;
+                    
+                    // Parse RGB values
+                    const rgb = backgroundColor.match(/\d+/g);
+                    if (rgb && rgb.length >= 3) {
+                        const r = parseInt(rgb[0]);
+                        const g = parseInt(rgb[1]);
+                        const b = parseInt(rgb[2]);
+                        
+                        // Calculate brightness using standard formula
+                        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                        return brightness < 128; // Dark if brightness is low
+                    }
+                    
+                    // Fallback: check CSS variables
+                    const editorBg = getComputedStyle(body).getPropertyValue('--vscode-editor-background');
+                    if (editorBg) {
+                        // If editor background is available, assume it's properly themed
+                        // VS Code dark themes typically have dark editor backgrounds
+                        return true; // Most VS Code usage is dark mode
+                    }
+                    
+                    return true; // Default to dark mode assumption
+                }
+                
+                function getThemeAppropriateColor() {
+                    const isDark = isThemeDark();
+                    
+                    // Predefined color palettes
+                    const darkModeColors = [
+                        '#1E4A72', // Deep navy blue
+                        '#2C5F41', // Deep forest green  
+                        '#8B2635', // Deep burgundy red
+                        '#5D4E75', // Deep purple
+                        '#B8860B', // Deep golden orange
+                        '#2F6B5B', // Deep teal
+                        '#8B4513', // Deep brown-red
+                        '#483D8B'  // Deep slate blue
+                    ];
+                    
+                    const lightModeColors = [
+                        '#4A90E2', // Bright blue
+                        '#50C878', // Emerald green
+                        '#FF6B6B', // Coral red
+                        '#9B59B6', // Purple
+                        '#F39C12', // Orange
+                        '#1ABC9C', // Turquoise
+                        '#E74C3C', // Red
+                        '#3498DB'  // Light blue
+                    ];
+                    
+                    const colors = isDark ? darkModeColors : lightModeColors;
+                    
+                    // Pick a random color from the appropriate palette
+                    const randomIndex = Math.floor(Math.random() * colors.length);
+                    return colors[randomIndex];
+                }
+                
                 // Repository rule management
                 function addRepoRule() {
                     if (!currentConfig) {
@@ -1065,15 +1202,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         currentConfig.repoRules = [];
                     }
                     
+                    // Smart defaults based on current workspace and theme
+                    const defaultRepoName = extractRepoNameFromUrl(workspaceInfo.repositoryUrl);
+                    const themeAppropriateColor = getThemeAppropriateColor();
+                    
                     currentConfig.repoRules.push({
-                        repoQualifier: '',
+                        repoQualifier: defaultRepoName,
                         defaultBranch: '',
-                        primaryColor: '#0066cc',
+                        primaryColor: themeAppropriateColor,
                         branchColor: ''
                     });
                     
                     displayRepoRules(currentConfig.repoRules);
-                    debouncedValidation();
+                    debouncedSaveAndPreview();
                 }
                 
                 function deleteRepoRule(index) {
@@ -1120,7 +1261,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     });
                     
                     displayBranchRules(currentConfig.branchRules);
-                    debouncedValidation();
+                    debouncedSaveAndPreview();
                 }
                 
                 function deleteBranchRule(index) {
@@ -1613,22 +1754,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 }
                 
                 let workspaceInfo = { repositoryUrl: '', currentBranch: '' };
-                
-                function isRepoRuleMatched(rule, repositoryUrl) {
-                    if (!repositoryUrl || !rule.repoQualifier) return false;
-                    return repositoryUrl.includes(rule.repoQualifier);
-                }
-                
-                function isBranchRuleMatched(rule, currentBranch) {
-                    if (!currentBranch || !rule.pattern) return false;
-                    try {
-                        const regex = new RegExp(rule.pattern);
-                        return regex.test(currentBranch);
-                    } catch (e) {
-                        // If regex is invalid, try exact string match
-                        return currentBranch === rule.pattern;
-                    }
-                }
+                let matchingIndexes = { repoRule: -1, branchRule: -1 };
                 
                 function displayRepoRules(rules) {
                     const content = document.getElementById('repoRulesContent');
@@ -1673,8 +1799,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 <td colspan="5" class="no-rules">No repository rules configured</td>
                             </tr>\`;
                     } else {
+                        // Use backend-calculated matching indexes (first match wins)
+                        const firstMatchIndex = matchingIndexes.repoRule;
+                        
                         rules.forEach((rule, index) => {
-                            const isMatched = isRepoRuleMatched(rule, workspaceInfo.repositoryUrl);
+                            // Only highlight the first matching rule as determined by the backend
+                            const isMatched = index === firstMatchIndex;
                             const matchedClass = isMatched ? ' matched-rule' : '';
                             html += \`
                                 <tr role="row" data-index="\${index}" class="rule-row\${matchedClass}" draggable="true" aria-label="Repository rule \${index + 1}">
@@ -1813,8 +1943,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 <td colspan="3" class="no-rules">No branch rules configured</td>
                             </tr>\`;
                     } else {
+                        // Use backend-calculated matching indexes (first match wins)
+                        const firstMatchIndex = matchingIndexes.branchRule;
+                        
                         rules.forEach((rule, index) => {
-                            const isMatched = isBranchRuleMatched(rule, workspaceInfo.currentBranch);
+                            // Only highlight the first matching rule as determined by the backend
+                            const isMatched = index === firstMatchIndex;
                             const matchedClass = isMatched ? ' matched-rule' : '';
                             html += \`
                                 <tr role="row" data-index="\${index}" class="rule-row\${matchedClass}" draggable="true" aria-label="Branch rule \${index + 1}">
@@ -2064,6 +2198,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             // Update workspace info for rule matching
                             if (message.data.workspaceInfo) {
                                 workspaceInfo = message.data.workspaceInfo;
+                            }
+                            
+                            // Update matching indexes from backend
+                            if (message.data.matchingIndexes) {
+                                matchingIndexes = message.data.matchingIndexes;
                             }
                             
                             displayRepoRules(message.data.repoRules);
