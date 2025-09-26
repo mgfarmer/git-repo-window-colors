@@ -1,0 +1,511 @@
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    margin: 0;
+    padding: 20px;
+}
+.config-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 40px);
+    gap: 20px;
+}
+.top-panels {
+    display: flex;
+    flex: 1;
+    gap: 20px;
+}
+.repo-panel,
+.branch-panel {
+    flex: 1;
+    border: 1px solid var(--vscode-panel-border);
+    padding: 0px;
+    padding-top: 10px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+}
+.bottom-panel {
+    height: 200px;
+    border: 1px solid var(--vscode-panel-border);
+    padding: 15px;
+    border-radius: 4px;
+}
+h2 {
+    margin-top: 0;
+    color: var(--vscode-foreground);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+.placeholder {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    text-align: center;
+    padding: 40px 20px;
+}
+.rules-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+.rules-table th {
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    padding: 8px;
+    text-align: left;
+    border: 1px solid var(--vscode-panel-border);
+    font-size: 12px;
+}
+.rules-table td {
+    padding: 4px;
+    border: 1px solid var(--vscode-panel-border);
+    background-color: var(--vscode-editor-background);
+    vertical-align: middle;
+}
+/* Ensure all table cells have consistent background */
+.rules-table td.color-cell,
+.rules-table td.reorder-controls {
+    background-color: var(--vscode-editor-background);
+}
+/* Highlight matched rules */
+.rules-table tr.matched-rule {
+    border: 2px solid var(--vscode-charts-green);
+    background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
+}
+.rules-table tr.matched-rule td {
+    border-color: var(--vscode-charts-green);
+}
+.rule-input,
+.color-input {
+    width: 100%;
+    background: var(--vscode-editor-background);
+    border: none;
+    color: var(--vscode-input-foreground);
+    padding: 4px;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+}
+.rule-input:focus,
+.color-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    background-color: var(--vscode-input-background);
+}
+.color-cell {
+    padding: 2px !important;
+}
+.color-input-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.color-swatch {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--vscode-panel-border);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.color-swatch:hover {
+    border-color: var(--vscode-focusBorder);
+}
+
+/* Native color picker styles */
+.color-input-container.native-picker {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.native-color-input {
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 3px;
+    cursor: pointer;
+    background: none;
+    padding: 0;
+    flex-shrink: 0;
+}
+.native-color-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border: none;
+    border-radius: 2px;
+}
+.native-color-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 2px;
+}
+.color-input.text-input {
+    flex: 1;
+    min-width: 80px;
+}
+
+.reorder-controls {
+    text-align: center;
+    width: 65px;
+    padding: 2px !important;
+}
+.reorder-buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    align-items: center;
+    justify-content: center;
+}
+.reorder-btn {
+    background: var(--vscode-editor-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-panel-border);
+    width: 15px;
+    height: 15px;
+    font-size: 8px;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.reorder-btn:hover:not(:disabled) {
+    background: var(--vscode-input-background);
+}
+.reorder-btn:disabled {
+    background: var(--vscode-editor-background);
+    color: var(--vscode-disabledForeground);
+    border: none;
+    cursor: not-allowed;
+    /* Don't use opacity on the whole button - it affects tooltips */
+}
+.drag-handle {
+    width: 15px;
+    height: 15px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+    cursor: grab;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 2px;
+    background: var(--vscode-input-background);
+    line-height: 1;
+    font-weight: normal;
+    text-align: center;
+    vertical-align: middle;
+    font-family: sans-serif;
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+}
+.rule-row.dragging {
+    opacity: 0.5;
+}
+.rule-row.drag-over {
+    border-top: 2px solid var(--vscode-focusBorder);
+}
+.delete-btn {
+    background: var(--vscode-button-background);
+    color: var(--vscode-errorForeground);
+    border: 1px solid var(--vscode-panel-border);
+    width: 15px;
+    height: 15px;
+    font-size: 8px;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.delete-btn:hover {
+    background: var(--vscode-errorBackground);
+    border-color: var(--vscode-errorForeground);
+}
+.add-button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    margin-bottom: 10px;
+}
+.add-button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+.table-controls {
+    margin-bottom: 10px;
+}
+/* Header layout with add button on the right */
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.panel-header h2 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.header-add-button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 6px 12px;
+    margin-right: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.header-add-button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+.validation-error {
+    border: 1px solid var(--vscode-errorBorder) !important;
+    background-color: var(--vscode-inputValidation-errorBackground) !important;
+}
+
+/* Validation error container styles */
+.validation-error-container {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-errorBorder);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+.error-title {
+    color: var(--vscode-errorForeground);
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+}
+.error-list {
+    margin: 0;
+    padding-left: 20px;
+    list-style-type: disc;
+}
+.error-item {
+    color: var(--vscode-errorForeground);
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+.error-item:last-child {
+    margin-bottom: 0;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+.setting-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.setting-item label {
+    flex: 1;
+    color: var(--vscode-foreground);
+}
+input[type='checkbox'] {
+    accent-color: var(--vscode-button-background);
+}
+input[type='range'] {
+    flex: 1;
+    max-width: 120px;
+}
+.no-rules {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    text-align: center;
+    padding: 20px;
+}
+.test-buttons {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+.test-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+}
+.test-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+/* Tooltip styles */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+}
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 300px;
+    background-color: var(--vscode-editorHoverWidget-background);
+    color: var(--vscode-editorHoverWidget-foreground);
+    text-align: left;
+    border-radius: 4px;
+    padding: 8px 12px;
+    position: absolute;
+    z-index: 1000;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -150px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+    line-height: 1.4;
+    border: 1px solid var(--vscode-editorHoverWidget-border);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+.tooltip .tooltiptext::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: var(--vscode-editorHoverWidget-border) transparent transparent transparent;
+}
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Panel header tooltips - render below to avoid clipping */
+.tooltip.panel-tooltip .tooltiptext {
+    bottom: auto;
+    top: 125%;
+}
+.tooltip.panel-tooltip .tooltiptext::after {
+    top: auto;
+    bottom: 100%;
+    border-color: transparent transparent var(--vscode-editorHoverWidget-border) transparent;
+}
+
+/* Bottom panel tooltips - render above to avoid clipping */
+.tooltip.bottom-panel-tooltip .tooltiptext {
+    bottom: 125%;
+    top: auto;
+}
+.tooltip.bottom-panel-tooltip .tooltiptext::after {
+    top: 100%;
+    bottom: auto;
+    border-color: var(--vscode-editorHoverWidget-border) transparent transparent transparent;
+}
+
+/* Right-positioned tooltips for reorder controls to avoid left edge clipping */
+.tooltip.right-tooltip .tooltiptext {
+    top: 50%;
+    left: 100%;
+    bottom: auto;
+    margin-left: 10px;
+    margin-top: -20px;
+    transform: translateY(-50%);
+}
+.tooltip.right-tooltip .tooltiptext::after {
+    top: 50%;
+    left: -5px;
+    margin-left: 0;
+    margin-top: -5px;
+    border-color: transparent var(--vscode-editorHoverWidget-border) transparent transparent;
+}
+
+/* Help text styles */
+.help-text {
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    font-style: italic;
+    margin-top: 4px;
+    line-height: 1.3;
+}
+.section-help {
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    margin: 4px 0;
+    padding: 6px;
+    background-color: var(--vscode-editorWidget-background);
+    border-radius: 4px;
+    border-left: 3px solid var(--vscode-textLink-foreground);
+}
+.help-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    margin-left: 4px;
+    opacity: 0.7;
+    cursor: help;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: 2px;
+    font-size: 12px;
+    line-height: 1;
+}
+.help-icon:hover,
+.help-icon:focus {
+    opacity: 1;
+    border-color: var(--vscode-focusBorder);
+    outline: none;
+}
+.help-icon:focus .tooltiptext,
+.help-icon:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Enhanced keyboard navigation */
+.rules-table input:focus,
+.rules-table select:focus,
+button:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+/* Screen reader only content */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* High contrast support */
+@media (prefers-contrast: high) {
+    .rules-table {
+        border: 2px solid;
+    }
+    .help-icon:focus {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .tooltip .tooltiptext {
+        transition: none;
+    }
+}

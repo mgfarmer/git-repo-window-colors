@@ -165,6 +165,7 @@
         "@types/mocha": "^10.0.7",
         "@types/node": "^20.x",
         "@types/vscode": "^1.90.0",
+        "copy-webpack-plugin": "^13.0.1",
         "prettier": "^3.3.3",
         "ts-loader": "^9.5.1",
         "typescript": "^5.6.2",
