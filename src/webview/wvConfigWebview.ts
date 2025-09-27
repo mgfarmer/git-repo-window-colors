@@ -472,8 +472,8 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     headerRow.innerHTML = `
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
-        <th scope="col" class="branch-column">Default Branch</th>
         <th scope="col">Primary Color</th>
+        <th scope="col" class="branch-column">Default Branch</th>
         <th scope="col" class="branch-column">Branch Color</th>
     `;
 
@@ -505,7 +505,7 @@ function createRepoRuleRowHTML(rule: any, index: number): string {
         <td class="reorder-controls">
             ${createReorderControlsHTML(index, 'repo')}
         </td>
-        <td>
+        <td class="repo-rule-cell">
             <input type="text" 
                    class="rule-input" 
                    id="repo-qualifier-${index}"
@@ -513,6 +513,9 @@ function createRepoRuleRowHTML(rule: any, index: number): string {
                    placeholder="e.g., myrepo or github.com/user/repo"
                    aria-label="Repository qualifier for rule ${index + 1}"
                    data-action="updateRepoRule(${index}, 'repoQualifier', this.value)">
+        </td>
+        <td class="color-cell">
+            ${createColorInputHTML(rule.primaryColor || '', 'repo', index, 'primaryColor')}
         </td>
         <td class="branch-column">
             <input type="text" 
@@ -522,9 +525,6 @@ function createRepoRuleRowHTML(rule: any, index: number): string {
                    placeholder="e.g., main, master"
                    aria-label="Default branch for rule ${index + 1}"
                    data-action="updateRepoRule(${index}, 'defaultBranch', this.value)">
-        </td>
-        <td class="color-cell">
-            ${createColorInputHTML(rule.primaryColor || '', 'repo', index, 'primaryColor')}
         </td>
         <td class="color-cell branch-column">
             ${createColorInputHTML(rule.branchColor || '', 'repo', index, 'branchColor')}

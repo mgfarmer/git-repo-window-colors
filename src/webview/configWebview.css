@@ -74,9 +74,30 @@ h2 {
 .rules-table tr.matched-rule {
     outline: 2px solid var(--vscode-charts-green);
     outline-offset: -1px;
+    position: relative;
 }
-.rules-table tr.matched-rule td {
+.rules-table tr.matched-rule td:not(.reorder-controls):not(.color-cell):not(.repo-rule-cell):not(.branch-column) {
     background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
+}
+/* Add matched rule overlay with checkmark icon */
+.rules-table tr.matched-rule::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    background-color: var(--vscode-charts-green);
+    color: var(--vscode-editor-background);
+    font-size: 12px;
+    font-weight: bold;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .rule-input,
 .color-input {
