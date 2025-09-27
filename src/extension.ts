@@ -71,7 +71,7 @@ let statusBarItem: vscode.StatusBarItem;
 // Helper functions for status bar
 function createStatusBarItem(context: ExtensionContext): void {
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    statusBarItem.command = 'windowColors.openConfig';
+    statusBarItem.command = 'windowColors.statusBarClick';
     statusBarItem.text = '$(symbol-color)';
     statusBarItem.tooltip = 'Git Repo Window Colors - Click to configure';
     context.subscriptions.push(statusBarItem);
@@ -256,6 +256,46 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.openConfig', () => {
             configProvider.show(context.extensionUri);
+        }),
+    );
+
+    // Register status bar click command with smart behavior
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.statusBarClick', async () => {
+            if (gitRepoRemoteFetchUrl === undefined || gitRepoRemoteFetchUrl === '') {
+                vscode.window.showErrorMessage('This workspace is not a git repository.');
+                return;
+            }
+
+            let configList = getRepoConfigList(false);
+            if (configList === undefined) {
+                configList = new Array<RepoConfig>();
+            }
+
+            let repoConfig = await getMatchingRepoRule(configList);
+
+            if (repoConfig !== undefined) {
+                // Rule already exists, just open the configuration editor
+                configProvider.show(context.extensionUri);
+                return;
+            }
+
+            // No rule exists, open editor and auto-add rule
+            // Create a new rule suggestion
+            const p1 = gitRepoRemoteFetchUrl.split(':');
+            let repoQualifier = '';
+            if (p1.length > 1) {
+                const parts = p1[1].split('/');
+                if (parts.length > 1) {
+                    const lastPart = parts.slice(-2).join('/');
+                    if (lastPart !== undefined) {
+                        repoQualifier = lastPart.replace('.git', '');
+                    }
+                }
+            }
+
+            // Open the configuration webview and automatically add a new rule
+            configProvider.showAndAddRepoRule(context.extensionUri, repoQualifier);
         }),
     );
 

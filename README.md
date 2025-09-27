@@ -6,6 +6,37 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ---
 
+## 🆕 What's New
+
+### Version 1.2.0 - Enhanced Configuration & Status Features
+
+#### 🎨 Modern Configuration Editor
+
+- Brand new visual configuration interface with intuitive rule building
+- Drag & drop rule reordering for priority-based matching
+- Built-in color picker with support for hex, RGB, HSL, and named colors
+- Real-time validation and error handling
+- Comprehensive accessibility support with keyboard navigation
+- Smart tooltips and contextual help throughout the interface
+
+#### 📍 Status Bar Icon Integration
+
+- Optional status bar icon with `symbol-color` indicator
+- Configurable visibility: show always or only when no rules match
+- One-click access to configuration editor
+- Intelligent hiding for non-Git workspaces
+- Seamless integration with existing VS Code UI patterns
+
+#### ✨ User Experience Improvements
+
+- Responsive 3-column layout optimized for different screen sizes
+- Consistent typography using VS Code terminal font
+- Refined spacing and alignment across all UI elements
+- Native VS Code confirmation dialogs for destructive actions
+- Enhanced keyboard shortcuts and accessibility features
+
+---
+
 ## ⚡ Why You Need This
 
 **The Problem:** You're a productive developer with 5+ VS Code windows open across different repositories. They all look identical. You waste precious seconds (or minutes) figuring out which window contains which project.
@@ -117,6 +148,17 @@ Quick access to essential functions:
 - **Automatic Brightness Adjustment** - Activity bar colors auto-adjust for readability
 - **Branch Hue Rotation** - Automatic color variations for branch indicators  
 - **Theme Integration** - Works with light and dark themes
+- **Performance Optimized** - Handles large configurations efficiently
+
+### Status Bar Integration
+
+- **Visual Repository Indicator** - Optional status bar icon with color palette icon
+- **Smart Visibility Control** - Configure when the icon appears:
+  - Always visible for Git repositories, or
+  - Only visible when no repository rules match (helps identify unconfigured repos)
+  - Hidden for non-Git workspaces automatically
+- **One-Click Access** - Click the status icon to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it.
+- **Contextual Information** - Tooltip shows current repository status and rule matching
 - **Performance Optimized** - Handles large configurations efficiently
 
 ### Multi-Element Coloring
