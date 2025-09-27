@@ -353,6 +353,38 @@ h2 {
     flex: 1;
     color: var(--vscode-foreground);
 }
+
+/* Special styling for range slider items */
+.setting-item.range-slider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.setting-item.range-slider label {
+    flex: 1;
+    color: var(--vscode-foreground);
+}
+
+.range-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+.range-controls input[type='range'] {
+    width: 120px;
+    flex: none;
+}
+
+.range-controls .value-display {
+    min-width: 30px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+}
+
 input[type='checkbox'] {
     accent-color: var(--vscode-button-background);
 }

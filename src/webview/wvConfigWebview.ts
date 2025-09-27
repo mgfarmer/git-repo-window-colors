@@ -789,16 +789,18 @@ function renderOtherSettings(settings: any) {
                     use separate branch rules instead.
                 </span>
             </div>
-            <div class="setting-item tooltip">
+            <div class="setting-item range-slider tooltip">
                 <label for="activity-bar-knob">Color Knob:</label>
-                <input type="range" 
-                       id="activity-bar-knob" 
-                       min="-10" 
-                       max="10" 
-                       value="${settings.activityBarColorKnob || 0}"
-                       data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
-                       aria-label="Color adjustment from -10 to +10">
-                <span id="activity-bar-knob-value">${settings.activityBarColorKnob || 0}</span>
+                <div class="range-controls">
+                    <input type="range" 
+                           id="activity-bar-knob" 
+                           min="-10" 
+                           max="10" 
+                           value="${settings.activityBarColorKnob || 0}"
+                           data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
+                           aria-label="Color adjustment from -10 to +10">
+                    <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
+                </div>
                 <span class="tooltiptext" role="tooltip">
                     Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
                     Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
@@ -830,16 +832,18 @@ function renderOtherSettings(settings: any) {
                     When disabled, the status bar icon is always visible for Git repositories.
                 </span>
             </div>
-            <div class="setting-item tooltip">
+            <div class="setting-item range-slider tooltip">
                 <label for="branch-hue-rotation">Branch Hue Rotation:</label>
-                <input type="range" 
-                       id="branch-hue-rotation" 
-                       min="-359" 
-                       max="359" 
-                       value="${settings.automaticBranchIndicatorColorKnob || 60}"
-                       data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
-                       aria-label="Branch hue rotation from -359 to +359 degrees">
-                <span id="branch-hue-rotation-value">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
+                <div class="range-controls">
+                    <input type="range" 
+                           id="branch-hue-rotation" 
+                           min="-359" 
+                           max="359" 
+                           value="${settings.automaticBranchIndicatorColorKnob || 60}"
+                           data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
+                           aria-label="Branch hue rotation from -359 to +359 degrees">
+                    <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
+                </div>
                 <span class="tooltiptext" role="tooltip">
                     Automatically shift the hue of branch indicator colors. This creates visual variation 
                     for branch-specific coloring when no explicit branch color is defined.  This only applies
