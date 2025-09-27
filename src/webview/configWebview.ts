@@ -113,9 +113,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'updateConfig':
                 await this._updateConfiguration(message.data);
                 break;
-            case 'previewConfig':
-                this._previewConfiguration(message.data);
-                break;
             case 'openColorPicker':
                 this._openColorPicker(message.data.colorPickerData!);
                 break;
@@ -369,16 +366,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             result += `|${rule.branchColor}`;
         }
         return result;
-    }
-
-    private _previewConfiguration(data: any): void {
-        // Update the configuration temporarily for preview
-        this._updateConfiguration(data);
-
-        // Call the main extension's doit function to apply colors
-        vscode.commands.executeCommand('_grwc.internal.applyColors', 'webview preview');
-
-        vscode.window.showInformationMessage('Preview applied - colors should update momentarily');
     }
 
     private async _handleDeleteConfirmation(deleteData: {

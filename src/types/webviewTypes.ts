@@ -23,7 +23,7 @@ export interface OtherSettings {
 }
 
 export interface WebviewMessage {
-    command: 'updateConfig' | 'requestConfig' | 'previewConfig' | 'openColorPicker' | 'addRepoRule' | 'confirmDelete';
+    command: 'updateConfig' | 'requestConfig' | 'openColorPicker' | 'addRepoRule' | 'confirmDelete';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];

@@ -182,15 +182,11 @@ export async function activate(context: ExtensionContext) {
             if (repoConfig !== undefined) {
                 // Rule already exists, just open the configuration editor
                 configProvider.show(context.extensionUri);
-                vscode.window.showInformationMessage(
-                    'A rule for this repository already exists. You can edit it in the configuration panel.',
-                );
                 return;
             }
 
+            // No rule exists, open editor and auto-add rule
             // Create a new rule suggestion
-            // git@github.com:mgfarmer/git-repo-window-colors.git
-            // https://github.com/mgfarmer/git-repo-window-colors.git
             const p1 = gitRepoRemoteFetchUrl.split(':');
             let repoQualifier = '';
             if (p1.length > 1) {
@@ -205,9 +201,6 @@ export async function activate(context: ExtensionContext) {
 
             // Open the configuration webview and automatically add a new rule
             configProvider.showAndAddRepoRule(context.extensionUri, repoQualifier);
-            vscode.window.showInformationMessage(
-                'Configuration panel opened. A new rule has been added for this repository.',
-            );
         }),
     );
 

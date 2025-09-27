@@ -230,9 +230,6 @@ window.addEventListener('message', (event) => {
         case 'configData':
             handleConfigurationData(message.data);
             break;
-        case 'previewResult':
-            handlePreviewResult(message.data);
-            break;
         case 'colorPickerResult':
             handleColorPickerResult(message.data);
             break;
@@ -251,10 +248,6 @@ function handleConfigurationData(data: any) {
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
     renderConfiguration(currentConfig);
-}
-
-function handlePreviewResult(data: any) {
-    console.log('Preview applied:', data);
 }
 
 function handleColorPickerResult(data: any) {
@@ -1249,15 +1242,6 @@ function sendConfiguration() {
     });
 }
 
-function previewConfiguration() {
-    if (!currentConfig) return;
-
-    vscode.postMessage({
-        command: 'previewConfig',
-        data: currentConfig,
-    });
-}
-
 function openColorPicker(ruleType: string, index: number, field: string) {
     vscode.postMessage({
         command: 'openColorPicker',
@@ -1413,25 +1397,6 @@ function runConfigurationTests() {
     alert('Configuration tests completed. Check console for details.');
 }
 
-function addTestButton() {
-    if (!DEVELOPMENT_MODE) return;
-
-    const existingButton = document.querySelector('[data-action="runConfigurationTests"]');
-    if (existingButton) return; // Already added
-
-    const container = document.querySelector('.test-buttons');
-    if (container && container.children.length === 0) {
-        container.innerHTML = `
-            <button class="test-button" data-action="runConfigurationTests">
-                Run Tests (Dev Mode)
-            </button>
-            <button class="test-button" data-action="previewConfiguration">
-                Preview Changes
-            </button>
-        `;
-    }
-}
-
 // Regex validation functions
 function validateRegexPattern(pattern: string, inputId: string) {
     // Clear any existing error for this input
@@ -1497,9 +1462,4 @@ function clearRegexValidationError() {
     branchInputs.forEach((input) => {
         input.classList.remove('regex-error');
     });
-}
-
-// Initialize test button in development mode only
-if (typeof window !== 'undefined' && DEVELOPMENT_MODE) {
-    setTimeout(addTestButton, 1000);
 }
