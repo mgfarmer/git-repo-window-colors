@@ -106,7 +106,7 @@ h2 {
     border: none;
     color: var(--vscode-input-foreground);
     padding: 4px;
-    font-family: var(--vscode-font-family);
+    font-family: var(--vscode-editor-font-family);
     font-size: 12px;
 }
 .rule-input:focus,
