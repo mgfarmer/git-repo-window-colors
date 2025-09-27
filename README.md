@@ -1,146 +1,170 @@
 # Git Repo Window Colors
 
-Color your VSCode Windows based on which git repo you are working in.
+**Never lose track of which repository you're working in again.**
 
-If you find this extension useful you can <a href="https://www.buymeacoffee.com/KevinMills" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+Transform your VS Code experience by automatically applying distinctive colors to your workspace based on the Git repository you have open. Perfect for developers juggling multiple projects, this extension provides instant visual identification across all your VS Code windows.
 
-## What it does
+---
 
-This extension allow you to give your VSCode window a custom color "frame" based on the name of the git repository opened as your worksapce. It does this by immediately writing color settings in `.vscode/settings.json` file.
+## ⚡ Why You Need This
 
-If you are like me and have multiple vscode windows opened all the time, working on different repositories, you know it can be hard to differentiate the windows visually. By assigning custom colors to the title and activity bars, this plugin aims to alleviate this problem. This also helps when viewing the thumbnail previews displayed by most docks (Windows Taskbar, Ubuntu Dock, etc...)
+**The Problem:** You're a productive developer with 5+ VS Code windows open across different repositories. They all look identical. You waste precious seconds (or minutes) figuring out which window contains which project.
 
-This plugin works best with these two settings also set:
+**The Solution:** Automatic, intelligent color-coding that makes every repository instantly recognizable at a glance.
+
+✅ **Instant Recognition** - Spot the right window immediately  
+✅ **Zero Manual Work** - Automatic coloring based on Git repository  
+✅ **Highly Customizable** - Fine-tune colors for your workflow  
+✅ **Branch-Aware** - Different colors for feature branches, hotfixes, etc.  
+✅ **Taskbar Integration** - Colored thumbnails in Windows/Mac dock previews  
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install & Configure (2 minutes)
+
+1. **Install** the extension from VS Code marketplace
+2. **Open Command Palette** (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+3. **Run:** `Git Repo Window Colors: Open Configuration`
+4. **Add your first rule** - Click "+ Add" in Repository Rules
+5. **Done!** Your workspace now has a unique color identity
+
+### 2. Recommended VS Code Settings
+
+Add these to your User Settings for the best visual experience:
 
 ```json
-"workbench.colorCustomizations": {
-    "window.customTitleBarVisibility": "auto",
-    "window.titleBarStyle": "custom"
+{
+    "window.titleBarStyle": "custom",
+    "workbench.colorCustomizations": {
+        "window.customTitleBarVisibility": "auto"
+    }
 }
 ```
 
-## Usage
+---
 
-LET IT BE KNOWN: Any custom color settings managed by this plugin that you may have defined previously in a workspace .vscode/settings.json will be overwritten by this extension.
+## 💡 How It Works
 
-### Configuration UI (Recommended)
+### Repository Rules (Primary Feature)
 
-The easiest way to configure this extension is through the **Configuration UI**:
+Configure colors for specific repositories. Rules are matched in priority order:
 
-1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Run the command: **"Git Repo Window Colors: Open Configuration"**
-3. Use the intuitive webview interface to:
-   - Add and edit repository rules with drag-and-drop reordering
-   - Add and edit branch pattern rules
-   - Configure colors using built-in color pickers
-   - Test your configuration with comprehensive validation
-   - Preview changes in real-time
+- **Repository Qualifier:** Part of your repo URL (e.g., `my-project`, `github.com/company/app`)
+- **Primary Color:** Main window color for this repository  
+- **Branch Color:** Optional different color for non-default branches
+- **Default Branch:** Specify main branch (master/main) for branch-specific coloring
 
-**Keyboard Shortcuts in Configuration UI:**
+**Example:** `my-app:blue|green` → Blue for main branch, green for feature branches
+
+### Branch Rules (Advanced Feature)
+
+Create patterns that work across ALL repositories:
+
+- **Pattern:** Regular expression matching branch names
+- **Color:** Applied when pattern matches
+
+**Examples:**
+
+- `feature/.*:purple` → All feature branches are purple
+- `hotfix.*:red` → All hotfix branches are red  
+- `JIRA-123.*:orange` → Specific ticket work is orange
+
+---
+
+## 🎨 Configuration Interface
+
+### Modern, Intuitive UI
+
+- **Visual Rule Builder** - No more JSON editing
+- **Drag & Drop Reordering** - Priority-based rule matching
+- **Built-in Color Picker** - Supports hex, RGB, HSL, named colors
+- **Real-time Preview** - See changes instantly
+- **Smart Validation** - Catch errors before they break anything
+
+### Keyboard Shortcuts
 
 - `Ctrl+Alt+R` - Add Repository Rule
-- `Ctrl+Alt+B` - Add Branch Rule  
-- `Ctrl+Alt+T` - Run Configuration Tests
-- `Ctrl+Alt+S` - Save Configuration
-- `Escape` - Close tooltips
+- `Ctrl+Alt+B` - Add Branch Rule
+- `Escape` - Close help tooltips
 
-**Accessibility Features:**
+### Accessibility First
 
-- Full keyboard navigation support
-- Screen reader compatibility with ARIA labels
-- High contrast mode support
-- Comprehensive tooltips and help text
-- Focus management and visual indicators
+- Full keyboard navigation
+- Screen reader compatible
+- High contrast support
+- Comprehensive help text
 
-### Command Palette Commands
+---
 
-This extension creates the following commands, accessible from the Command Palette:
+## 🔧 Command Palette
 
-- **"Git Repo Window Colors: Open Configuration"** - Opens the full configuration webview (recommended)
-- **"Colorize this repo"** - Quick command to add a coloring rule for the current workspace repo
-- **"Decolorize this repo"** - Remove any rule that currently applies to your workspace
+Quick access to essential functions:
 
-Advanced configuration can also be done via User Settings UI or directly in the User Settings JSON file.
+| Command | Purpose |
+|---------|---------|
+| `GRWC: Open Configuration` | Open full configuration UI *(recommended)* |
+| `GRWC: Colorize this repo` | Quick-add current repository |
+| `GRWC: Decolorize this repo` | Remove coloring for current repository |
 
-### Configuration UI Features
+---
 
-The webview configuration interface provides a rich set of features for managing your color rules:
+## ⚙️ Advanced Features
 
-**Repository Rules Panel:**
+### Smart Color Management
 
-- Define color rules for specific repositories
-- Drag and drop reordering (first match wins)
-- Support for repository qualifiers, default branches, primary colors, and branch colors
-- Real-time validation with detailed error messages
-- Built-in color picker with support for hex, named colors, RGB, and HSL formats
+- **Automatic Brightness Adjustment** - Activity bar colors auto-adjust for readability
+- **Branch Hue Rotation** - Automatic color variations for branch indicators  
+- **Theme Integration** - Works with light and dark themes
+- **Performance Optimized** - Handles large configurations efficiently
 
-**Branch Rules Panel:**
+### Multi-Element Coloring
 
-- Create patterns to match branch names across all repositories
-- Regular expression support for flexible pattern matching
-- Override repository colors for specific branches
-- Visual examples and pattern documentation
+Configure which VS Code elements get colored:
 
-**Other Settings Panel:**
+- Title bar *(primary)*
+- Activity bar *(recommended)*
+- Editor tabs *(optional)*
+- Status bar *(optional)*
+- Inactive windows *(optional)*
 
-- Activity Bar Color Knob adjustment (-10 to +10)
-- Branch Hue Rotation settings (-359° to +359°)
-- Toggle switches for UI element coloring
-- Real-time preview of setting changes
+### Enterprise Ready
 
-**Testing and Validation:**
+- **Settings Sync Compatible** - Colors follow you across machines
+- **Team Friendly** - Configurations don't pollute repository settings
+- **Multi-workspace Support** - Works with complex project structures
 
-- Comprehensive configuration testing suite
-- Performance testing with large configurations
-- Edge case and invalid configuration detection
-- Color format validation and helpful error messages
-- Test data restoration ensures your real configuration is preserved
+---
 
-### Status Reporting
+## 📊 Perfect For
 
-Status reporting for this extension can be found in the 'Git Repo Window Colors" output channel. Go there if things are not working as you expect.  Maybe there will be enough information to help you (or me) out.  Please include the output in this channel in any bug reports.
+- **Full-stack Developers** working across frontend/backend repos
+- **DevOps Engineers** managing multiple infrastructure projects  
+- **Open Source Contributors** juggling personal and work projects
+- **Team Leads** reviewing code across multiple repositories
+- **Consultants** switching between client projects
 
-### Repo Configuration Setting
+---
 
-This is optional.  This section defines settings that match repo urls and applies colors for the matched repo.
+## 🛠️ Troubleshooting
 
-This setting is a configurable list of string entries. Each string has this format schema:
+**Colors not applying?** Check the "Git Repo Window Colors" output channel for diagnostic information.
 
-`<repo-qualifier>[|<default-branch>] : <primary-color>[|<branch-color>]`
+**Multiple windows same color?** Ensure your repository qualifiers are specific enough to differentiate projects.
 
-Where:
+**Performance issues?** Use the built-in configuration testing to optimize rule complexity.
 
-- `<repo-qualifier>`: This is required. The repository qualifier is a simple string. If this string is found in the repository fetch URL (what you'd get with `git config --get remote.origin.url`), then a match is made. The first match found will be used.
-- `<default-branch>`: This is optional. and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `Automatic Branch Indicator Color Knob` in settings. You can invert the branch coloring logic in the settings as well.
+---
 
-- `<primary-color>`: This is required. The primary color is the color associated with the repository. This color will be used to color the window title bar and activity bar (when not using branch colors).
+## 💬 Support
 
-- `<branch-color>`: This is a color that will be used for the activity bar when working on a non-default branch, or on the default branch, depending on the `Invert Branch Color Logic` setting.
+**Found a bug?** Include output from the "Git Repo Window Colors" channel in your issue report.
 
-The color value can be any color string code recognized by javascript `Color()`.
+**Feature request?** We're always looking to make developers more productive!
 
-When editing the settings, the VSCode window will respond immediately to your edits. Any errors (broken json, unknown color codes, etc...) are reported via VSCode notifiaction messages. Any entry with an error is ignored.
+---
 
-If your workspace folder is not a git repo, then no coloring will happen.
+*Transform your workflow. Install Git Repo Window Colors today and never lose track of your projects again.*
 
-### Branch Configuration Setting
-
-The Repo Configuration describe above can do basic branch indications like "I'm working on the default branch" (one color) or "I'm working on a non-default branch" (another color). The Branch Configuration section takes this to the NEXT LEVEL. Using this section is completely optional, but you may find it hard to resist the power it offers.
-
-Using this setting you can assign custom colors to specific branch names or branch patterns. Say you are using a bug tracker like Jira where you have FEATURE and BUG type issues. Your flow mandates that you create branch names like `FEATURE-23-My-Awsome-Feature`, or `BUG-1-My-Nightmare-Bug`. You can use this section to configure one color to identify all feature branch work, and another color for bug fix branches. You can even assign a color to that one special feature you're working on, but haven't told anyone about.
-
-Each entry in this section is a simple `<branch-pattern>:<color>` string. The `<branch-patter>` is a regular expression, or a simple string. If a branch-pattern in this table is matched against the current working branch of any repo your are working on, then this setting will override any branch coloring from the repo configuration list above, and be applied. The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo who's working branch matches the pattern the coloring will be applied. So if you have 3 vscode windows open on three repositories all working on the same feature or bug branch, you'll know right away which windows you should focus on.
-
-The settings in this section apply to any opened repo, regarless of the per-repo color settings.  This means you do not need to have a repo rule matched in order to use branch colors.  If you do have a matched repo rule then the repo color will be applied.  If a branch rule does not match the activity bar will take on the repo color, and if a branch rule matches the activity bar will take on the branch color.  If a repo rule does not match and a branch rule does match, then the branch color will be applied everywhere (like a repo color).
-
-### Setting Sync
-
-If you use Settings Sync then these color configuraiton will apply everywhere you use vscode. It's pretty cool to change a color setting in one instance and see it updated in other instance.
-
-## Notes
-
-This extension works best when you have .vscode/settings.jon in your .gitignore file (either locally or globally). It will work without this, but you may end up committing your custom colors to your repo which might be problematic to other people working in the repo that do not have this SUPER COOL extension installed. I highly recommend you just tell them to install it.
-
-Workspaces containing multiple root folders may not behave predictably. The current behavior for multi-folder workspaces is that the workspace color settings will be set by the first folder opened.
-
-When opening new vscode windows, you might see the relevant theme colors change as they are updated to the new workspace. This is normal.
+If this extension saves you time and frustration, consider [buying me a coffee](https://www.buymeacoffee.com/KevinMills) ☕
