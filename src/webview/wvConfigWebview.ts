@@ -150,8 +150,12 @@ function extractRepoNameFromUrl(repositoryUrl: string): string {
 }
 
 function isThemeDark(): boolean {
+    const body = document.getElementsByTagName('body')[0] as HTMLElement;
+    if (body.classList.contains('vscode-dark')) {
+        return true;
+    }
+
     // Check VS Code theme by looking at computed styles
-    const body = document.body;
     const backgroundColor = getComputedStyle(body).backgroundColor;
 
     // Parse RGB values
@@ -166,45 +170,73 @@ function isThemeDark(): boolean {
         return brightness < 128; // Dark if brightness is low
     }
 
-    // Fallback: check CSS variables
-    const editorBg = getComputedStyle(body).getPropertyValue('--vscode-editor-background');
-    if (editorBg) {
-        // If editor background is available, assume it's properly themed
-        // VS Code dark themes typically have dark editor backgrounds
-        return true; // Most VS Code usage is dark mode
-    }
-
     return true; // Default to dark mode assumption
 }
 
 function getThemeAppropriateColor(): string {
     const isDark = isThemeDark();
 
-    // Predefined color palettes
-    const darkModeColors = [
-        '#1E4A72', // Deep navy blue
-        '#2C5F41', // Deep forest green
-        '#8B2635', // Deep burgundy red
-        '#5D4E75', // Deep purple
-        '#B8860B', // Deep golden orange
-        '#2F6B5B', // Deep teal
-        '#8B4513', // Deep brown-red
-        '#483D8B', // Deep slate blue
-    ];
+    const body = document.getElementsByTagName('body')[0] as HTMLElement;
+    const titleBarInactiveForeground =
+        getComputedStyle(body).getPropertyValue('--vscode-titleBar-inactiveForeground') || '#cccccc';
+    const asColor = convertColorToHex(titleBarInactiveForeground);
 
-    const lightModeColors = [
-        '#4A90E2', // Bright blue
-        '#50C878', // Emerald green
-        '#E74C3C', // Bright red
-        '#9B59B6', // Bright purple
-        '#F39C12', // Orange
-        '#1ABC9C', // Turquoise
-        '#E67E22', // Dark orange
-        '#3498DB', // Light blue
-    ];
+    // Generate a random color with good visual contrast against asColor
+    function generateContrastColor(baseColor: string): string {
+        // Convert hex to RGB
+        const hex = baseColor.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b = parseInt(hex.substr(4, 2), 16);
 
-    const colors = isDark ? darkModeColors : lightModeColors;
-    return colors[Math.floor(Math.random() * colors.length)];
+        // Calculate relative luminance using human vision sensitivity
+        // Human eyes are most sensitive to green, less to red, least to blue
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+        // Generate random hue (0-360 degrees)
+        const hue = Math.floor(Math.random() * 360);
+
+        // Use high saturation for vibrant colors
+        const saturation = 0.7 + Math.random() * 0.3; // 70-100%
+
+        // Choose lightness based on base color luminance for maximum contrast
+        // If base is dark, use light colors; if base is light, use dark colors
+        let lightness: number;
+        if (luminance < 0.5) {
+            // Base is dark, generate light contrasting colors
+            lightness = 0.6 + Math.random() * 0.3; // 60-90%
+        } else {
+            // Base is light, generate dark contrasting colors
+            lightness = 0.2 + Math.random() * 0.3; // 20-50%
+        }
+
+        // Convert HSL to RGB
+        const hslToRgb = (h: number, s: number, l: number) => {
+            h /= 360;
+            const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            const p = 2 * l - q;
+            const hue2rgb = (t: number) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+            };
+
+            const red = Math.round(hue2rgb(h + 1 / 3) * 255);
+            const green = Math.round(hue2rgb(h) * 255);
+            const blue = Math.round(hue2rgb(h - 1 / 3) * 255);
+
+            return `#${red.toString(16).padStart(2, '0')}${green.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
+        };
+
+        return hslToRgb(hue, saturation, lightness);
+    }
+
+    const contrastColor = generateContrastColor(asColor);
+
+    return contrastColor;
 }
 
 function getSmartBranchDefaults(): string {
