@@ -1357,12 +1357,12 @@ function addTestButton() {
 function validateRegexPattern(pattern: string, inputId: string) {
     // Clear any existing error for this input
     clearRegexValidationError();
-    
+
     // Don't validate empty patterns
     if (!pattern.trim()) {
         return;
     }
-    
+
     try {
         // Try to create a RegExp with the pattern
         new RegExp(pattern);
@@ -1378,7 +1378,7 @@ function showRegexValidationError(pattern: string, errorMessage: string, inputId
     // Find the branch panel container
     const branchPanel = document.querySelector('.branch-panel');
     if (!branchPanel) return;
-    
+
     // Create or update the error container
     let errorContainer = document.getElementById('regex-validation-error');
     if (!errorContainer) {
@@ -1389,7 +1389,7 @@ function showRegexValidationError(pattern: string, errorMessage: string, inputId
         errorContainer.setAttribute('aria-live', 'polite');
         branchPanel.appendChild(errorContainer);
     }
-    
+
     errorContainer.innerHTML = `
         <div class="regex-error-content">
             <strong>Invalid Regular Expression:</strong> "${escapeHtml(pattern)}"
@@ -1397,9 +1397,9 @@ function showRegexValidationError(pattern: string, errorMessage: string, inputId
             <span class="error-message">${escapeHtml(errorMessage)}</span>
         </div>
     `;
-    
+
     errorContainer.style.display = 'block';
-    
+
     // Add error styling to the input
     const input = document.getElementById(inputId);
     if (input) {
@@ -1412,10 +1412,10 @@ function clearRegexValidationError() {
     if (errorContainer) {
         errorContainer.style.display = 'none';
     }
-    
+
     // Remove error styling from all branch pattern inputs
     const branchInputs = document.querySelectorAll('[id^="branch-pattern-"]');
-    branchInputs.forEach(input => {
+    branchInputs.forEach((input) => {
         input.classList.remove('regex-error');
     });
 }
