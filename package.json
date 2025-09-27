@@ -92,6 +92,11 @@
                         "items": {
                             "type": "string"
                         },
+                        "default": [
+                            "^(bug/|bug-.*:red",
+                            "^(feature/|feature-).*:green",
+                            "^(?!(main|master)$).*:purple"
+                        ],
                         "scope": "application",
                         "uniqueItems": true
                     },

@@ -8,6 +8,7 @@ declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extensi
 const vscode = acquireVsCodeApi();
 let currentConfig: any = null;
 let validationTimeout: any = null;
+let regexValidationTimeout: any = null;
 
 // Request initial configuration
 vscode.postMessage({
@@ -408,6 +409,14 @@ function handleDocumentChange(event: Event) {
 function handleDocumentInput(event: Event) {
     const target = event.target as HTMLInputElement;
     if (!target) return;
+
+    // Handle regex validation for branch pattern inputs
+    if (target.id && target.id.startsWith('branch-pattern-')) {
+        clearTimeout(regexValidationTimeout);
+        regexValidationTimeout = setTimeout(() => {
+            validateRegexPattern(target.value, target.id);
+        }, 256);
+    }
 
     const action = target.getAttribute('data-input-action');
     if (!action) return;
@@ -1342,6 +1351,73 @@ function addTestButton() {
             </button>
         `;
     }
+}
+
+// Regex validation functions
+function validateRegexPattern(pattern: string, inputId: string) {
+    // Clear any existing error for this input
+    clearRegexValidationError();
+    
+    // Don't validate empty patterns
+    if (!pattern.trim()) {
+        return;
+    }
+    
+    try {
+        // Try to create a RegExp with the pattern
+        new RegExp(pattern);
+        // If successful, ensure no error is shown
+        clearRegexValidationError();
+    } catch (error) {
+        // If failed, show the validation error
+        showRegexValidationError(pattern, error.message, inputId);
+    }
+}
+
+function showRegexValidationError(pattern: string, errorMessage: string, inputId: string) {
+    // Find the branch panel container
+    const branchPanel = document.querySelector('.branch-panel');
+    if (!branchPanel) return;
+    
+    // Create or update the error container
+    let errorContainer = document.getElementById('regex-validation-error');
+    if (!errorContainer) {
+        errorContainer = document.createElement('div');
+        errorContainer.id = 'regex-validation-error';
+        errorContainer.className = 'regex-error-container';
+        errorContainer.setAttribute('role', 'alert');
+        errorContainer.setAttribute('aria-live', 'polite');
+        branchPanel.appendChild(errorContainer);
+    }
+    
+    errorContainer.innerHTML = `
+        <div class="regex-error-content">
+            <strong>Invalid Regular Expression:</strong> "${escapeHtml(pattern)}"
+            <br>
+            <span class="error-message">${escapeHtml(errorMessage)}</span>
+        </div>
+    `;
+    
+    errorContainer.style.display = 'block';
+    
+    // Add error styling to the input
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.classList.add('regex-error');
+    }
+}
+
+function clearRegexValidationError() {
+    const errorContainer = document.getElementById('regex-validation-error');
+    if (errorContainer) {
+        errorContainer.style.display = 'none';
+    }
+    
+    // Remove error styling from all branch pattern inputs
+    const branchInputs = document.querySelectorAll('[id^="branch-pattern-"]');
+    branchInputs.forEach(input => {
+        input.classList.remove('regex-error');
+    });
 }
 
 // Initialize test button in development mode only

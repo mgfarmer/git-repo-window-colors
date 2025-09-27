@@ -529,3 +529,44 @@ button:focus {
         transition: none;
     }
 }
+
+/* Regex validation error styling */
+.regex-error-container {
+    display: none;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    border-radius: 4px 4px 0 0;
+    padding: 8px 12px;
+    z-index: 100;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.regex-error-content {
+    color: var(--vscode-inputValidation-errorForeground);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.regex-error-content strong {
+    font-weight: 600;
+}
+
+.regex-error-content .error-message {
+    font-style: italic;
+    opacity: 0.9;
+}
+
+/* Error styling for inputs with regex errors */
+.rule-input.regex-error {
+    border-color: var(--vscode-inputValidation-errorBorder) !important;
+    background-color: var(--vscode-inputValidation-errorBackground);
+}
+
+/* Ensure branch panel has relative positioning for absolute error container */
+.branch-panel {
+    position: relative;
+}
