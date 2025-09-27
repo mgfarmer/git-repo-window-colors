@@ -244,6 +244,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             activityBarColorKnob: config.get<number>('activityBarColorKnob', 0),
             automaticBranchIndicatorColorKnob: config.get<number>('automaticBranchIndicatorColorKnob', 60),
             showBranchColumns: config.get<boolean>('showBranchColumns', true),
+            showStatusIconWhenNoRuleMatches: config.get<boolean>('showStatusIconWhenNoRuleMatches', true),
+            askToColorizeRepoWhenOpened: config.get<boolean>('askToColorizeRepoWhenOpened', true),
         };
     }
 

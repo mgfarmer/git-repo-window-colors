@@ -20,6 +20,8 @@ export interface OtherSettings {
     activityBarColorKnob: number;
     automaticBranchIndicatorColorKnob: number;
     showBranchColumns: boolean;
+    showStatusIconWhenNoRuleMatches: boolean;
+    askToColorizeRepoWhenOpened: boolean;
 }
 
 export interface WebviewMessage {

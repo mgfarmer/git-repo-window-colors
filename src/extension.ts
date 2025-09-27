@@ -376,9 +376,81 @@ async function init() {
 
         doit('initial activation');
         updateStatusBarItem(); // Update status bar after initialization
+
+        // Check if we should ask to colorize this repo if no rules match
+        await checkAndAskToColorizeRepo();
     } else {
         outputChannel.appendLine('No git repository found for workspace.');
         updateStatusBarItem(); // Update status bar for non-git workspace
+    }
+}
+
+async function checkAndAskToColorizeRepo(): Promise<void> {
+    // Check if the setting is enabled
+    const askToColorize = getBooleanSetting('askToColorizeRepoWhenOpened');
+    if (!askToColorize) {
+        return;
+    }
+
+    // Check if there are any existing rules that match this repo
+    const repoConfigList = getRepoConfigList(false);
+    const existingRule = await getMatchingRepoRule(repoConfigList);
+
+    if (existingRule) {
+        // A rule already matches this repo, don't ask
+        return;
+    }
+
+    // No matching rule found, ask the user if they want to add one
+    const repoName = extractRepoNameFromUrl(gitRepoRemoteFetchUrl);
+    const response = await vscode.window.showInformationMessage(
+        `Would you like to add color rules for the repository "${repoName}"?`,
+        'Yes, open configuration',
+        "No, don't ask again",
+        'Not now',
+    );
+
+    switch (response) {
+        case 'Yes, open configuration':
+            // Open the configuration webview and auto-add a rule
+            configProvider.showAndAddRepoRule(vscode.Uri.file(''), repoName);
+            break;
+        case "No, don't ask again":
+            // Disable the setting
+            await workspace.getConfiguration('windowColors').update('askToColorizeRepoWhenOpened', false, true);
+            vscode.window.showInformationMessage('You can re-enable this in the Git Repo Window Colors configuration.');
+            break;
+        case 'Not now':
+        default:
+            // Do nothing
+            break;
+    }
+}
+
+function extractRepoNameFromUrl(url: string): string {
+    // Extract a user-friendly repo name from the git URL
+    try {
+        const parts = url.split(':');
+        if (parts.length > 1) {
+            const pathPart = parts[1].split('/');
+            if (pathPart.length > 1) {
+                const lastPart = pathPart.slice(-2).join('/');
+                return lastPart.replace('.git', '');
+            }
+        }
+
+        // Fallback: extract from https URLs
+        if (url.includes('github.com') || url.includes('gitlab.com') || url.includes('bitbucket.org')) {
+            const match = url.match(/[\/:]([^\/]+\/[^\/]+?)(?:\.git)?$/);
+            if (match) {
+                return match[1];
+            }
+        }
+
+        // Final fallback
+        return url.split('/').pop()?.replace('.git', '') || 'repository';
+    } catch (error) {
+        return 'repository';
     }
 }
 

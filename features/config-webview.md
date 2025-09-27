@@ -155,7 +155,7 @@ VS Code Window (live color updates)
 
 ```typescript
 interface WebviewMessage {
-  command: 'updateConfig' | 'requestConfig' | 'previewConfig' | 'openColorPicker';
+  command: 'updateConfig' | 'requestConfig' | 'openColorPicker';
   data: {
     repoRules?: RepoRule[];
     branchRules?: BranchRule[];

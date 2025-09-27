@@ -159,6 +159,13 @@
                         "default": true,
                         "description": "When checked, the status bar icon is only shown when no rule matches the current repository. When unchecked, the status bar icon is always shown when the workspace is a git repository. The icon is never shown when the workspace is not a git repository.",
                         "scope": "application"
+                    },
+                    "windowColors.askToColorizeRepoWhenOpened": {
+                        "order": 27,
+                        "type": "boolean",
+                        "default": true,
+                        "description": "When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules.",
+                        "scope": "application"
                     }
                 }
             }

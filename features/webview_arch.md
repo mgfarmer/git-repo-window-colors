@@ -170,9 +170,6 @@ private async _handleMessage(message: WebviewMessage): Promise<void> {
         case 'updateConfig':
             await this._updateConfiguration(message.data);
             break;
-        case 'previewConfig':
-            this._previewConfiguration(message.data);
-            break;
         // Add more commands as needed
     }
 }
@@ -418,7 +415,7 @@ Separate TS config for webview context:
 ```typescript
 // src/types/webviewTypes.ts
 export interface WebviewMessage {
-    command: 'updateConfig' | 'requestConfig' | 'previewConfig';
+    command: 'updateConfig' | 'requestConfig';
     data: {
         // Define your data structure
         settings?: YourSettings;
