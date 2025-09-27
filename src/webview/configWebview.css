@@ -396,6 +396,10 @@ input[type='range'] {
     line-height: 1.4;
     border: 1px solid var(--vscode-editorHoverWidget-border);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    word-wrap: break-word;
+    white-space: normal;
+    max-width: 300px;
+    box-sizing: border-box;
 }
 .tooltip .tooltiptext::after {
     content: '';
@@ -420,6 +424,21 @@ input[type='range'] {
 .tooltip.panel-tooltip .tooltiptext::after {
     top: auto;
     bottom: 100%;
+    border-color: transparent transparent var(--vscode-editorHoverWidget-border) transparent;
+}
+
+/* Branch Add button tooltip - render below and to the left */
+.tooltip.panel-tooltip-left .tooltiptext {
+    bottom: auto;
+    top: 125%;
+    left: -250px;
+    margin-left: 0;
+}
+.tooltip.panel-tooltip-left .tooltiptext::after {
+    top: auto;
+    bottom: 100%;
+    left: 270px;
+    margin-left: -5px;
     border-color: transparent transparent var(--vscode-editorHoverWidget-border) transparent;
 }
 

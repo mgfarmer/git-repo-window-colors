@@ -471,7 +471,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 </button>
                             </h2>
                             <button type="button" 
-                                    class="header-add-button tooltip" 
+                                    class="header-add-button tooltip panel-tooltip" 
                                     data-action="addRepoRule" 
                                     title="Add a new repository rule"
                                     aria-label="Add Repository Rule (Ctrl+Alt+R)">
@@ -513,7 +513,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 </button>
                             </h2>
                             <button type="button" 
-                                    class="header-add-button tooltip" 
+                                    class="header-add-button tooltip panel-tooltip-left" 
                                     data-action="addBranchRule" 
                                     title="Add a new branch rule"
                                     aria-label="Add Branch Rule (Ctrl+Alt+B)">

@@ -149,7 +149,7 @@
                     "windowColors.showBranchColumns": {
                         "order": 25,
                         "type": "boolean",
-                        "default": true,
+                        "default": false,
                         "description": "Show the Default Branch and Branch Color columns in the Repository Rules table. When unchecked, these branch-related columns are hidden to provide a more compact view.",
                         "scope": "application"
                     }
