@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2018",
+    "lib": [
+      "dom",
+      "es2018"
+    ],
+    "module": "es6",
+    "moduleResolution": "node",
+    "strict": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": [
+    "wvConfigWebview.ts"
+  ]
+}

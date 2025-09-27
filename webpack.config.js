@@ -7,7 +7,8 @@ const webpack = require('webpack');
 const CopyPlugin = require('copy-webpack-plugin');
 
 /**@type {import('webpack').Configuration}*/
-const config = {
+const extensionConfig = {
+    name: 'extension',
     target: 'node', // vscode extensions run in webworker context for VS Code web 📖 -> https://webpack.js.org/configuration/target/#target
 
     entry: './src/extension.ts', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
@@ -39,7 +40,7 @@ const config = {
         rules: [
             {
                 test: /\.ts$/,
-                exclude: /node_modules/,
+                exclude: [/node_modules/, /src\/webview\/wvConfigWebview\.ts$/],
                 use: [
                     {
                         loader: 'ts-loader',
@@ -64,4 +65,37 @@ const config = {
         }),
     ],
 };
-module.exports = config;
+
+/**@type {import('webpack').Configuration}*/
+const webviewConfig = {
+    name: 'webview',
+    target: 'web', // webview scripts run in browser context
+    entry: './src/webview/wvConfigWebview.ts',
+    output: {
+        path: path.resolve(__dirname, 'out', 'webview'),
+        filename: 'wvConfigWebview.js',
+        devtoolModuleFilenameTemplate: '../../[resource-path]',
+    },
+    devtool: 'source-map',
+    resolve: {
+        extensions: ['.ts', '.js'],
+    },
+    module: {
+        rules: [
+            {
+                test: /\.ts$/,
+                exclude: /node_modules/,
+                use: [
+                    {
+                        loader: 'ts-loader',
+                        options: {
+                            configFile: 'src/webview/tsconfig.json',
+                        },
+                    },
+                ],
+            },
+        ],
+    },
+};
+
+module.exports = [extensionConfig, webviewConfig];

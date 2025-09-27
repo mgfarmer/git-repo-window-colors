@@ -72,11 +72,11 @@ h2 {
 }
 /* Highlight matched rules */
 .rules-table tr.matched-rule {
-    border: 2px solid var(--vscode-charts-green);
-    background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
+    outline: 2px solid var(--vscode-charts-green);
+    outline-offset: -1px;
 }
 .rules-table tr.matched-rule td {
-    border-color: var(--vscode-charts-green);
+    background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
 }
 .rule-input,
 .color-input {
@@ -154,6 +154,7 @@ h2 {
     gap: 2px;
     align-items: center;
     justify-content: center;
+    margin-bottom: 2px;
 }
 .reorder-btn {
     background: var(--vscode-editor-background);
