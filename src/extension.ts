@@ -105,60 +105,37 @@ export async function activate(context: ExtensionContext) {
                 configList = new Array<RepoConfig>();
             }
 
-            let isNewConfig: boolean = false;
             let repoConfig = await getMatchingRepoRule(configList);
 
-            if (repoConfig === undefined) {
-                isNewConfig = true;
-                // Create a fresh new rule
-                // git@github.com:mgfarmer/git-repo-window-colors.git
-                // https://github.com/mgfarmer/git-repo-window-colors.git
-                const p1 = gitRepoRemoteFetchUrl.split(':');
-                let repoQualifier = '';
-                if (p1.length > 1) {
-                    const parts = p1[1].split('/');
-                    if (parts.length > 1) {
-                        const lastPart = parts.slice(-2).join('/');
-                        if (lastPart !== undefined) {
-                            repoQualifier = lastPart.replace('.git', '');
-                        }
+            if (repoConfig !== undefined) {
+                // Rule already exists, just open the configuration editor
+                configProvider.show(context.extensionUri);
+                vscode.window.showInformationMessage(
+                    'A rule for this repository already exists. You can edit it in the configuration panel.',
+                );
+                return;
+            }
+
+            // Create a new rule suggestion
+            // git@github.com:mgfarmer/git-repo-window-colors.git
+            // https://github.com/mgfarmer/git-repo-window-colors.git
+            const p1 = gitRepoRemoteFetchUrl.split(':');
+            let repoQualifier = '';
+            if (p1.length > 1) {
+                const parts = p1[1].split('/');
+                if (parts.length > 1) {
+                    const lastPart = parts.slice(-2).join('/');
+                    if (lastPart !== undefined) {
+                        repoQualifier = lastPart.replace('.git', '');
                     }
                 }
-
-                repoConfig = {
-                    repoQualifier: repoQualifier,
-                    defaultBranch: undefined,
-                    primaryColor: '',
-                    branchColor: undefined,
-                };
             }
 
-            // Let user change the repo qualifier, if desired
-            const newQualifier = await vscode.window.showInputBox({
-                prompt: 'Accept or edit the qualifier for this this repository',
-                value: repoConfig.repoQualifier,
-            });
-            if (newQualifier === undefined) {
-                return;
-            }
-            repoConfig.repoQualifier = newQualifier;
-
-            // Let the user enter a color for this rule
-            const newColor = await vscode.window.showInputBox({
-                prompt: 'Enter a color for this repository',
-                value: repoConfig.primaryColor,
-            });
-            if (newColor === undefined || newColor === '') {
-                return;
-            }
-            repoConfig.primaryColor = newColor;
-
-            // Add repoConfig to the list of rules
-            if (isNewConfig) {
-                configList.push(repoConfig);
-            }
-            const configArray = configList.map((item) => repoConfigAsString(item));
-            workspace.getConfiguration('windowColors').update('repoConfigurationList', configArray, true);
+            // Open the configuration webview and automatically add a new rule
+            configProvider.showAndAddRepoRule(context.extensionUri, repoQualifier);
+            vscode.window.showInformationMessage(
+                'Configuration panel opened. A new rule has been added for this repository.',
+            );
         }),
     );
 

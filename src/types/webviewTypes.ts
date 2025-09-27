@@ -23,7 +23,7 @@ export interface OtherSettings {
 }
 
 export interface WebviewMessage {
-    command: 'updateConfig' | 'requestConfig' | 'previewConfig' | 'openColorPicker';
+    command: 'updateConfig' | 'requestConfig' | 'previewConfig' | 'openColorPicker' | 'addRepoRule' | 'confirmDelete';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -36,6 +36,13 @@ export interface WebviewMessage {
             ruleType: 'repo' | 'branch';
             ruleIndex: number;
             colorType: 'primary' | 'branch';
+        };
+        repoQualifier?: string;
+        primaryColor?: string;
+        deleteData?: {
+            ruleType: 'repo' | 'branch';
+            index: number;
+            ruleDescription: string;
         };
     };
 }

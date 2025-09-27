@@ -31,6 +31,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
     private _workspaceInfo: { repositoryUrl: string; currentBranch: string } = { repositoryUrl: '', currentBranch: '' };
+    private currentConfig: any = null;
 
     constructor(extensionUri: vscode.Uri) {
         this._extensionUri = extensionUri;
@@ -41,6 +42,22 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Refresh the webview if it's open
         if (this._panel) {
             this._sendConfigurationToWebview();
+        }
+    }
+
+    public showAndAddRepoRule(extensionUri: vscode.Uri, repoQualifier: string, primaryColor: string = ''): void {
+        // First, show the webview
+        this.show(extensionUri);
+
+        // Send a message to the webview to add a new repo rule
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'addRepoRule',
+                data: {
+                    repoQualifier: repoQualifier,
+                    primaryColor: primaryColor,
+                },
+            });
         }
     }
 
@@ -101,6 +118,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'openColorPicker':
                 this._openColorPicker(message.data.colorPickerData!);
+                break;
+            case 'confirmDelete':
+                await this._handleDeleteConfirmation(message.data.deleteData!);
                 break;
         }
     }
@@ -361,6 +381,51 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         vscode.window.showInformationMessage('Preview applied - colors should update momentarily');
     }
 
+    private async _handleDeleteConfirmation(deleteData: {
+        ruleType: 'repo' | 'branch';
+        index: number;
+        ruleDescription: string;
+    }): Promise<void> {
+        const { ruleType, index, ruleDescription } = deleteData;
+
+        const result = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete the ${ruleType} rule ${ruleDescription}?`,
+            { modal: true },
+            'Delete',
+            'Cancel',
+        );
+
+        if (result === 'Delete') {
+            // Perform the deletion
+            const repoRules = this._getRepoRules();
+            const branchRules = this._getBranchRules();
+
+            if (ruleType === 'repo' && repoRules[index]) {
+                repoRules.splice(index, 1);
+                await this._updateConfiguration({ repoRules });
+            } else if (ruleType === 'branch' && branchRules[index]) {
+                branchRules.splice(index, 1);
+                await this._updateConfiguration({ branchRules });
+            }
+
+            // Send confirmation back to webview
+            if (this._panel) {
+                this._panel.webview.postMessage({
+                    command: 'deleteConfirmed',
+                    data: { success: true },
+                });
+            }
+        } else {
+            // Send cancellation back to webview
+            if (this._panel) {
+                this._panel.webview.postMessage({
+                    command: 'deleteConfirmed',
+                    data: { success: false },
+                });
+            }
+        }
+    }
+
     private _openColorPicker(colorPickerData: any): void {
         // Skip VS Code color picker if using native HTML color picker
         if (USE_NATIVE_COLOR_PICKER) {
@@ -408,8 +473,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 }
             });
     }
-
-    private currentConfig: any = null;
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Get the CSS file URI

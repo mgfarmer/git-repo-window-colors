@@ -236,6 +236,12 @@ window.addEventListener('message', (event) => {
         case 'colorPickerResult':
             handleColorPickerResult(message.data);
             break;
+        case 'addRepoRule':
+            handleAddRepoRule(message.data);
+            break;
+        case 'deleteConfirmed':
+            handleDeleteConfirmed(message.data);
+            break;
     }
 });
 
@@ -255,6 +261,50 @@ function handleColorPickerResult(data: any) {
     if (data.colorPickerData && data.selectedColor) {
         const { ruleType, ruleIndex, field } = data.colorPickerData;
         updateColorInUI(ruleType, ruleIndex, field, data.selectedColor);
+    }
+}
+
+function handleAddRepoRule(data: any) {
+    // Add a new repository rule with the provided data
+    if (data.repoQualifier) {
+        // Call the existing addRepoRule function to add a new rule
+        addRepoRule();
+
+        // After the rule is added, populate it with the provided data
+        setTimeout(() => {
+            const repoRows = document.querySelectorAll('#repoRulesContent .rule-row');
+            if (repoRows.length > 0) {
+                const lastRow = repoRows[repoRows.length - 1] as HTMLElement;
+                const qualifierInput = lastRow.querySelector('[data-field="repoQualifier"]') as HTMLInputElement;
+                const colorInput = lastRow.querySelector('[data-field="primaryColor"]') as HTMLInputElement;
+
+                if (qualifierInput) {
+                    qualifierInput.value = data.repoQualifier;
+                    qualifierInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+
+                if (colorInput && data.primaryColor) {
+                    colorInput.value = data.primaryColor;
+                    colorInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+
+                // Focus on the color input so user can start typing
+                if (colorInput) {
+                    colorInput.focus();
+                }
+            }
+        }, 100);
+    }
+}
+
+function handleDeleteConfirmed(data: any) {
+    // The deletion has already been handled by the backend
+    // The configuration will be refreshed via the normal config update flow
+    // We don't need to do anything here as the UI will be updated automatically
+    if (data.success) {
+        console.log('Rule deleted successfully');
+    } else {
+        console.log('Rule deletion was cancelled');
     }
 }
 
@@ -300,9 +350,37 @@ function handleDocumentClick(event: Event) {
         const branchMatch = target.getAttribute('data-action')?.match(/deleteBranchRule\((\d+)\)/);
 
         if (repoMatch) {
-            deleteRepoRule(parseInt(repoMatch[1]));
+            const index = parseInt(repoMatch[1]);
+            const rule = currentConfig?.repoRules?.[index];
+            const ruleDescription = rule ? `"${rule.repoQualifier}" -> ${rule.primaryColor}` : `#${index + 1}`;
+
+            // Send delete confirmation request to backend
+            vscode.postMessage({
+                command: 'confirmDelete',
+                data: {
+                    deleteData: {
+                        ruleType: 'repo',
+                        index: index,
+                        ruleDescription: ruleDescription,
+                    },
+                },
+            });
         } else if (branchMatch) {
-            deleteBranchRule(parseInt(branchMatch[1]));
+            const index = parseInt(branchMatch[1]);
+            const rule = currentConfig?.branchRules?.[index];
+            const ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
+
+            // Send delete confirmation request to backend
+            vscode.postMessage({
+                command: 'confirmDelete',
+                data: {
+                    deleteData: {
+                        ruleType: 'branch',
+                        index: index,
+                        ruleDescription: ruleDescription,
+                    },
+                },
+            });
         }
         return;
     }
@@ -907,22 +985,6 @@ function syncColorInputs(ruleType: string, index: number, field: string, value: 
             updateColorSwatch(ruleType, index, field, value);
         }
     }
-}
-
-function deleteRepoRule(index: number) {
-    if (!currentConfig?.repoRules) return;
-
-    currentConfig.repoRules.splice(index, 1);
-    //renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
-    sendConfiguration();
-}
-
-function deleteBranchRule(index: number) {
-    if (!currentConfig?.branchRules) return;
-
-    currentConfig.branchRules.splice(index, 1);
-    //renderBranchRules(currentConfig.branchRules, currentConfig.matchingIndexes?.branchRule);
-    sendConfiguration();
 }
 
 function moveRule(index: number, ruleType: string, direction: number) {
