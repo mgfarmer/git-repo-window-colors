@@ -607,7 +607,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                   role="tooltip" 
                                   aria-hidden="true">
                                 <strong>Other Settings</strong><br>
-                                Configure global behavior and appearance options.<br><br>
+                                Configure other behavior and appearance options.<br><br>
                                 <strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br>
                                 <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-359° to +359°)<br><br>
                                 Toggle various UI elements that should be colored by the extension.
@@ -615,7 +615,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         </button>
                     </h2>
                     <div class="section-help" aria-describedby="other-settings-heading">
-                        Configure global settings that affect how colors are applied across VS Code.
+                        Configure other settings that control the extension UI and how colors are applied across VS Code.
                     </div>
                     <div id="otherSettingsContent" role="region" aria-label="Other settings controls">
                         <div class="placeholder" aria-live="polite">Loading other settings...</div>

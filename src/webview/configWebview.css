@@ -36,9 +36,8 @@ body {
 h2 {
     margin-top: 0;
     color: var(--vscode-foreground);
-    border-bottom: 1px solid var(--vscode-panel-border);
-    padding-bottom: 10px;
-    margin-bottom: 15px;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
 }
 .placeholder {
     color: var(--vscode-descriptionForeground);
@@ -526,8 +525,16 @@ input[type='range'] {
 .section-help {
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
-    margin: 4px 0;
-    padding: 6px;
+    margin-top: -15px;
+    margin-bottom: 10px;
+    padding: 0;
+}
+
+/* Align section-help with h2 labels in panels that have panel-header padding */
+.repo-panel .section-help,
+.branch-panel .section-help {
+    padding-left: 18px;
+    padding-right: 80px;
 }
 .help-icon {
     display: inline-block;
