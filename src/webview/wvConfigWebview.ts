@@ -814,18 +814,6 @@ function renderOtherSettings(settings: any) {
                     use separate branch rules instead.
                 </span>
             </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="ask-to-colorize-repo-when-opened"
-                           ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
-                           data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
-                    Ask to colorize repo when opened
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
-                </span>
-            </div>
             <div class="setting-item range-slider tooltip">
                 <label for="activity-bar-knob">Color Knob:</label>
                 <div class="range-controls">
@@ -859,14 +847,13 @@ function renderOtherSettings(settings: any) {
             <div class="setting-item tooltip">
                 <label>
                     <input type="checkbox" 
-                           id="show-status-icon-when-no-rule-matches"
-                           ${settings.showStatusIconWhenNoRuleMatches ? 'checked' : ''}
-                           data-action="updateOtherSetting('showStatusIconWhenNoRuleMatches', this.checked)">
-                    Show Status Icon When No Rule Matches
+                           id="ask-to-colorize-repo-when-opened"
+                           ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
+                           data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
+                    Ask to colorize repo when opened
                 </label>
                 <span class="tooltiptext" role="tooltip">
-                    When enabled, the status bar icon will only appear when no repository rule matches the current workspace. 
-                    When disabled, the status bar icon is always visible for Git repositories.
+                    When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
                 </span>
             </div>
             <div class="setting-item range-slider tooltip">
@@ -899,6 +886,19 @@ function renderOtherSettings(settings: any) {
                 <span class="tooltiptext" role="tooltip">
                     Apply colors to the title bar even when the VS Code window is not focused. 
                     This maintains visual identification when switching between applications.
+                </span>
+            </div>
+            <div class="setting-item tooltip">
+                <label>
+                    <input type="checkbox" 
+                           id="show-status-icon-when-no-rule-matches"
+                           ${settings.showStatusIconWhenNoRuleMatches ? 'checked' : ''}
+                           data-action="updateOtherSetting('showStatusIconWhenNoRuleMatches', this.checked)">
+                    Show Status Icon When No Rule Matches
+                </label>
+                <span class="tooltiptext" role="tooltip">
+                    When enabled, the status bar icon will only appear when no repository rule matches the current workspace. 
+                    When disabled, the status bar icon is always visible for Git repositories.
                 </span>
             </div>
         </div>
