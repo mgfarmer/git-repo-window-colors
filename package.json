@@ -152,6 +152,13 @@
                         "default": false,
                         "description": "Show the Default Branch and Branch Color columns in the Repository Rules table. When unchecked, these branch-related columns are hidden to provide a more compact view.",
                         "scope": "application"
+                    },
+                    "windowColors.showStatusIconWhenNoRuleMatches": {
+                        "order": 26,
+                        "type": "boolean",
+                        "default": true,
+                        "description": "When checked, the status bar icon is only shown when no rule matches the current repository. When unchecked, the status bar icon is always shown when the workspace is a git repository. The icon is never shown when the workspace is not a git repository.",
+                        "scope": "application"
                     }
                 }
             }

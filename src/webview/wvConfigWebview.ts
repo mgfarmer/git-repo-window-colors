@@ -762,6 +762,34 @@ function renderOtherSettings(settings: any) {
     container.innerHTML = `
         <div class="settings-grid">
             <div class="setting-item tooltip">
+                <label>
+                    <input type="checkbox" 
+                           id="color-status-bar"
+                           ${settings.colorStatusBar ? 'checked' : ''}
+                           data-action="updateOtherSetting('colorStatusBar', this.checked)">
+                    Color Status Bar
+                </label>
+                <span class="tooltiptext" role="tooltip">
+                    Apply repository colors to the status bar at the bottom of the VS Code window. 
+                    This give the repository color more prominence.
+                </span>
+            </div>
+            <div class="setting-item tooltip">
+                <label>
+                    <input type="checkbox" 
+                           id="show-branch-columns"
+                           ${settings.showBranchColumns ? 'checked' : ''}
+                           data-action="updateOtherSetting('showBranchColumns', this.checked)"
+                           data-extra-action="updateBranchColumnVisibility">
+                    Show Branch Columns in Repository Rules
+                </label>
+                <span class="tooltiptext" role="tooltip">
+                    Show or hide the Default Branch and Branch Color columns in the Repository Rules table. 
+                    Disable this to simplify the interface if you only use basic repository coloring, or want to
+                    use separate branch rules instead.
+                </span>
+            </div>
+            <div class="setting-item tooltip">
                 <label for="activity-bar-knob">Color Knob:</label>
                 <input type="range" 
                        id="activity-bar-knob" 
@@ -775,6 +803,31 @@ function renderOtherSettings(settings: any) {
                     Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
                     Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
                     Provided for fine-tuning the look and feel.
+                </span>
+            </div>
+            <div class="setting-item tooltip">
+                <label>
+                    <input type="checkbox" 
+                           id="color-editor-tabs"
+                           ${settings.colorEditorTabs ? 'checked' : ''}
+                           data-action="updateOtherSetting('colorEditorTabs', this.checked)">
+                    Color Editor Tabs
+                </label>
+                <span class="tooltiptext" role="tooltip">
+                    Apply repository colors to editor tabs. This give the repository color more prominence.
+                </span>
+            </div>
+            <div class="setting-item tooltip">
+                <label>
+                    <input type="checkbox" 
+                           id="show-status-icon-when-no-rule-matches"
+                           ${settings.showStatusIconWhenNoRuleMatches ? 'checked' : ''}
+                           data-action="updateOtherSetting('showStatusIconWhenNoRuleMatches', this.checked)">
+                    Show Status Icon When No Rule Matches
+                </label>
+                <span class="tooltiptext" role="tooltip">
+                    When enabled, the status bar icon will only appear when no repository rule matches the current workspace. 
+                    When disabled, the status bar icon is always visible for Git repositories.
                 </span>
             </div>
             <div class="setting-item tooltip">
@@ -797,31 +850,6 @@ function renderOtherSettings(settings: any) {
             <div class="setting-item tooltip">
                 <label>
                     <input type="checkbox" 
-                           id="color-status-bar"
-                           ${settings.colorStatusBar ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorStatusBar', this.checked)">
-                    Color Status Bar
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply repository colors to the status bar at the bottom of the VS Code window. 
-                    This give the repository color more prominence.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="color-editor-tabs"
-                           ${settings.colorEditorTabs ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorEditorTabs', this.checked)">
-                    Color Editor Tabs
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply repository colors to editor tabs. This give the repository color more prominence.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
                            id="color-inactive-titlebar"
                            ${settings.colorInactiveTitlebar ? 'checked' : ''}
                            data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
@@ -830,21 +858,6 @@ function renderOtherSettings(settings: any) {
                 <span class="tooltiptext" role="tooltip">
                     Apply colors to the title bar even when the VS Code window is not focused. 
                     This maintains visual identification when switching between applications.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="show-branch-columns"
-                           ${settings.showBranchColumns ? 'checked' : ''}
-                           data-action="updateOtherSetting('showBranchColumns', this.checked)"
-                           data-extra-action="updateBranchColumnVisibility">
-                    Show Branch Columns in Repository Rules
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Show or hide the Default Branch and Branch Color columns in the Repository Rules table. 
-                    Disable this to simplify the interface if you only use basic repository coloring, or want to
-                    use separate branch rules instead.
                 </span>
             </div>
         </div>

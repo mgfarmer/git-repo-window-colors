@@ -66,9 +66,81 @@ let gitApi: any;
 let gitRepository: any;
 let gitRepoRemoteFetchUrl: string = '';
 let configProvider: ConfigWebviewProvider;
+let statusBarItem: vscode.StatusBarItem;
+
+// Helper functions for status bar
+function createStatusBarItem(context: ExtensionContext): void {
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    statusBarItem.command = 'windowColors.openConfig';
+    statusBarItem.text = '$(symbol-color)';
+    statusBarItem.tooltip = 'Git Repo Window Colors - Click to configure';
+    context.subscriptions.push(statusBarItem);
+}
+
+function shouldShowStatusBarItem(): boolean {
+    // Never show if not a git repository
+    if (!gitRepoRemoteFetchUrl) {
+        return false;
+    }
+
+    const showOnlyWhenNoMatch = getBooleanSetting('showStatusIconWhenNoRuleMatches') ?? true;
+
+    if (!showOnlyWhenNoMatch) {
+        // Always show when it's a git repo
+        return true;
+    }
+
+    // Show only when no rule matches
+    const repoConfigList = getRepoConfigList(false);
+    if (!repoConfigList) {
+        return true; // No rules configured, so show
+    }
+
+    // Check if any rule matches current repo
+    for (const rule of repoConfigList) {
+        if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
+            return false; // Rule matches, so don't show
+        }
+    }
+
+    return true; // No rule matches, so show
+}
+
+function updateStatusBarItem(): void {
+    if (!statusBarItem) return;
+
+    if (shouldShowStatusBarItem()) {
+        const hasMatchingRule = getCurrentMatchingRule() !== undefined;
+        if (hasMatchingRule) {
+            statusBarItem.tooltip = 'Git Repo Window Colors - Repository has color rules configured';
+        } else {
+            statusBarItem.tooltip = 'Git Repo Window Colors - Click to add color rules for this repository';
+        }
+        statusBarItem.show();
+    } else {
+        statusBarItem.hide();
+    }
+}
+
+function getCurrentMatchingRule(): RepoConfig | undefined {
+    if (!gitRepoRemoteFetchUrl) return undefined;
+
+    const repoConfigList = getRepoConfigList(false);
+    if (!repoConfigList) return undefined;
+
+    for (const rule of repoConfigList) {
+        if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
+            return rule;
+        }
+    }
+    return undefined;
+}
 
 export async function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
+
+    // Create status bar item
+    createStatusBarItem(context);
 
     if (!isGitModelAvailable()) {
         outputChannel.appendLine('Git extension not available.');
@@ -203,6 +275,7 @@ export async function activate(context: ExtensionContext) {
                 e.affectsConfiguration('workbench.colorTheme')
             ) {
                 doit('settings change');
+                updateStatusBarItem(); // Update status bar when configuration changes
             }
         }),
     );
@@ -245,6 +318,7 @@ export async function activate(context: ExtensionContext) {
             outputChannel.appendLine(`Git extension state changed to: ${newState}`);
             if (newState === 'initialized') {
                 await init();
+                updateStatusBarItem(); // Update status bar when git becomes available
             }
         });
     }
@@ -268,8 +342,10 @@ async function init() {
         }
 
         doit('initial activation');
+        updateStatusBarItem(); // Update status bar after initialization
     } else {
         outputChannel.appendLine('No git repository found for workspace.');
+        updateStatusBarItem(); // Update status bar for non-git workspace
     }
 }
 
@@ -619,6 +695,7 @@ async function doit(reason: string) {
         'If you have any issues or suggestions, please file them at\n  https://github.com/mgfarmer/git-repo-window-colors/issues',
     );
     startBranchPoll();
+    updateStatusBarItem(); // Update status bar after applying colors
 }
 
 function getWorkspaceRepo() {
