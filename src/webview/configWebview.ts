@@ -122,7 +122,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private _sendConfigurationToWebview(): void {
+    public _sendConfigurationToWebview(): void {
         if (!this._panel) {
             return;
         }

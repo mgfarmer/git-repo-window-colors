@@ -21,7 +21,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 #### 📍 Status Bar Icon Integration
 
-- Optional status bar icon with `symbol-color` indicator
+- Optional status bar icon (palette symbol)
 - Configurable visibility: show always or only when no rules match
 - One-click access to configuration editor
 - Intelligent hiding for non-Git workspaces
@@ -47,7 +47,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 ✅ **Zero Manual Work** - Automatic coloring based on Git repository  
 ✅ **Highly Customizable** - Fine-tune colors for your workflow  
 ✅ **Branch-Aware** - Different colors for feature branches, hotfixes, etc.  
-✅ **Taskbar Integration** - Colored thumbnails in Windows/Mac dock previews  
+✅ **Taskbar Integration** - Colored thumbnails in Windows/Mac/Linux dock previews  
 
 ---
 
@@ -57,9 +57,10 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 1. **Install** the extension from VS Code marketplace
 2. **Open Command Palette** (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-3. **Run:** `Git Repo Window Colors: Open Configuration`
+3. **Run:** `GRWC: Open Configuration`
 4. **Add your first rule** - Click "+ Add" in Repository Rules
 5. **Done!** Your workspace now has a unique color identity
+6. **More!** Tune the color to your liking, click on the color swatch
 
 ### 2. Recommended VS Code Settings
 
@@ -74,6 +75,8 @@ Add these to your User Settings for the best visual experience:
 }
 ```
 
+The extension will check these settings an offer to set them for you.
+
 ---
 
 ## 💡 How It Works
@@ -84,10 +87,8 @@ Configure colors for specific repositories. Rules are matched in priority order:
 
 - **Repository Qualifier:** Part of your repo URL (e.g., `my-project`, `github.com/company/app`)
 - **Primary Color:** Main window color for this repository  
-- **Branch Color:** Optional different color for non-default branches
-- **Default Branch:** Specify main branch (master/main) for branch-specific coloring
-
-**Example:** `my-app:blue|green` → Blue for main branch, green for feature branches
+- **Branch Color:** [Optional] different color for non-default branches
+- **Default Branch:** [Optional] Specify your preferred main branch name (default is master|main) for branch-specific coloring.
 
 ### Branch Rules (Advanced Feature)
 

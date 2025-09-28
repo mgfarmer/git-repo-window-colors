@@ -236,8 +236,16 @@ export async function activate(context: ExtensionContext) {
                         (item) => item.repoQualifier !== repoConfig.repoQualifier,
                     );
                     const newArray = newRepoConfigList.map((item) => repoConfigAsString(item));
-                    workspace.getConfiguration('windowColors').update('repoConfigurationList', newArray, true);
-                    undoColors();
+                    workspace
+                        .getConfiguration('windowColors')
+                        .update('repoConfigurationList', newArray, true)
+                        .then(() => {
+                            undoColors();
+                            // Update the configuration webview if it's open
+                            if (configProvider) {
+                                configProvider._sendConfigurationToWebview();
+                            }
+                        });
                 });
         }),
     );
