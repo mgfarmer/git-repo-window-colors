@@ -601,7 +601,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
             row.classList.add('matched-rule');
         }
 
-        row.innerHTML = createRepoRuleRowHTML(rule, index);
+        row.innerHTML = createRepoRuleRowHTML(rule, index, rules.length);
         setupRepoRuleRowEvents(row, index);
     });
 
@@ -612,10 +612,10 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     updateBranchColumnVisibility();
 }
 
-function createRepoRuleRowHTML(rule: any, index: number): string {
+function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): string {
     return `
         <td class="reorder-controls">
-            ${createReorderControlsHTML(index, 'repo')}
+            ${createReorderControlsHTML(index, 'repo', totalCount)}
         </td>
         <td class="repo-rule-cell">
             <input type="text" 
@@ -679,7 +679,7 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
             row.classList.add('matched-rule');
         }
 
-        row.innerHTML = createBranchRuleRowHTML(rule, index);
+        row.innerHTML = createBranchRuleRowHTML(rule, index, rules.length);
         setupBranchRuleRowEvents(row, index);
     });
 
@@ -687,10 +687,10 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
     container.appendChild(table);
 }
 
-function createBranchRuleRowHTML(rule: any, index: number): string {
+function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): string {
     return `
         <td class="reorder-controls">
-            ${createReorderControlsHTML(index, 'branch')}
+            ${createReorderControlsHTML(index, 'branch', totalCount)}
         </td>
         <td>
             <input type="text" 
@@ -748,7 +748,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     }
 }
 
-function createReorderControlsHTML(index: number, ruleType: string): string {
+function createReorderControlsHTML(index: number, ruleType: string, totalCount: number): string {
     return `
         <div class="reorder-buttons">
             <div class="drag-handle tooltip right-tooltip" 
@@ -771,7 +771,8 @@ function createReorderControlsHTML(index: number, ruleType: string): string {
             <button class="reorder-btn" 
                     data-action="moveRule(${index}, '${ruleType}', 1)" 
                     title="Move down"
-                    aria-label="Move rule ${index + 1} down">▼</button>
+                    aria-label="Move rule ${index + 1} down"
+                    ${index === totalCount - 1 ? 'disabled' : ''}>▼</button>
             <button class="delete-btn" 
                     data-action="delete${ruleType.charAt(0).toUpperCase() + ruleType.slice(1)}Rule(${index})"
                     title="Delete this rule"
@@ -1110,6 +1111,17 @@ function handleDragOver(event: DragEvent) {
     if (event.dataTransfer) {
         event.dataTransfer.dropEffect = 'move';
     }
+
+    // Add visual indicator
+    const targetRow = (event.target as Element).closest('.rule-row') as HTMLTableRowElement;
+    if (targetRow && !targetRow.classList.contains('dragging')) {
+        // Remove drag-over class from all rows
+        document.querySelectorAll('.rule-row').forEach((row) => {
+            row.classList.remove('drag-over');
+        });
+        // Add drag-over class to current target
+        targetRow.classList.add('drag-over');
+    }
 }
 
 function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
@@ -1147,6 +1159,7 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
     // Remove dragging class from all rows
     document.querySelectorAll('.rule-row').forEach((row) => {
         row.classList.remove('dragging');
+        row.classList.remove('drag-over');
     });
 }
 
@@ -1156,6 +1169,10 @@ function setupRepoRuleRowEvents(row: HTMLTableRowElement, index: number) {
     if (dragHandle) {
         dragHandle.addEventListener('dragend', () => {
             row.classList.remove('dragging');
+            // Remove drag-over class from all rows when drag ends
+            document.querySelectorAll('.rule-row').forEach((r) => {
+                r.classList.remove('drag-over');
+            });
         });
     }
 }
@@ -1166,6 +1183,10 @@ function setupBranchRuleRowEvents(row: HTMLTableRowElement, index: number) {
     if (dragHandle) {
         dragHandle.addEventListener('dragend', () => {
             row.classList.remove('dragging');
+            // Remove drag-over class from all rows when drag ends
+            document.querySelectorAll('.rule-row').forEach((r) => {
+                r.classList.remove('drag-over');
+            });
         });
     }
 }

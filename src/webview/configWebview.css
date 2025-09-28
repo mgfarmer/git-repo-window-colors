@@ -219,7 +219,7 @@ h2 {
     vertical-align: middle;
     font-family: sans-serif;
     box-sizing: border-box;
-    padding-top: 3px;
+    padding: 0;
     margin: 0;
 }
 .rule-row.dragging {
