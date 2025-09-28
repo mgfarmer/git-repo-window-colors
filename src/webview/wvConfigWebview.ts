@@ -435,6 +435,17 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle random color buttons
+    if (target.classList.contains('random-color-btn')) {
+        const action = target.getAttribute('data-action');
+        const match = action?.match(/generateRandomColor\('(\w+)', (\d+), '(\w+)'\)/);
+        if (match) {
+            const [, ruleType, index, field] = match;
+            generateRandomColor(ruleType, parseInt(index), field);
+        }
+        return;
+    }
+
     // Handle Add buttons
     if (target.getAttribute('data-action') === 'addRepoRule') {
         addRepoRule();
@@ -723,6 +734,10 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                        value="${hexColor}" 
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
+                <button class="random-color-btn" 
+                        data-action="generateRandomColor('${ruleType}', ${index}, '${field}')"
+                        title="Generate random color"
+                        aria-label="Generate random color for ${ruleType} rule ${index + 1} ${field}">🎲</button>
                 <input type="text" 
                        class="color-input text-input" 
                        value="${color || ''}" 
@@ -739,6 +754,10 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                      style="background-color: ${convertColorToValidCSS(color) || '#4A90E2'}"
                      data-action="openColorPicker('${ruleType}', ${index}, '${field}')"
                      title="Click to choose color"></div>
+                <button class="random-color-btn" 
+                        data-action="generateRandomColor('${ruleType}', ${index}, '${field}')"
+                        title="Generate random color"
+                        aria-label="Generate random color for ${ruleType} rule ${index + 1} ${field}">🎲</button>
                 <input type="text" 
                        class="color-input" 
                        id="${ruleType}-${field}-${index}"
@@ -1044,6 +1063,39 @@ function syncColorInputs(ruleType: string, index: number, field: string, value: 
             updateColorSwatch(ruleType, index, field, value);
         }
     }
+}
+
+function generateRandomColor(ruleType: string, index: number, field: string) {
+    if (!currentConfig) return;
+
+    // Generate a new random color using the existing theme-appropriate function
+    const randomColor = getThemeAppropriateColor();
+
+    // Update the config
+    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
+    if (!rules?.[index]) return;
+
+    rules[index][field] = randomColor;
+
+    // Update the UI elements
+    updateColorSwatch(ruleType, index, field, randomColor);
+
+    // Update the text input
+    const textInput = document
+        .querySelector(`#${ruleType}-${field}-${index}`)
+        ?.parentElement?.querySelector('.text-input') as HTMLInputElement;
+    if (textInput) {
+        textInput.value = randomColor;
+    } else {
+        // For non-native picker, update the main input
+        const input = document.getElementById(`${ruleType}-${field}-${index}`) as HTMLInputElement;
+        if (input) {
+            input.value = randomColor;
+        }
+    }
+
+    // Send updated configuration to backend
+    debounceValidateAndSend();
 }
 
 function moveRule(index: number, ruleType: string, direction: number) {

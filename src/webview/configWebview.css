@@ -158,6 +158,32 @@ h2 {
     border: none;
     border-radius: 2px;
 }
+
+/* Random color button */
+.random-color-btn {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 3px;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-button-foreground);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+.random-color-btn:hover {
+    background: var(--vscode-input-background);
+    border-color: var(--vscode-focusBorder);
+}
+
+.random-color-btn:active {
+    background: var(--vscode-editor-background);
+}
 .color-input.text-input {
     flex: 1;
     min-width: 80px;
@@ -386,6 +412,16 @@ h2 {
     height: 10px;
     border-radius: 5px;
     background: linear-gradient(to right, #4a90e2, #f5a623, #d0021b);
+}
+
+/* Color knob uses gray gradient */
+#activity-bar-knob::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #333333, #cccccc) !important;
+}
+
+/* Branch hue rotation keeps colorful gradient */
+#branch-hue-rotation::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #4a90e2, #f5a623, #d0021b) !important;
 }
 
 .range-controls input[type='range']::-webkit-slider-thumb {
