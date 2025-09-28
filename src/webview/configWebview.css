@@ -375,6 +375,28 @@ h2 {
 .range-controls input[type='range'] {
     width: 120px;
     flex: none;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 12px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.range-controls input[type='range']::-webkit-slider-runnable-track {
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #4a90e2, #f5a623, #d0021b);
+}
+
+.range-controls input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 22px;
+    width: 22px;
+    border-radius: 50%;
+    background: #f0f0f0;
+    border: 2px solid #333;
+    margin-top: -6px; /* Center the thumb on the track */
 }
 
 .range-controls .value-display {
@@ -396,23 +418,6 @@ input[type='range'] {
     font-style: italic;
     text-align: center;
     padding: 20px;
-}
-.test-buttons {
-    margin-top: 15px;
-    display: flex;
-    gap: 10px;
-}
-.test-button {
-    background-color: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: var(--vscode-font-family);
-}
-.test-button:hover {
-    background-color: var(--vscode-button-hoverBackground);
 }
 
 /* Tooltip styles */

@@ -185,29 +185,32 @@ function getThemeAppropriateColor(): string {
     function generateContrastColor(baseColor: string): string {
         // Convert hex to RGB
         const hex = baseColor.replace('#', '');
-        const r = parseInt(hex.substr(0, 2), 16);
-        const g = parseInt(hex.substr(2, 2), 16);
-        const b = parseInt(hex.substr(4, 2), 16);
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
 
         // Calculate relative luminance using human vision sensitivity
         // Human eyes are most sensitive to green, less to red, least to blue
         const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
-        // Generate random hue (0-360 degrees)
-        const hue = Math.floor(Math.random() * 360);
+        // Generate random hue (0-360 degrees), avoiding yellow range (30-90 degrees)
+        let hue: number;
+        do {
+            hue = Math.floor(Math.random() * 360);
+        } while (hue >= 30 && hue <= 90); // Avoid yellow hues within 30 degrees of 60
 
         // Use high saturation for vibrant colors
-        const saturation = 0.7 + Math.random() * 0.3; // 70-100%
+        const saturation = 0.8 + Math.random() * 0.2; // 80-100%
 
         // Choose lightness based on base color luminance for maximum contrast
-        // If base is dark, use light colors; if base is light, use dark colors
+        // For dark themes: make result 20% darker; for light themes: make result 20% brighter
         let lightness: number;
         if (luminance < 0.5) {
-            // Base is dark, generate light contrasting colors
-            lightness = 0.6 + Math.random() * 0.3; // 60-90%
+            // Base is dark (dark theme), generate light contrasting colors (reduced by 20%)
+            lightness = 0.5 + Math.random() * 0.2; // 36-72% (was 60-90%)
         } else {
-            // Base is light, generate dark contrasting colors
-            lightness = 0.2 + Math.random() * 0.3; // 20-50%
+            // Base is light (light theme), generate dark contrasting colors (increased by 20%)
+            lightness = 0.2 + Math.random() * 0.3; // 24-60% (was 20-50%)
         }
 
         // Convert HSL to RGB
@@ -862,18 +865,19 @@ function renderOtherSettings(settings: any) {
                 <div class="range-controls">
                     <input type="range" 
                            id="branch-hue-rotation" 
-                           min="-359" 
-                           max="359" 
+                           min="-179" 
+                           max="179" 
                            value="${settings.automaticBranchIndicatorColorKnob || 60}"
                            data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
-                           aria-label="Branch hue rotation from -359 to +359 degrees">
+                           aria-label="Branch hue rotation from -179 to +179 degrees">
                     <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
                 </div>
                 <span class="tooltiptext" role="tooltip">
                     Automatically shift the hue of branch indicator colors. This creates visual variation 
-                    for branch-specific coloring when no explicit branch color is defined.  This only applies
-                    if you use define branch colors in repository rules.  It does not apply to discrete branch rules. A valu of 180 means
+                    for branch-specific coloring when a default branch is specified and no explicit branch color is defined. 
+                    A value of 180 means
                     opposite colors, while 60 or -60 gives a nice complementary colors. Or use anything you like!
+                    Note: This setting does not apply to discrete branch rules. 
                 </span>
             </div>
             <div class="setting-item tooltip">

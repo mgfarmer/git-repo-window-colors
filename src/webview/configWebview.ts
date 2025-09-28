@@ -577,7 +577,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             </button>
                         </div>
                         <div class="section-help">
-                            Define color rules based on branch name patterns. These override repository branch rules.
+                            Define color rules based on branch name patterns. These override repository branch rules (if used). The configured color is applied to the Activity Bar when working on a matched branch.
                         </div>
                         <div id="branchRulesContent" role="region" aria-label="Branch rules table">
                             <div class="placeholder" aria-live="polite">Loading branch rules...</div>
@@ -598,7 +598,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 <strong>Other Settings</strong><br>
                                 Configure other behavior and appearance options.<br><br>
                                 <strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br>
-                                <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-359° to +359°)<br><br>
+                                <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-179° to +179°)<br><br>
                                 Toggle various UI elements that should be colored by the extension.
                             </span>
                         </button>
