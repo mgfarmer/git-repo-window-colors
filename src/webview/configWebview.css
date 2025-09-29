@@ -1,12 +1,26 @@
 /* Simple text-based icons that work across all themes */
-.icon-gripper::before { content: '⋮⋮'; }
-.icon-triangle-up::before { content: '▲'; }
-.icon-triangle-down::before { content: '▼'; }
-.icon-trash::before { content: '×'; }
-.icon-refresh::before { content: '↻'; }
+.icon-gripper::before {
+    content: '⋮⋮';
+}
+.icon-triangle-up::before {
+    content: '▲';
+}
+.icon-triangle-down::before {
+    content: '▼';
+}
+.icon-trash::before {
+    content: '×';
+}
+.icon-refresh::before {
+    content: '↻';
+}
 
 /* Icon styling for consistent appearance */
-.icon-gripper, .icon-triangle-up, .icon-triangle-down, .icon-trash, .icon-refresh {
+.icon-gripper,
+.icon-triangle-up,
+.icon-triangle-down,
+.icon-trash,
+.icon-refresh {
     display: inline-block;
     font-family: monospace;
     font-weight: normal;
