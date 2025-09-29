@@ -982,8 +982,13 @@ function updateBranchColumnVisibility() {
 function addRepoRule() {
     if (!currentConfig) return;
 
+    // If current repo is already matched by an existing rule, don't pre-fill it
+    const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    const isCurrentRepoAlreadyMatched =
+        currentConfig.matchingIndexes?.repoRule !== null && currentConfig.matchingIndexes?.repoRule !== undefined;
+
     const newRule = {
-        repoQualifier: extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || ''),
+        repoQualifier: isCurrentRepoAlreadyMatched ? 'enter-repo-qualifier' : currentRepoName,
         defaultBranch: '',
         primaryColor: getThemeAppropriateColor(),
         branchColor: '',
