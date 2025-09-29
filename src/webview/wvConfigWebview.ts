@@ -1887,7 +1887,7 @@ function updateAutoCompleteSelection() {
         if (index === selectedSuggestionIndex) {
             item.classList.add('selected');
             item.setAttribute('aria-selected', 'true');
-            
+
             // Scroll to keep selected item visible
             scrollToSelectedItem(item as HTMLElement, autoCompleteDropdown);
         } else {
@@ -1900,13 +1900,13 @@ function updateAutoCompleteSelection() {
 function scrollToSelectedItem(selectedItem: HTMLElement, dropdown: HTMLElement) {
     const dropdownRect = dropdown.getBoundingClientRect();
     const itemRect = selectedItem.getBoundingClientRect();
-    
+
     // Calculate relative position within the dropdown
     const itemTop = selectedItem.offsetTop;
     const itemBottom = itemTop + selectedItem.offsetHeight;
     const dropdownScrollTop = dropdown.scrollTop;
     const dropdownHeight = dropdown.clientHeight;
-    
+
     // Check if item is above the visible area
     if (itemTop < dropdownScrollTop) {
         dropdown.scrollTop = itemTop;

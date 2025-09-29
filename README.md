@@ -8,13 +8,14 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ## 🆕 What's New
 
-### Version 1.2.0 - Enhanced Configuration & Status Features
+### Version 1.3.0 - Enhanced Configuration & Status Features
 
 #### 🎨 Modern Configuration Editor
 
 - Brand new visual configuration interface with intuitive rule building
 - Drag & drop rule reordering for priority-based matching
 - Built-in color picker with support for hex, RGB, HSL, and named colors
+- **NEW:** HTML color name autocomplete with visual previews for all 140 standard colors
 - Real-time validation and error handling
 - Comprehensive accessibility support with keyboard navigation
 - Smart tooltips and contextual help throughout the interface
@@ -112,8 +113,20 @@ Create patterns that work across ALL repositories:
 - **Visual Rule Builder** - No more JSON editing
 - **Drag & Drop Reordering** - Priority-based rule matching
 - **Built-in Color Picker** - Supports hex, RGB, HSL, named colors
+- **HTML Color Autocomplete** - Intelligent suggestions for all 140 standard HTML color names with visual previews
 - **Real-time Preview** - See changes instantly
 - **Smart Validation** - Catch errors before they break anything
+
+### Color Input Features
+
+When entering colors in text fields, enjoy these productivity features:
+
+- **Smart Autocomplete** - Type any part of a color name (e.g., "blue", "dark", "light") to see matching suggestions
+- **Visual Color Preview** - Each autocomplete suggestion includes a color swatch for instant recognition
+- **Full HTML Color Support** - Access to all 140 standard colors: aliceblue, antiquewhite, aqua, azure, beige, bisque, black, blue, brown, coral, crimson, cyan, gold, green, hotpink, indigo, lime, magenta, navy, orange, pink, purple, red, silver, teal, violet, white, yellow, and many more
+- **Keyboard Navigation** - Use arrow keys to browse suggestions, Enter to select, Escape to close
+- **Mouse Support** - Click any suggestion to select it instantly
+- **Auto-scroll** - Dropdown automatically scrolls to keep selected items visible
 
 ### Keyboard Shortcuts
 
