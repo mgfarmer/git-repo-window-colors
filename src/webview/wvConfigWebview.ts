@@ -159,8 +159,8 @@ let activeAutoCompleteInput: HTMLInputElement | null = null;
 let autoCompleteDropdown: HTMLElement | null = null;
 let selectedSuggestionIndex: number = -1;
 
-// Color input original value tracking
-const originalColorValues = new Map<HTMLInputElement, string>();
+// Input original value tracking for escape key restoration
+const originalInputValues = new Map<HTMLInputElement, string>();
 
 // Request initial configuration
 vscode.postMessage({
@@ -715,9 +715,12 @@ function handleDocumentKeydown(event: KeyboardEvent) {
     const target = event.target as HTMLInputElement;
     if (!target) return;
 
-    // Handle escape key for color input restoration
-    if (event.key === 'Escape' && target.classList.contains('color-input') && target.classList.contains('text-input')) {
-        const originalValue = originalColorValues.get(target);
+    // Handle escape key for input restoration (both color inputs and rule inputs)
+    if (event.key === 'Escape' && 
+        (target.classList.contains('rule-input') || 
+         (target.classList.contains('color-input') && target.classList.contains('text-input')))) {
+        
+        const originalValue = originalInputValues.get(target);
         if (originalValue !== undefined) {
             target.value = originalValue;
 
@@ -726,7 +729,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
             target.dispatchEvent(new Event('change', { bubbles: true }));
 
             // Clear the stored original value
-            originalColorValues.delete(target);
+            originalInputValues.delete(target);
 
             // Hide autocomplete if it's open
             hideAutoCompleteDropdown();
@@ -742,10 +745,11 @@ function handleDocumentFocusIn(event: FocusEvent) {
     const target = event.target as HTMLInputElement;
     if (!target) return;
 
-    // Store original value when user starts editing a color input
-    if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
-        if (!originalColorValues.has(target)) {
-            originalColorValues.set(target, target.value);
+    // Store original value when user starts editing any rule input
+    if (target.classList.contains('rule-input') || 
+        (target.classList.contains('color-input') && target.classList.contains('text-input'))) {
+        if (!originalInputValues.has(target)) {
+            originalInputValues.set(target, target.value);
         }
     }
 }
@@ -755,10 +759,11 @@ function handleDocumentFocusOut(event: FocusEvent) {
     if (!target) return;
 
     // Clear stored original value when user finishes editing (commits the change)
-    if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
+    if (target.classList.contains('rule-input') || 
+        (target.classList.contains('color-input') && target.classList.contains('text-input'))) {
         // Small delay to allow for potential escape key handling
         setTimeout(() => {
-            originalColorValues.delete(target);
+            originalInputValues.delete(target);
         }, 50);
     }
 }
