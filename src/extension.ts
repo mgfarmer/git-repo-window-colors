@@ -153,12 +153,13 @@ export async function activate(context: ExtensionContext) {
         console.warn('Git extension not available');
         return '';
     }
-    if (!gitExt.isActive) {
-        await gitExt.activate();
-        return '';
-    }
+    // if (!gitExt.isActive) {
+    //     await gitExt.activate();
+    //     return '';
+    // }
+    gitApi = gitExt.isActive ? gitExt.exports.getAPI(1) : (await gitExt.activate()).getAPI(1);
 
-    gitApi = gitExt.exports.getAPI(1);
+    //gitApi = gitExt.exports.getAPI(1);
 
     if (!workspace.workspaceFolders) {
         outputChannel.appendLine('No workspace folders.  Cannot color an empty workspace.');

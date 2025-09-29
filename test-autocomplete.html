@@ -97,6 +97,9 @@
         let activeAutoCompleteInput = null;
         let autoCompleteDropdown = null;
         let selectedSuggestionIndex = -1;
+        
+        // Color input original value tracking
+        const originalColorValues = new Map();
 
         function handleColorInputAutoComplete(input) {
             const value = input.value.toLowerCase().trim();
@@ -177,6 +180,47 @@
         document.addEventListener('input', (event) => {
             if (event.target.classList.contains('color-input')) {
                 handleColorInputAutoComplete(event.target);
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            // Handle escape key for color input restoration
+            if (event.key === 'Escape' && event.target.classList.contains('color-input')) {
+                const originalValue = originalColorValues.get(event.target);
+                if (originalValue !== undefined) {
+                    event.target.value = originalValue;
+                    
+                    // Clear the stored original value
+                    originalColorValues.delete(event.target);
+                    
+                    // Hide autocomplete if it's open
+                    hideAutoCompleteDropdown();
+                    
+                    // Reset background color
+                    document.body.style.backgroundColor = originalValue;
+                    
+                    // Blur the input to signal that editing is complete
+                    event.target.blur();
+                }
+            }
+        });
+
+        document.addEventListener('focusin', (event) => {
+            // Store original value when user starts editing a color input
+            if (event.target.classList.contains('color-input')) {
+                if (!originalColorValues.has(event.target)) {
+                    originalColorValues.set(event.target, event.target.value);
+                }
+            }
+        });
+
+        document.addEventListener('focusout', (event) => {
+            // Clear stored original value when user finishes editing (commits the change)
+            if (event.target.classList.contains('color-input')) {
+                // Small delay to allow for potential escape key handling
+                setTimeout(() => {
+                    originalColorValues.delete(event.target);
+                }, 50);
             }
         });
 

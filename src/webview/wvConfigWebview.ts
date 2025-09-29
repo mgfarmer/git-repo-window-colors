@@ -159,6 +159,9 @@ let activeAutoCompleteInput: HTMLInputElement | null = null;
 let autoCompleteDropdown: HTMLElement | null = null;
 let selectedSuggestionIndex: number = -1;
 
+// Color input original value tracking
+const originalColorValues = new Map<HTMLInputElement, string>();
+
 // Request initial configuration
 vscode.postMessage({
     command: 'requestConfig',
@@ -507,6 +510,9 @@ function attachEventListeners() {
     document.removeEventListener('click', handleDocumentClick);
     document.removeEventListener('change', handleDocumentChange);
     document.removeEventListener('input', handleDocumentInput);
+    document.removeEventListener('keydown', handleDocumentKeydown);
+    document.removeEventListener('focusin', handleDocumentFocusIn);
+    document.removeEventListener('focusout', handleDocumentFocusOut);
     document.removeEventListener('dragstart', handleDocumentDragStart);
     document.removeEventListener('dragover', handleDocumentDragOver);
     document.removeEventListener('drop', handleDocumentDrop);
@@ -515,6 +521,9 @@ function attachEventListeners() {
     document.addEventListener('click', handleDocumentClick);
     document.addEventListener('change', handleDocumentChange);
     document.addEventListener('input', handleDocumentInput);
+    document.addEventListener('keydown', handleDocumentKeydown);
+    document.addEventListener('focusin', handleDocumentFocusIn);
+    document.addEventListener('focusout', handleDocumentFocusOut);
     document.addEventListener('dragstart', handleDocumentDragStart);
     document.addEventListener('dragover', handleDocumentDragOver);
     document.addEventListener('drop', handleDocumentDrop);
@@ -699,6 +708,58 @@ function handleDocumentInput(event: Event) {
     if (match) {
         const [, ruleType, index, field] = match;
         syncColorInputs(ruleType, parseInt(index), field, target.value);
+    }
+}
+
+function handleDocumentKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLInputElement;
+    if (!target) return;
+
+    // Handle escape key for color input restoration
+    if (event.key === 'Escape' && target.classList.contains('color-input') && target.classList.contains('text-input')) {
+        const originalValue = originalColorValues.get(target);
+        if (originalValue !== undefined) {
+            target.value = originalValue;
+
+            // Trigger change events to update the configuration
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+
+            // Clear the stored original value
+            originalColorValues.delete(target);
+
+            // Hide autocomplete if it's open
+            hideAutoCompleteDropdown();
+
+            // Blur the input to signal that editing is complete
+            target.blur();
+        }
+        return;
+    }
+}
+
+function handleDocumentFocusIn(event: FocusEvent) {
+    const target = event.target as HTMLInputElement;
+    if (!target) return;
+
+    // Store original value when user starts editing a color input
+    if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
+        if (!originalColorValues.has(target)) {
+            originalColorValues.set(target, target.value);
+        }
+    }
+}
+
+function handleDocumentFocusOut(event: FocusEvent) {
+    const target = event.target as HTMLInputElement;
+    if (!target) return;
+
+    // Clear stored original value when user finishes editing (commits the change)
+    if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
+        // Small delay to allow for potential escape key handling
+        setTimeout(() => {
+            originalColorValues.delete(target);
+        }, 50);
     }
 }
 
@@ -1139,7 +1200,9 @@ function addRepoRule() {
     // If current repo is already matched by an existing rule, don't pre-fill it
     const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
     const isCurrentRepoAlreadyMatched =
-        currentConfig.matchingIndexes?.repoRule !== null && currentConfig.matchingIndexes?.repoRule !== undefined;
+        currentConfig.matchingIndexes?.repoRule !== null &&
+        currentConfig.matchingIndexes?.repoRule !== undefined &&
+        currentConfig.matchingIndexes?.repoRule >= 0;
 
     const newRule = {
         repoQualifier: isCurrentRepoAlreadyMatched ? 'enter-repo-qualifier' : currentRepoName,
