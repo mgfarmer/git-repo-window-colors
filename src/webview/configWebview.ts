@@ -379,7 +379,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             `Are you sure you want to delete the ${ruleType} rule ${ruleDescription}?`,
             { modal: true },
             'Delete',
-            'Cancel',
         );
 
         if (result === 'Delete') {
