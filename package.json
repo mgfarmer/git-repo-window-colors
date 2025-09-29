@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
     "icon": "img/icon_602.png",
-    "version": "1.3.2",
+    "version": "1.3.5",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -157,7 +157,7 @@
                     "windowColors.showStatusIconWhenNoRuleMatches": {
                         "order": 26,
                         "type": "boolean",
-                        "default": true,
+                        "default": false,
                         "description": "When checked, the status bar icon is only shown when no rule matches the current repository. When unchecked, the status bar icon is always shown when the workspace is a git repository. The icon is never shown when the workspace is not a git repository.",
                         "scope": "application"
                     },
@@ -178,7 +178,7 @@
         "vscode:prepublish": "yarn run compile",
         "package": "vsce package --yarn",
         "publish": "yarn vsce publish",
-        "publish-prerelease": "yarn vsce publish --pre-release"
+        "publish-prerelease": "npm version patch --force && yarn vsce publish --pre-release"
     },
     "devDependencies": {
         "@types/color": "^4.2.0",
