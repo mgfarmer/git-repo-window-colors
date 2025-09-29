@@ -200,17 +200,19 @@ function getThemeAppropriateColor(): string {
         } while (hue >= 30 && hue <= 90); // Avoid yellow hues within 30 degrees of 60
 
         // Use high saturation for vibrant colors
-        const saturation = 0.8 + Math.random() * 0.2; // 80-100%
+        let saturation;
 
         // Choose lightness based on base color luminance for maximum contrast
         // For dark themes: make result 20% darker; for light themes: make result 20% brighter
         let lightness: number;
-        if (luminance < 0.5) {
-            // Base is dark (dark theme), generate light contrasting colors (reduced by 20%)
-            lightness = 0.5 + Math.random() * 0.2; // 36-72% (was 60-90%)
+        if (isDark) {
+            // Base is dark (dark theme)
+            lightness = 0.2 + Math.random() * 0.2; // 36-72% (was 60-90%)
+            saturation = 0.8 + Math.random() * 0.2; // 80-100%
         } else {
-            // Base is light (light theme), generate dark contrasting colors (increased by 20%)
-            lightness = 0.2 + Math.random() * 0.3; // 24-60% (was 20-50%)
+            // Base is light (light theme)
+            lightness = 0.5 + Math.random() * 0.2; // 24-60% (was 20-50%)
+            saturation = 0.2 + Math.random() * 0.3; // 40-60%
         }
 
         // Convert HSL to RGB
@@ -234,6 +236,7 @@ function getThemeAppropriateColor(): string {
             return `#${red.toString(16).padStart(2, '0')}${green.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
         };
 
+        console.log('[DEBUG] generateContrastColor HSL:', hue, saturation, lightness);
         return hslToRgb(hue, saturation, lightness);
     }
 
@@ -337,7 +340,7 @@ function handleDeleteConfirmed(data: any) {
 }
 
 function renderConfiguration(config: any) {
-    console.log('[DEBUG] renderConfiguration ', config);
+    // console.log('[DEBUG] renderConfiguration ', config);
     // Clear validation errors on new data
     clearValidationErrors();
 
@@ -611,7 +614,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
 
         // Highlight matched rule
         if (matchingIndex !== undefined && index === matchingIndex) {
-            console.log('[DEBUG] Applying matched-rule class to index:', index, 'rule:', rule.repoQualifier);
+            // console.log('[DEBUG] Applying matched-rule class to index:', index, 'rule:', rule.repoQualifier);
             row.classList.add('matched-rule');
         }
 
@@ -1023,29 +1026,29 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 }
 
 function updateColorSwatch(ruleType: string, index: number, field: string, value: string) {
-    console.log(
-        `[DEBUG] updateColorSwatch called with: ruleType="${ruleType}", index=${index}, field="${field}", value="${value}"`,
-    );
+    // console.log(
+    //     `[DEBUG] updateColorSwatch called with: ruleType="${ruleType}", index=${index}, field="${field}", value="${value}"`,
+    // );
 
     const colorInput = document.getElementById(`${ruleType}-${field}-${index}`) as HTMLInputElement;
     if (colorInput && colorInput.type === 'color') {
         // Convert any color format to hex for the native color input
         const hexColor = convertColorToHex(value);
         colorInput.value = hexColor;
-        console.log(`[DEBUG] Updated native color input to: "${hexColor}"`);
+        // console.log(`[DEBUG] Updated native color input to: "${hexColor}"`);
     }
 
     // Update the swatch background for non-native color picker (only if swatch exists)
     const swatch = colorInput?.parentElement?.querySelector('.color-swatch') as HTMLElement;
-    console.log(`[DEBUG] Found swatch element:`, swatch);
+    // console.log(`[DEBUG] Found swatch element:`, swatch);
 
     if (swatch) {
         // For named colors and other formats, try to convert to a valid CSS color
         const displayColor = convertColorToValidCSS(value) || '#4A90E2';
-        console.log(`[DEBUG] Setting swatch backgroundColor to: "${displayColor}"`);
+        // console.log(`[DEBUG] Setting swatch backgroundColor to: "${displayColor}"`);
         swatch.style.backgroundColor = displayColor;
     } else {
-        console.log(`[DEBUG] No swatch element found - using native color picker`);
+        // console.log(`[DEBUG] No swatch element found - using native color picker`);
     }
 }
 
@@ -1099,24 +1102,24 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
 }
 
 function moveRule(index: number, ruleType: string, direction: number) {
-    console.log('[DEBUG] moveRule called:', { index, ruleType, direction });
-    console.log('[DEBUG] currentConfig exists:', !!currentConfig);
+    // console.log('[DEBUG] moveRule called:', { index, ruleType, direction });
+    // console.log('[DEBUG] currentConfig exists:', !!currentConfig);
 
     if (!currentConfig) return;
 
     const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
-    console.log('[DEBUG] Rules array exists:', !!rules, 'length:', rules?.length);
+    // console.log('[DEBUG] Rules array exists:', !!rules, 'length:', rules?.length);
 
     if (!rules) return;
 
-    console.log(
-        '[DEBUG] Rules before move:',
-        rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
-    );
+    // console.log(
+    //     '[DEBUG] Rules before move:',
+    //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
+    // );
 
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= rules.length) {
-        console.log('[DEBUG] Move cancelled - out of bounds:', { newIndex, length: rules.length });
+        // console.log('[DEBUG] Move cancelled - out of bounds:', { newIndex, length: rules.length });
         return;
     }
 
@@ -1125,11 +1128,11 @@ function moveRule(index: number, ruleType: string, direction: number) {
     rules[index] = rules[newIndex];
     rules[newIndex] = temp;
 
-    console.log(
-        '[DEBUG] Rules after move:',
-        rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
-    );
-    console.log('[DEBUG] About to call sendConfiguration with currentConfig:', !!currentConfig);
+    // console.log(
+    //     '[DEBUG] Rules after move:',
+    //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
+    // );
+    // console.log('[DEBUG] About to call sendConfiguration with currentConfig:', !!currentConfig);
 
     // Send updated configuration - backend will recalculate matching indexes and send back proper update
     // This will trigger a complete table refresh with correct highlighting
@@ -1139,7 +1142,7 @@ function moveRule(index: number, ruleType: string, direction: number) {
 function updateOtherSetting(setting: string, value: any) {
     if (!currentConfig?.otherSettings) return;
 
-    console.log(`[DEBUG] updateOtherSetting: ${setting} = ${value}`);
+    // console.log(`[DEBUG] updateOtherSetting: ${setting} = ${value}`);
     currentConfig.otherSettings[setting] = value;
     // Send immediately for settings changes (no validation needed)
     sendConfiguration();
@@ -1356,7 +1359,7 @@ function displayValidationErrors(errors: string[]) {
 
 // Communication functions
 function sendConfiguration() {
-    console.log('[DEBUG] Sending configuration to extension:', currentConfig);
+    // console.log('[DEBUG] Sending configuration to extension:', currentConfig);
     vscode.postMessage({
         command: 'updateConfig',
         data: currentConfig,
@@ -1426,17 +1429,17 @@ function rgbToHex(rgb: string): string | null {
 function convertColorToValidCSS(color: string): string {
     if (!color) return '#4A90E2';
 
-    console.log(`[DEBUG] Testing color: "${color}"`);
+    // console.log(`[DEBUG] Testing color: "${color}"`);
 
     // If it's already a valid hex color, return it
     if (/^#[0-9A-Fa-f]{6}$/.test(color) || /^#[0-9A-Fa-f]{3}$/.test(color)) {
-        console.log(`[DEBUG] "${color}" is hex, returning as-is`);
+        // console.log(`[DEBUG] "${color}" is hex, returning as-is`);
         return color;
     }
 
     // If it's an RGB color, return it as-is
     if (/^rgba?\(/.test(color)) {
-        console.log(`[DEBUG] "${color}" is RGB, returning as-is`);
+        // console.log(`[DEBUG] "${color}" is RGB, returning as-is`);
         return color;
     }
 
@@ -1448,17 +1451,17 @@ function convertColorToValidCSS(color: string): string {
         const computedColor = getComputedStyle(tempDiv).backgroundColor;
         document.body.removeChild(tempDiv);
 
-        console.log(`[DEBUG] "${color}" computed to: "${computedColor}"`);
+        // console.log(`[DEBUG] "${color}" computed to: "${computedColor}"`);
 
         // If the browser recognized the color, return the original value
         if (computedColor && computedColor !== 'rgba(0, 0, 0, 0)' && computedColor !== 'transparent') {
-            console.log(`[DEBUG] "${color}" is valid, returning original`);
+            // console.log(`[DEBUG] "${color}" is valid, returning original`);
             return color; // Return the original named color since CSS understands it
         }
 
-        console.log(`[DEBUG] "${color}" failed validation, using fallback`);
+        // console.log(`[DEBUG] "${color}" failed validation, using fallback`);
     } catch (e) {
-        console.log(`[DEBUG] Error testing "${color}":`, e);
+        // console.log(`[DEBUG] Error testing "${color}":`, e);
         // If there's an error, fall back to default
     }
 

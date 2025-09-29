@@ -1,3 +1,21 @@
+/* Simple text-based icons that work across all themes */
+.icon-gripper::before { content: '⋮⋮'; }
+.icon-triangle-up::before { content: '▲'; }
+.icon-triangle-down::before { content: '▼'; }
+.icon-trash::before { content: '×'; }
+.icon-refresh::before { content: '↻'; }
+
+/* Icon styling for consistent appearance */
+.icon-gripper, .icon-triangle-up, .icon-triangle-down, .icon-trash, .icon-refresh {
+    display: inline-block;
+    font-family: monospace;
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    text-align: center;
+    color: inherit;
+}
+
 body {
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
@@ -166,7 +184,7 @@ h2 {
     border: 1px solid var(--vscode-panel-border);
     border-radius: 3px;
     background: var(--vscode-editor-background);
-    color: var(--vscode-button-foreground);
+    color: var(--vscode-foreground);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -204,7 +222,7 @@ h2 {
 }
 .reorder-btn {
     background: var(--vscode-editor-background);
-    color: var(--vscode-button-foreground);
+    color: var(--vscode-foreground);
     border: 1px solid var(--vscode-panel-border);
     width: 15px;
     height: 15px;
@@ -230,7 +248,7 @@ h2 {
     width: 15px;
     height: 15px;
     font-size: 10px;
-    color: var(--vscode-button-foreground);
+    color: var(--vscode-foreground);
     cursor: grab;
     user-select: none;
     display: flex;
@@ -256,7 +274,7 @@ h2 {
 }
 .delete-btn {
     background: var(--vscode-editor-background);
-    color: var(--vscode-button-foreground);
+    color: var(--vscode-foreground);
     border: 1px solid var(--vscode-panel-border);
     width: 15px;
     height: 15px;
