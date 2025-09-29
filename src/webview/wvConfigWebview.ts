@@ -388,7 +388,7 @@ function getThemeAppropriateColor(): string {
             return `#${red.toString(16).padStart(2, '0')}${green.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
         };
 
-        console.log('[DEBUG] generateContrastColor HSL:', hue, saturation, lightness);
+        //console.log('[DEBUG] generateContrastColor HSL:', hue, saturation, lightness);
         return hslToRgb(hue, saturation, lightness);
     }
 
@@ -716,10 +716,11 @@ function handleDocumentKeydown(event: KeyboardEvent) {
     if (!target) return;
 
     // Handle escape key for input restoration (both color inputs and rule inputs)
-    if (event.key === 'Escape' && 
-        (target.classList.contains('rule-input') || 
-         (target.classList.contains('color-input') && target.classList.contains('text-input')))) {
-        
+    if (
+        event.key === 'Escape' &&
+        (target.classList.contains('rule-input') ||
+            (target.classList.contains('color-input') && target.classList.contains('text-input')))
+    ) {
         const originalValue = originalInputValues.get(target);
         if (originalValue !== undefined) {
             target.value = originalValue;
@@ -746,8 +747,10 @@ function handleDocumentFocusIn(event: FocusEvent) {
     if (!target) return;
 
     // Store original value when user starts editing any rule input
-    if (target.classList.contains('rule-input') || 
-        (target.classList.contains('color-input') && target.classList.contains('text-input'))) {
+    if (
+        target.classList.contains('rule-input') ||
+        (target.classList.contains('color-input') && target.classList.contains('text-input'))
+    ) {
         if (!originalInputValues.has(target)) {
             originalInputValues.set(target, target.value);
         }
@@ -759,8 +762,10 @@ function handleDocumentFocusOut(event: FocusEvent) {
     if (!target) return;
 
     // Clear stored original value when user finishes editing (commits the change)
-    if (target.classList.contains('rule-input') || 
-        (target.classList.contains('color-input') && target.classList.contains('text-input'))) {
+    if (
+        target.classList.contains('rule-input') ||
+        (target.classList.contains('color-input') && target.classList.contains('text-input'))
+    ) {
         // Small delay to allow for potential escape key handling
         setTimeout(() => {
             originalInputValues.delete(target);
@@ -1151,7 +1156,7 @@ function renderOtherSettings(settings: any) {
                            id="show-status-icon-when-no-rule-matches"
                            ${settings.showStatusIconWhenNoRuleMatches ? 'checked' : ''}
                            data-action="updateOtherSetting('showStatusIconWhenNoRuleMatches', this.checked)">
-                    Show Status Icon When No Rule Matches
+                    Show Status Icon Only When No Rule Matches
                 </label>
                 <span class="tooltiptext" role="tooltip">
                     When enabled, the status bar icon will only appear when no repository rule matches the current workspace. 
@@ -1217,7 +1222,6 @@ function addRepoRule() {
     };
 
     currentConfig.repoRules.push(newRule);
-    //renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
     sendConfiguration();
 }
 
@@ -1230,7 +1234,6 @@ function addBranchRule() {
     };
 
     currentConfig.branchRules.push(newRule);
-    //renderBranchRules(currentConfig.branchRules, currentConfig.matchingIndexes?.branchRule);
     sendConfiguration();
 }
 
@@ -1438,13 +1441,6 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
     // Insert at the target position
     const insertIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
     rules.splice(insertIndex, 0, draggedItem);
-
-    // Re-render
-    // if (targetType === 'repo') {
-    //     renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
-    // } else {
-    //     renderBranchRules(currentConfig.branchRules, currentConfig.matchingIndexes?.branchRule);
-    // }
 
     sendConfiguration();
 

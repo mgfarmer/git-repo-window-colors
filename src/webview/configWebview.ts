@@ -347,8 +347,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             await Promise.all(updatePromises);
             // console.log('[DEBUG] All configuration updates completed successfully');
 
-            //vscode.window.showInformationMessage('Configuration updated successfully');
-
             // console.log('[DEBUG] Configuration updated, sending fresh config to webview');
             // Send updated configuration back to webview with recalculated matching indexes
             this._sendConfigurationToWebview();
