@@ -550,9 +550,12 @@ function handleDocumentInput(event: Event) {
 
 function handleDocumentDragStart(event: DragEvent) {
     const target = event.target as HTMLElement;
-    if (target?.classList.contains('drag-handle')) {
-        const index = target.getAttribute('data-drag-index');
-        const ruleType = target.getAttribute('data-drag-type');
+    const dragHandle = target.classList.contains('drag-handle')
+        ? target
+        : (target.closest('.drag-handle') as HTMLElement);
+    if (dragHandle) {
+        const index = dragHandle.getAttribute('data-drag-index');
+        const ruleType = dragHandle.getAttribute('data-drag-type');
         if (index && ruleType) {
             handleDragStart(event, parseInt(index), ruleType);
         }
@@ -561,18 +564,25 @@ function handleDocumentDragStart(event: DragEvent) {
 
 function handleDocumentDragOver(event: DragEvent) {
     const target = event.target as HTMLElement;
-    if (target?.classList.contains('drag-handle')) {
+    // Allow drag over any part of a rule row, not just the drag handle
+    const ruleRow = target.closest('.rule-row');
+    if (ruleRow) {
         handleDragOver(event);
     }
 }
 
 function handleDocumentDrop(event: DragEvent) {
     const target = event.target as HTMLElement;
-    if (target?.classList.contains('drag-handle')) {
-        const index = target.getAttribute('data-drag-index');
-        const ruleType = target.getAttribute('data-drag-type');
-        if (index && ruleType) {
-            handleDrop(event, parseInt(index), ruleType);
+    const ruleRow = target.closest('.rule-row') as HTMLElement;
+    if (ruleRow) {
+        // Get the drag handle within the row to extract index and type
+        const dragHandle = ruleRow.querySelector('.drag-handle') as HTMLElement;
+        if (dragHandle) {
+            const index = dragHandle.getAttribute('data-drag-index');
+            const ruleType = dragHandle.getAttribute('data-drag-type');
+            if (index && ruleType) {
+                handleDrop(event, parseInt(index), ruleType);
+            }
         }
     }
 }
