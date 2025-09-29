@@ -94,7 +94,7 @@
                             "type": "string"
                         },
                         "default": [
-                            "^(bug/|bug-.*:red",
+                            "^(bug/|bug-.*):red",
                             "^(feature/|feature-).*:green",
                             "^(?!(main|master)$).*:purple"
                         ],
