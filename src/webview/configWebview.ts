@@ -136,10 +136,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
         const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(branchRules, workspaceInfo.currentBranch);
 
-        console.log('[DEBUG] Sending matching indexes:', {
-            repoRule: matchingRepoRuleIndex,
-            branchRule: matchingBranchRuleIndex,
-        });
+        // console.log('[DEBUG] Sending matching indexes:', {
+        //     repoRule: matchingRepoRuleIndex,
+        //     branchRule: matchingBranchRuleIndex,
+        // });
 
         this.currentConfig = {
             repoRules,
@@ -305,7 +305,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     }
 
     private async _updateConfiguration(data: any): Promise<void> {
-        console.log('[DEBUG] Backend _updateConfiguration called with:', data);
+        // console.log('[DEBUG] Backend _updateConfiguration called with:', data);
 
         if (!data) {
             vscode.window.showErrorMessage('No configuration data provided');
@@ -343,9 +343,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             }
 
             // Wait for all configuration updates to complete
-            console.log('[DEBUG] Waiting for', updatePromises.length, 'configuration updates to complete...');
+            // console.log('[DEBUG] Waiting for', updatePromises.length, 'configuration updates to complete...');
             await Promise.all(updatePromises);
-            console.log('[DEBUG] All configuration updates completed successfully');
+            // console.log('[DEBUG] All configuration updates completed successfully');
 
             //vscode.window.showInformationMessage('Configuration updated successfully');
 
