@@ -1887,11 +1887,34 @@ function updateAutoCompleteSelection() {
         if (index === selectedSuggestionIndex) {
             item.classList.add('selected');
             item.setAttribute('aria-selected', 'true');
+            
+            // Scroll to keep selected item visible
+            scrollToSelectedItem(item as HTMLElement, autoCompleteDropdown);
         } else {
             item.classList.remove('selected');
             item.setAttribute('aria-selected', 'false');
         }
     });
+}
+
+function scrollToSelectedItem(selectedItem: HTMLElement, dropdown: HTMLElement) {
+    const dropdownRect = dropdown.getBoundingClientRect();
+    const itemRect = selectedItem.getBoundingClientRect();
+    
+    // Calculate relative position within the dropdown
+    const itemTop = selectedItem.offsetTop;
+    const itemBottom = itemTop + selectedItem.offsetHeight;
+    const dropdownScrollTop = dropdown.scrollTop;
+    const dropdownHeight = dropdown.clientHeight;
+    
+    // Check if item is above the visible area
+    if (itemTop < dropdownScrollTop) {
+        dropdown.scrollTop = itemTop;
+    }
+    // Check if item is below the visible area
+    else if (itemBottom > dropdownScrollTop + dropdownHeight) {
+        dropdown.scrollTop = itemBottom - dropdownHeight;
+    }
 }
 
 function selectAutoCompleteSuggestion(input: HTMLInputElement, colorName: string) {
