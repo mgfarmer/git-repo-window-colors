@@ -714,3 +714,64 @@ button:focus {
 .branch-panel {
     position: relative;
 }
+
+/* Color Auto-complete Styles */
+.color-autocomplete-dropdown {
+    position: absolute;
+    background: var(--vscode-quickInput-background);
+    border: 1px solid var(--vscode-quickInput-border);
+    border-radius: 3px;
+    box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+.color-autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--vscode-quickInput-foreground);
+    border-bottom: 1px solid var(--vscode-quickInput-border);
+}
+
+.color-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.color-autocomplete-item:hover,
+.color-autocomplete-item.selected {
+    background: var(--vscode-quickInputList-focusBackground);
+    color: var(--vscode-quickInputList-focusForeground);
+}
+
+.color-preview {
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    border: 1px solid var(--vscode-panel-border);
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* Scrollbar styling for dropdown */
+.color-autocomplete-dropdown::-webkit-scrollbar {
+    width: 8px;
+}
+
+.color-autocomplete-dropdown::-webkit-scrollbar-track {
+    background: var(--vscode-scrollbarSlider-background);
+}
+
+.color-autocomplete-dropdown::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-background);
+    border-radius: 4px;
+}
+
+.color-autocomplete-dropdown::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground);
+}

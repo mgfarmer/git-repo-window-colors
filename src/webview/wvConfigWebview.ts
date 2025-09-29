@@ -10,6 +10,155 @@ let currentConfig: any = null;
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
 
+// HTML Color Names for auto-complete
+const HTML_COLOR_NAMES = [
+    'aliceblue',
+    'antiquewhite',
+    'aqua',
+    'aquamarine',
+    'azure',
+    'beige',
+    'bisque',
+    'black',
+    'blanchedalmond',
+    'blue',
+    'blueviolet',
+    'brown',
+    'burlywood',
+    'cadetblue',
+    'chartreuse',
+    'chocolate',
+    'coral',
+    'cornflowerblue',
+    'cornsilk',
+    'crimson',
+    'cyan',
+    'darkblue',
+    'darkcyan',
+    'darkgoldenrod',
+    'darkgray',
+    'darkgreen',
+    'darkkhaki',
+    'darkmagenta',
+    'darkolivegreen',
+    'darkorange',
+    'darkorchid',
+    'darkred',
+    'darksalmon',
+    'darkseagreen',
+    'darkslateblue',
+    'darkslategray',
+    'darkturquoise',
+    'darkviolet',
+    'deeppink',
+    'deepskyblue',
+    'dimgray',
+    'dodgerblue',
+    'firebrick',
+    'floralwhite',
+    'forestgreen',
+    'fuchsia',
+    'gainsboro',
+    'ghostwhite',
+    'gold',
+    'goldenrod',
+    'gray',
+    'green',
+    'greenyellow',
+    'honeydew',
+    'hotpink',
+    'indianred',
+    'indigo',
+    'ivory',
+    'khaki',
+    'lavender',
+    'lavenderblush',
+    'lawngreen',
+    'lemonchiffon',
+    'lightblue',
+    'lightcoral',
+    'lightcyan',
+    'lightgoldenrodyellow',
+    'lightgray',
+    'lightgreen',
+    'lightpink',
+    'lightsalmon',
+    'lightseagreen',
+    'lightskyblue',
+    'lightslategray',
+    'lightsteelblue',
+    'lightyellow',
+    'lime',
+    'limegreen',
+    'linen',
+    'magenta',
+    'maroon',
+    'mediumaquamarine',
+    'mediumblue',
+    'mediumorchid',
+    'mediumpurple',
+    'mediumseagreen',
+    'mediumslateblue',
+    'mediumspringgreen',
+    'mediumturquoise',
+    'mediumvioletred',
+    'midnightblue',
+    'mintcream',
+    'mistyrose',
+    'moccasin',
+    'navajowhite',
+    'navy',
+    'oldlace',
+    'olive',
+    'olivedrab',
+    'orange',
+    'orangered',
+    'orchid',
+    'palegoldenrod',
+    'palegreen',
+    'paleturquoise',
+    'palevioletred',
+    'papayawhip',
+    'peachpuff',
+    'peru',
+    'pink',
+    'plum',
+    'powderblue',
+    'purple',
+    'red',
+    'rosybrown',
+    'royalblue',
+    'saddlebrown',
+    'salmon',
+    'sandybrown',
+    'seagreen',
+    'seashell',
+    'sienna',
+    'silver',
+    'skyblue',
+    'slateblue',
+    'slategray',
+    'snow',
+    'springgreen',
+    'steelblue',
+    'tan',
+    'teal',
+    'thistle',
+    'tomato',
+    'turquoise',
+    'violet',
+    'wheat',
+    'white',
+    'whitesmoke',
+    'yellow',
+    'yellowgreen',
+];
+
+// Auto-complete state
+let activeAutoCompleteInput: HTMLInputElement | null = null;
+let autoCompleteDropdown: HTMLElement | null = null;
+let selectedSuggestionIndex: number = -1;
+
 // Request initial configuration
 vscode.postMessage({
     command: 'requestConfig',
@@ -529,6 +678,11 @@ function handleDocumentChange(event: Event) {
 function handleDocumentInput(event: Event) {
     const target = event.target as HTMLInputElement;
     if (!target) return;
+
+    // Handle color input auto-complete
+    if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
+        handleColorInputAutoComplete(target);
+    }
 
     // Handle regex validation for branch pattern inputs
     if (target.id && target.id.startsWith('branch-pattern-')) {
@@ -1602,3 +1756,173 @@ function clearRegexValidationError() {
         input.classList.remove('regex-error');
     });
 }
+
+// Color Auto-complete Functions
+function handleColorInputAutoComplete(input: HTMLInputElement) {
+    const value = input.value.toLowerCase().trim();
+
+    if (value.length === 0) {
+        hideAutoCompleteDropdown();
+        return;
+    }
+
+    // Filter color names that start with the input value
+    const matches = HTML_COLOR_NAMES.filter(
+        (colorName) => colorName.toLowerCase().includes(value), // && colorName.toLowerCase() !== value,
+    );
+
+    if (matches.length === 0) {
+        hideAutoCompleteDropdown();
+        return;
+    }
+
+    showAutoCompleteDropdown(input, matches.slice(0, 20)); // Show max 10 suggestions
+}
+
+function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]) {
+    hideAutoCompleteDropdown(); // Hide any existing dropdown
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'color-autocomplete-dropdown';
+    dropdown.setAttribute('role', 'listbox');
+    dropdown.setAttribute('aria-label', 'Color name suggestions');
+
+    suggestions.forEach((suggestion, index) => {
+        const item = document.createElement('div');
+        item.className = 'color-autocomplete-item';
+        item.setAttribute('role', 'option');
+        item.textContent = suggestion;
+        item.dataset.index = index.toString();
+
+        // Add color preview
+        const preview = document.createElement('span');
+        preview.className = 'color-preview';
+        preview.style.backgroundColor = suggestion;
+        item.appendChild(preview);
+
+        item.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent input from losing focus
+            selectAutoCompleteSuggestion(input, suggestion);
+        });
+
+        item.addEventListener('mouseenter', () => {
+            selectedSuggestionIndex = index;
+            updateAutoCompleteSelection();
+        });
+
+        dropdown.appendChild(item);
+    });
+
+    // Position dropdown below input
+    const inputRect = input.getBoundingClientRect();
+    dropdown.style.position = 'absolute';
+    dropdown.style.top = inputRect.bottom + window.scrollY + 'px';
+    dropdown.style.left = inputRect.left + window.scrollX + 'px';
+    dropdown.style.width = Math.max(inputRect.width, 200) + 'px';
+    dropdown.style.zIndex = '1000';
+
+    document.body.appendChild(dropdown);
+
+    activeAutoCompleteInput = input;
+    autoCompleteDropdown = dropdown;
+    selectedSuggestionIndex = -1;
+
+    // Add keyboard navigation
+    input.addEventListener('keydown', handleAutoCompleteKeydown);
+}
+
+function hideAutoCompleteDropdown() {
+    if (autoCompleteDropdown) {
+        document.body.removeChild(autoCompleteDropdown);
+        autoCompleteDropdown = null;
+    }
+
+    if (activeAutoCompleteInput) {
+        activeAutoCompleteInput.removeEventListener('keydown', handleAutoCompleteKeydown);
+        activeAutoCompleteInput = null;
+    }
+
+    selectedSuggestionIndex = -1;
+}
+
+function handleAutoCompleteKeydown(event: KeyboardEvent) {
+    if (!autoCompleteDropdown) return;
+
+    const items = autoCompleteDropdown.querySelectorAll('.color-autocomplete-item');
+
+    switch (event.key) {
+        case 'ArrowDown':
+            event.preventDefault();
+            selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, items.length - 1);
+            updateAutoCompleteSelection();
+            break;
+
+        case 'ArrowUp':
+            event.preventDefault();
+            selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+            updateAutoCompleteSelection();
+            break;
+
+        case 'Enter':
+            if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < items.length) {
+                event.preventDefault();
+                const selectedItem = items[selectedSuggestionIndex];
+                const colorName = selectedItem.textContent?.replace(/\s+$/, '') || ''; // Remove trailing spaces from preview
+                selectAutoCompleteSuggestion(activeAutoCompleteInput!, colorName);
+            }
+            break;
+
+        case 'Escape':
+            event.preventDefault();
+            hideAutoCompleteDropdown();
+            break;
+    }
+}
+
+function updateAutoCompleteSelection() {
+    if (!autoCompleteDropdown) return;
+
+    const items = autoCompleteDropdown.querySelectorAll('.color-autocomplete-item');
+    items.forEach((item, index) => {
+        if (index === selectedSuggestionIndex) {
+            item.classList.add('selected');
+            item.setAttribute('aria-selected', 'true');
+        } else {
+            item.classList.remove('selected');
+            item.setAttribute('aria-selected', 'false');
+        }
+    });
+}
+
+function selectAutoCompleteSuggestion(input: HTMLInputElement, colorName: string) {
+    input.value = colorName;
+
+    // Trigger the input event to update the configuration
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    hideAutoCompleteDropdown();
+    input.focus();
+}
+
+// Close auto-complete when clicking outside
+document.addEventListener('click', (event) => {
+    if (
+        autoCompleteDropdown &&
+        !autoCompleteDropdown.contains(event.target as Node) &&
+        event.target !== activeAutoCompleteInput
+    ) {
+        hideAutoCompleteDropdown();
+    }
+});
+
+// Close auto-complete when input loses focus (with delay to allow for clicks on dropdown)
+document.addEventListener('focusout', (event) => {
+    if (event.target === activeAutoCompleteInput) {
+        setTimeout(() => {
+            if (autoCompleteDropdown && document.activeElement !== activeAutoCompleteInput) {
+                hideAutoCompleteDropdown();
+            }
+        }, 150);
+    }
+});
