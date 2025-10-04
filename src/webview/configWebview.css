@@ -299,6 +299,9 @@ h2 {
 .rule-row.drag-over {
     border-top: 2px solid var(--vscode-focusBorder);
 }
+.rule-row.drag-over-bottom {
+    border-bottom: 2px solid var(--vscode-focusBorder);
+}
 .delete-btn {
     background: var(--vscode-editor-background);
     color: var(--vscode-foreground);

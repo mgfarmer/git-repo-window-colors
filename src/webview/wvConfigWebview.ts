@@ -806,7 +806,23 @@ function handleDocumentDrop(event: DragEvent) {
             const index = dragHandle.getAttribute('data-drag-index');
             const ruleType = dragHandle.getAttribute('data-drag-type');
             if (index && ruleType) {
-                handleDrop(event, parseInt(index), ruleType);
+                let targetIndex = parseInt(index);
+
+                // Check if we're dropping in the bottom half of the last row
+                // If so, treat it as "insert after this row" (i.e., at the very bottom)
+                const rules = ruleType === 'repo' ? currentConfig?.repoRules : currentConfig?.branchRules;
+                if (rules && targetIndex === rules.length - 1) {
+                    const rect = ruleRow.getBoundingClientRect();
+                    const mouseY = event.clientY;
+                    const rowMiddle = rect.top + rect.height / 2;
+
+                    // If dropping in the bottom half of the last row, insert after it
+                    if (mouseY > rowMiddle) {
+                        targetIndex = rules.length; // Insert at the very end
+                    }
+                }
+
+                handleDrop(event, targetIndex, ruleType);
             }
         }
     }
@@ -1433,12 +1449,36 @@ function handleDragOver(event: DragEvent) {
     // Add visual indicator
     const targetRow = (event.target as Element).closest('.rule-row') as HTMLTableRowElement;
     if (targetRow && !targetRow.classList.contains('dragging')) {
-        // Remove drag-over class from all rows
+        // Remove drag-over classes from all rows
         document.querySelectorAll('.rule-row').forEach((row) => {
-            row.classList.remove('drag-over');
+            row.classList.remove('drag-over', 'drag-over-bottom');
         });
-        // Add drag-over class to current target
-        targetRow.classList.add('drag-over');
+
+        // Determine if we're targeting the bottom position
+        const dragHandle = targetRow.querySelector('.drag-handle') as HTMLElement;
+        if (dragHandle) {
+            const ruleType = dragHandle.getAttribute('data-drag-type');
+            const targetIndex = parseInt(dragHandle.getAttribute('data-drag-index') || '0');
+            const rules = ruleType === 'repo' ? currentConfig?.repoRules : currentConfig?.branchRules;
+
+            // Check if this is the last row and we're in the bottom half
+            if (rules && targetIndex === rules.length - 1) {
+                const rect = targetRow.getBoundingClientRect();
+                const mouseY = event.clientY;
+                const rowMiddle = rect.top + rect.height / 2;
+
+                if (mouseY > rowMiddle) {
+                    // Bottom half of last row - show drop indicator below
+                    targetRow.classList.add('drag-over-bottom');
+                } else {
+                    // Top half of last row - show drop indicator above
+                    targetRow.classList.add('drag-over');
+                }
+            } else {
+                // Not the last row - always show drop indicator above
+                targetRow.classList.add('drag-over');
+            }
+        }
     }
 }
 
@@ -1457,8 +1497,19 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
     // Remove the dragged item
     const draggedItem = rules.splice(draggedIndex, 1)[0];
 
-    // Insert at the target position
-    const insertIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    // Calculate the correct insert position
+    let insertIndex = targetIndex;
+
+    // If we removed an item before the target position, adjust the insert index
+    if (draggedIndex < targetIndex) {
+        insertIndex = targetIndex - 1;
+    }
+
+    // Handle the special case where targetIndex is rules.length (insert at the very end)
+    if (targetIndex >= rules.length) {
+        insertIndex = rules.length;
+    }
+
     rules.splice(insertIndex, 0, draggedItem);
 
     sendConfiguration();
@@ -1471,6 +1522,7 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
     document.querySelectorAll('.rule-row').forEach((row) => {
         row.classList.remove('dragging');
         row.classList.remove('drag-over');
+        row.classList.remove('drag-over-bottom');
     });
 }
 
@@ -1483,6 +1535,7 @@ function setupRepoRuleRowEvents(row: HTMLTableRowElement, index: number) {
             // Remove drag-over class from all rows when drag ends
             document.querySelectorAll('.rule-row').forEach((r) => {
                 r.classList.remove('drag-over');
+                r.classList.remove('drag-over-bottom');
             });
         });
     }
@@ -1497,6 +1550,7 @@ function setupBranchRuleRowEvents(row: HTMLTableRowElement, index: number) {
             // Remove drag-over class from all rows when drag ends
             document.querySelectorAll('.rule-row').forEach((r) => {
                 r.classList.remove('drag-over');
+                r.classList.remove('drag-over-bottom');
             });
         });
     }
