@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
+//import { outputChannel } from '../extension';
 
 // Build-time configuration for color picker type
 // Set to false to use VS Code's input dialog, true to use native HTML color picker
@@ -32,9 +33,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _disposables: vscode.Disposable[] = [];
     private _workspaceInfo: { repositoryUrl: string; currentBranch: string } = { repositoryUrl: '', currentBranch: '' };
     private currentConfig: any = null;
+    private _configurationListener: vscode.Disposable | undefined;
 
     constructor(extensionUri: vscode.Uri) {
         this._extensionUri = extensionUri;
+
+        // Set up configuration listener once
+        this._configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration('windowColors')) {
+                this._sendConfigurationToWebview();
+            }
+        });
+        this._disposables.push(this._configurationListener);
     }
 
     public setWorkspaceInfo(repositoryUrl: string, currentBranch: string): void {
@@ -147,16 +157,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             otherSettings,
         };
 
+        const msgData = {
+            ...this.currentConfig,
+            workspaceInfo,
+            matchingIndexes: {
+                repoRule: matchingRepoRuleIndex,
+                branchRule: matchingBranchRuleIndex,
+            },
+        };
+
+        //console.log('[DEBUG] Sending configuration to webview: ', msgData);
+
         this._panel.webview.postMessage({
             command: 'configData',
-            data: {
-                ...this.currentConfig,
-                workspaceInfo,
-                matchingIndexes: {
-                    repoRule: matchingRepoRuleIndex,
-                    branchRule: matchingBranchRuleIndex,
-                },
-            },
+            data: msgData,
         });
     }
 
@@ -286,15 +300,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // });
 
         for (let i = 0; i < branchRules.length; i++) {
-            // console.log(`[DEBUG] Testing branch rule ${i}: "${branchRules[i].pattern}" against "${currentBranch}"`);
+            // outputChannel.appendLine(
+            //     `[DEBUG] Testing branch rule ${i}: "${branchRules[i].pattern}" against "${currentBranch}"`,
+            // );
             try {
                 const regex = new RegExp(branchRules[i].pattern);
                 if (regex.test(currentBranch)) {
-                    // console.log(`[DEBUG] Branch rule ${i} matched! Returning index ${i}`);
+                    // outputChannel.appendLine(`[DEBUG] Branch rule ${i} matched! Returning index ${i}`);
                     return i;
                 }
             } catch (error) {
-                // console.log(`[DEBUG] Branch rule ${i} has invalid regex, skipping`);
+                // outputChannel.appendLine(`[DEBUG] Branch rule ${i} has invalid regex, skipping`);
                 // Invalid regex, skip this rule
                 continue;
             }
@@ -314,42 +330,43 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const config = vscode.workspace.getConfiguration('windowColors');
+            // console.log('[DEBUG] Current settingsconfiguration:', config);
+            // console.log('[DEBUG] New data to apply:', data);
             const updatePromises: Thenable<void>[] = [];
 
             // Update repository rules
             if (data.repoRules) {
-                //console.log('[DEBUG] Updating repo rules:', data.repoRules);
+                // console.log('[DEBUG] Updating repo rules:', data.repoRules);
                 const repoRulesArray = data.repoRules.map((rule: RepoRule) => {
                     const formatted = this._formatRepoRule(rule);
-                    //console.log('[DEBUG] Formatted rule:', rule, '->', formatted);
+                    // console.log('[DEBUG]   Formatted rule:', rule, '->', formatted);
                     return formatted;
                 });
-                //console.log('[DEBUG] Final repo rules array:', repoRulesArray);
                 updatePromises.push(config.update('repoConfigurationList', repoRulesArray, true));
             }
 
             // Update branch rules
             if (data.branchRules) {
-                const branchRulesArray = data.branchRules.map((rule: BranchRule) => `${rule.pattern}:${rule.color}`);
+                // console.log('[DEBUG] Updating branch rules:', data.branchRules);
+                const branchRulesArray = data.branchRules.map((rule: BranchRule) => {
+                    // console.log('[DEBUG]   branch rule:', rule);
+                    return `${rule.pattern}:${rule.color}`;
+                });
                 updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
             }
 
             // Update other settings
             if (data.otherSettings) {
+                // console.log('[DEBUG] Updating other settings:', data.otherSettings);
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
                     updatePromises.push(config.update(key, settings[key as keyof OtherSettings], true));
                 });
             }
 
-            // Wait for all configuration updates to complete
             // console.log('[DEBUG] Waiting for', updatePromises.length, 'configuration updates to complete...');
             await Promise.all(updatePromises);
-            // console.log('[DEBUG] All configuration updates completed successfully');
-
-            // console.log('[DEBUG] Configuration updated, sending fresh config to webview');
-            // Send updated configuration back to webview with recalculated matching indexes
-            this._sendConfigurationToWebview();
+            // console.log('[DEBUG] All configuration updates completed results:', promiseResult);
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);
@@ -624,6 +641,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     public dispose(): void {
         this._onPanelDisposed();
+
+        // Dispose configuration listener explicitly
+        if (this._configurationListener) {
+            this._configurationListener.dispose();
+            this._configurationListener = undefined;
+        }
 
         while (this._disposables.length) {
             const x = this._disposables.pop();

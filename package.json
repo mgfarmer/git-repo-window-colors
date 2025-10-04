@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
     "icon": "img/icon_602.png",
-    "version": "1.3.5",
+    "version": "1.3.6",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -178,7 +178,7 @@
         "vscode:prepublish": "yarn run compile",
         "package": "vsce package --yarn",
         "publish": "yarn vsce publish",
-        "publish-prerelease": "npm version patch --force && yarn vsce publish --pre-release"
+        "publish-prerelease": "yarn version --patch --no-git-tag-version && yarn vsce publish --pre-release"
     },
     "devDependencies": {
         "@types/color": "^4.2.0",

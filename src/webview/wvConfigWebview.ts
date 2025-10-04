@@ -492,7 +492,7 @@ function handleDeleteConfirmed(data: any) {
 }
 
 function renderConfiguration(config: any) {
-    // console.log('[DEBUG] renderConfiguration ', config);
+    console.log('[DEBUG] renderConfiguration ', config);
     // Clear validation errors on new data
     clearValidationErrors();
 
@@ -1225,11 +1225,30 @@ function addRepoRule() {
     sendConfiguration();
 }
 
+const humorousDefectNames: string[] = [
+    'Unintended-Feature',
+    'Heisenbug',
+    'Gremlin',
+    'A-Case-of-the-Mondays',
+    'Schroedinbug',
+    'Ghost-in-the-Machine',
+    'Caffeination-Anomaly',
+    'Syntax-Sasquatch',
+    'Wobbly-Bit',
+    'Surprise-Functionality',
+    'The-Funk',
+    'Percussive-Maintenance-Candidate',
+    'Spontaneous-Self-Awareness',
+    'Reality-Incompatibility',
+];
+
 function addBranchRule() {
     if (!currentConfig) return;
 
+    // Get a random humorous defect name for the default pattern
+    const randomDefectName = humorousDefectNames[Math.floor(Math.random() * humorousDefectNames.length)];
     const newRule = {
-        pattern: '',
+        pattern: randomDefectName,
         color: getThemeAppropriateColor(),
     };
 

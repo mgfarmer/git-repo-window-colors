@@ -60,7 +60,7 @@ function repoConfigAsString(repoConfig: RepoConfig): string {
     return result;
 }
 
-let outputChannel: vscode.OutputChannel;
+export let outputChannel: vscode.OutputChannel;
 let gitExt;
 let gitApi: any;
 let gitRepository: any;
@@ -150,21 +150,25 @@ export async function activate(context: ExtensionContext) {
 
     gitExt = vscode.extensions.getExtension('vscode.git');
     if (!gitExt) {
+        outputChannel.appendLine('Git extension not available.');
+        outputChannel.appendLine('Do you have git installed?');
         console.warn('Git extension not available');
         return '';
     }
-    // if (!gitExt.isActive) {
-    //     await gitExt.activate();
-    //     return '';
-    // }
-    gitApi = gitExt.isActive ? gitExt.exports.getAPI(1) : (await gitExt.activate()).getAPI(1);
-
-    //gitApi = gitExt.exports.getAPI(1);
 
     if (!workspace.workspaceFolders) {
         outputChannel.appendLine('No workspace folders.  Cannot color an empty workspace.');
         return;
     }
+
+    gitApi = gitExt.isActive ? gitExt.exports.getAPI(1) : (await gitExt.activate()).getAPI(1);
+
+    if (!gitApi) {
+        outputChannel.appendLine('Git API not available.');
+        return;
+    }
+
+    outputChannel.appendLine('Git extension is activated.');
 
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.colorize', async () => {
@@ -705,6 +709,9 @@ async function doit(reason: string) {
     // Now check the branch map to see if any apply
     let branchMatch = false;
     for (const [branch, color] of branchMap) {
+        if (branch === '') {
+            continue;
+        }
         if (currentBranch?.match(branch)) {
             branchColor = Color(color);
             outputChannel.appendLine('  Branch rule matched: "' + branch + '" with color: ' + branchColor.hex());
