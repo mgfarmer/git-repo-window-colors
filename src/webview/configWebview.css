@@ -101,6 +101,18 @@ h2 {
 .rules-table td.reorder-controls {
     background-color: var(--vscode-editor-background);
 }
+
+/* Add padding to color cells to prevent overlap */
+.rules-table td.color-cell {
+    padding-left: 8px;
+}
+
+/* Ensure input fields within table cells don't overflow */
+.rules-table td .rule-input,
+.rules-table td .color-input {
+    max-width: 100%;
+    overflow: hidden;
+}
 /* Highlight matched rules */
 .rules-table tr.matched-rule {
     outline: 2px solid var(--vscode-charts-green);
@@ -139,19 +151,20 @@ h2 {
     padding: 4px;
     font-family: var(--vscode-editor-font-family);
     font-size: 12px;
+    box-sizing: border-box; /* Ensure padding doesn't add to width */
 }
 .rule-input:focus,
 .color-input:focus {
     outline: 1px solid var(--vscode-focusBorder);
     background-color: var(--vscode-input-background);
 }
-.color-cell {
-    padding: 2px !important;
-}
+
 .color-input-container {
     display: flex;
     align-items: center;
     gap: 4px;
+    max-width: 100%;
+    overflow: hidden;
 }
 .color-swatch {
     display: inline-block;
