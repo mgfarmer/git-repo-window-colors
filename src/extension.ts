@@ -1,7 +1,7 @@
 import * as Color from 'color';
-//import * as fs from "fs-extra";
-//import * as os from "os";
-//import * as path from 'path';
+import * as fs from 'fs-extra';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 import { ConfigWebviewProvider } from './webview/configWebview';
@@ -79,7 +79,7 @@ function createStatusBarItem(context: ExtensionContext): void {
 
 function shouldShowStatusBarItem(): boolean {
     // Never show if not a git repository
-    if (!gitRepoRemoteFetchUrl) {
+    if (!gitRepoRemoteFetchUrl || gitRepoRemoteFetchUrl === '') {
         return false;
     }
 
@@ -265,6 +265,20 @@ export async function activate(context: ExtensionContext) {
         }),
     );
 
+    // Register export configuration command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.exportConfig', async () => {
+            await exportConfiguration();
+        }),
+    );
+
+    // Register import configuration command
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.importConfig', async () => {
+            await importConfiguration();
+        }),
+    );
+
     // Register status bar click command with smart behavior
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.statusBarClick', async () => {
@@ -373,25 +387,62 @@ export async function activate(context: ExtensionContext) {
 async function init() {
     gitRepository = getWorkspaceRepo();
     if (gitRepository) {
-        gitRepoRemoteFetchUrl = gitRepository.state.remotes[0]['fetchUrl'];
-        outputChannel.appendLine('Git repository: ' + gitRepoRemoteFetchUrl);
-        currentBranch = getCurrentGitBranch();
-        if (currentBranch === undefined) {
-            outputChannel.appendLine('Could not determine current branch.');
-            return;
+        if (gitRepository.state.remotes.length > 0) {
+            gitRepoRemoteFetchUrl = gitRepository.state.remotes[0]['fetchUrl'];
+            outputChannel.appendLine('Git repository: ' + gitRepoRemoteFetchUrl);
+            currentBranch = getCurrentGitBranch();
+            if (currentBranch === undefined) {
+                outputChannel.appendLine('Could not determine current branch.');
+                return;
+            }
+            outputChannel.appendLine('Current branch: ' + currentBranch);
+
+            // Update workspace info for the configuration webview
+            if (configProvider) {
+                configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
+            }
+
+            doit('initial activation');
+            updateStatusBarItem(); // Update status bar after initialization
+
+            // Check if we should ask to colorize this repo if no rules match
+            await checkAndAskToColorizeRepo();
+        } else {
+            // No remotes available yet, poll for them
+            outputChannel.appendLine('No git remotes found yet, waiting for remotes to be available...');
+            const remoteCheckInterval = setInterval(async () => {
+                try {
+                    outputChannel.appendLine('Checking for remotes...');
+                    gitRepository = getWorkspaceRepo();
+                    if (gitRepository && gitRepository.state.remotes.length > 0) {
+                        // Remote is now available, clear the interval and proceed
+                        clearInterval(remoteCheckInterval);
+
+                        gitRepoRemoteFetchUrl = gitRepository.state.remotes[0]['fetchUrl'];
+                        outputChannel.appendLine('Git repository: ' + gitRepoRemoteFetchUrl);
+                        currentBranch = getCurrentGitBranch();
+                        if (currentBranch === undefined) {
+                            outputChannel.appendLine('Could not determine current branch.');
+                            return;
+                        }
+                        outputChannel.appendLine('Current branch: ' + currentBranch);
+
+                        // Update workspace info for the configuration webview
+                        if (configProvider) {
+                            configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
+                        }
+
+                        doit('initial activation');
+                        updateStatusBarItem(); // Update status bar after initialization
+
+                        // Check if we should ask to colorize this repo if no rules match
+                        await checkAndAskToColorizeRepo();
+                    }
+                } catch (error) {
+                    outputChannel.appendLine('Error checking for git remotes: ' + error);
+                }
+            }, 3000);
         }
-        outputChannel.appendLine('Current branch: ' + currentBranch);
-
-        // Update workspace info for the configuration webview
-        if (configProvider) {
-            configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
-        }
-
-        doit('initial activation');
-        updateStatusBarItem(); // Update status bar after initialization
-
-        // Check if we should ask to colorize this repo if no rules match
-        await checkAndAskToColorizeRepo();
     } else {
         outputChannel.appendLine('No git repository found for workspace.');
         updateStatusBarItem(); // Update status bar for non-git workspace
@@ -903,3 +954,283 @@ const getColorWithLuminosity = (color: Color, min: number, max: number): Color =
     }
     return c;
 };
+
+// Export configuration to JSON file
+async function exportConfiguration(): Promise<void> {
+    try {
+        // Get current configuration
+        const config = workspace.getConfiguration('windowColors');
+        const exportData = {
+            repoConfigurationList: config.get('repoConfigurationList'),
+            branchConfigurationList: config.get('branchConfigurationList'),
+            removeManagedColors: config.get('removeManagedColors'),
+            invertBranchColorLogic: config.get('invertBranchColorLogic'),
+            colorInactiveTitlebar: config.get('colorInactiveTitlebar'),
+            colorEditorTabs: config.get('colorEditorTabs'),
+            colorStatusBar: config.get('colorStatusBar'),
+            activityBarColorKnob: config.get('activityBarColorKnob'),
+            applyBranchColorToTabsAndStatusBar: config.get('applyBranchColorToTabsAndStatusBar'),
+            automaticBranchIndicatorColorKnob: config.get('automaticBranchIndicatorColorKnob'),
+            showBranchColumns: config.get('showBranchColumns'),
+            showStatusIconWhenNoRuleMatches: config.get('showStatusIconWhenNoRuleMatches'),
+            askToColorizeRepoWhenOpened: config.get('askToColorizeRepoWhenOpened'),
+            exportedAt: new Date().toISOString(),
+            version: '1.5.0',
+        };
+
+        // Get last export path or default to home directory
+        const lastExportPath = config.get<string>('lastExportPath') || os.homedir();
+
+        // Show save dialog
+        const saveUri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file(path.join(lastExportPath, 'git-repo-window-colors-config.json')),
+            filters: {
+                'JSON Files': ['json'],
+                'All Files': ['*'],
+            },
+            title: 'Export Git Repo Window Colors Configuration',
+        });
+
+        if (!saveUri) {
+            return; // User cancelled
+        }
+
+        // Save the file
+        await fs.writeFile(saveUri.fsPath, JSON.stringify(exportData, null, 2), 'utf8');
+
+        // Remember the directory for next time
+        const exportDir = path.dirname(saveUri.fsPath);
+        await config.update('lastExportPath', exportDir, vscode.ConfigurationTarget.Global);
+
+        vscode.window.showInformationMessage(`Configuration exported successfully to ${saveUri.fsPath}`);
+        outputChannel.appendLine(`Configuration exported to: ${saveUri.fsPath}`);
+    } catch (error) {
+        const errorMessage = `Failed to export configuration: ${error}`;
+        vscode.window.showErrorMessage(errorMessage);
+        outputChannel.appendLine(errorMessage);
+    }
+}
+
+// Import configuration from JSON file
+async function importConfiguration(): Promise<void> {
+    try {
+        // Get last import path or default to home directory
+        const config = workspace.getConfiguration('windowColors');
+        const lastImportPath = config.get<string>('lastImportPath') || os.homedir();
+
+        // Show open dialog
+        const openUri = await vscode.window.showOpenDialog({
+            defaultUri: vscode.Uri.file(lastImportPath),
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            filters: {
+                'JSON Files': ['json'],
+                'All Files': ['*'],
+            },
+            title: 'Import Git Repo Window Colors Configuration',
+        });
+
+        if (!openUri || openUri.length === 0) {
+            return; // User cancelled
+        }
+
+        const importPath = openUri[0].fsPath;
+
+        // Read and parse the file
+        const fileContent = await fs.readFile(importPath, 'utf8');
+        const importData = JSON.parse(fileContent);
+
+        // Validate that this looks like a valid configuration file
+        if (!importData.repoConfigurationList && !importData.branchConfigurationList) {
+            vscode.window.showErrorMessage('Invalid configuration file: Missing required configuration data');
+            return;
+        }
+
+        // Show confirmation dialog
+        const action = await vscode.window.showWarningMessage(
+            'This will replace your current Git Repo Window Colors configuration. Do you want to continue?',
+            { modal: true },
+            'Import and Replace',
+            'Merge with Current',
+            'Cancel',
+        );
+
+        if (action === 'Cancel' || !action) {
+            return;
+        }
+
+        // Apply the configuration
+        const configUpdates: Array<Thenable<void>> = [];
+
+        if (action === 'Import and Replace') {
+            // Replace all configuration
+            if (importData.repoConfigurationList !== undefined) {
+                configUpdates.push(
+                    config.update(
+                        'repoConfigurationList',
+                        importData.repoConfigurationList,
+                        vscode.ConfigurationTarget.Global,
+                    ),
+                );
+            }
+            if (importData.branchConfigurationList !== undefined) {
+                configUpdates.push(
+                    config.update(
+                        'branchConfigurationList',
+                        importData.branchConfigurationList,
+                        vscode.ConfigurationTarget.Global,
+                    ),
+                );
+            }
+        } else if (action === 'Merge with Current') {
+            // Merge configurations
+            const currentRepoList = config.get<string[]>('repoConfigurationList') || [];
+            const currentBranchList = config.get<string[]>('branchConfigurationList') || [];
+
+            const importRepoList = importData.repoConfigurationList || [];
+            const importBranchList = importData.branchConfigurationList || [];
+
+            // Merge repo configurations (avoid duplicates based on repo qualifier)
+            const mergedRepoList = [...currentRepoList];
+            for (const importItem of importRepoList) {
+                const repoQualifier = importItem.split(':')[0].split('|')[0].trim();
+                const existingIndex = mergedRepoList.findIndex(
+                    (item) => item.split(':')[0].split('|')[0].trim() === repoQualifier,
+                );
+                if (existingIndex >= 0) {
+                    mergedRepoList[existingIndex] = importItem; // Replace existing
+                } else {
+                    mergedRepoList.push(importItem); // Add new
+                }
+            }
+
+            // Merge branch configurations (avoid duplicates based on branch pattern)
+            const mergedBranchList = [...currentBranchList];
+            for (const importItem of importBranchList) {
+                const branchPattern = importItem.split(':')[0].trim();
+                const existingIndex = mergedBranchList.findIndex((item) => item.split(':')[0].trim() === branchPattern);
+                if (existingIndex >= 0) {
+                    mergedBranchList[existingIndex] = importItem; // Replace existing
+                } else {
+                    mergedBranchList.push(importItem); // Add new
+                }
+            }
+
+            configUpdates.push(
+                config.update('repoConfigurationList', mergedRepoList, vscode.ConfigurationTarget.Global),
+            );
+            configUpdates.push(
+                config.update('branchConfigurationList', mergedBranchList, vscode.ConfigurationTarget.Global),
+            );
+        }
+
+        // Apply other settings (always replace, not merge)
+        if (importData.removeManagedColors !== undefined) {
+            configUpdates.push(
+                config.update('removeManagedColors', importData.removeManagedColors, vscode.ConfigurationTarget.Global),
+            );
+        }
+        if (importData.invertBranchColorLogic !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'invertBranchColorLogic',
+                    importData.invertBranchColorLogic,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+        if (importData.colorInactiveTitlebar !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'colorInactiveTitlebar',
+                    importData.colorInactiveTitlebar,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+        if (importData.colorEditorTabs !== undefined) {
+            configUpdates.push(
+                config.update('colorEditorTabs', importData.colorEditorTabs, vscode.ConfigurationTarget.Global),
+            );
+        }
+        if (importData.colorStatusBar !== undefined) {
+            configUpdates.push(
+                config.update('colorStatusBar', importData.colorStatusBar, vscode.ConfigurationTarget.Global),
+            );
+        }
+        if (importData.activityBarColorKnob !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'activityBarColorKnob',
+                    importData.activityBarColorKnob,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+        if (importData.applyBranchColorToTabsAndStatusBar !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'applyBranchColorToTabsAndStatusBar',
+                    importData.applyBranchColorToTabsAndStatusBar,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+        if (importData.automaticBranchIndicatorColorKnob !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'automaticBranchIndicatorColorKnob',
+                    importData.automaticBranchIndicatorColorKnob,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+        if (importData.showBranchColumns !== undefined) {
+            configUpdates.push(
+                config.update('showBranchColumns', importData.showBranchColumns, vscode.ConfigurationTarget.Global),
+            );
+        }
+        if (importData.showStatusIconWhenNoRuleMatches !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'showStatusIconWhenNoRuleMatches',
+                    importData.showStatusIconWhenNoRuleMatches,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+        if (importData.askToColorizeRepoWhenOpened !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'askToColorizeRepoWhenOpened',
+                    importData.askToColorizeRepoWhenOpened,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+
+        // Wait for all updates to complete
+        await Promise.all(configUpdates);
+
+        // Remember the directory for next time
+        const importDir = path.dirname(importPath);
+        await config.update('lastImportPath', importDir, vscode.ConfigurationTarget.Global);
+
+        // Refresh the configuration webview if it's open
+        if (configProvider) {
+            configProvider._sendConfigurationToWebview();
+        }
+
+        // Apply the new colors
+        doit('configuration import');
+
+        const successMessage = `Configuration imported successfully from ${importPath}`;
+        vscode.window.showInformationMessage(successMessage);
+        outputChannel.appendLine(successMessage);
+    } catch (error) {
+        const errorMessage = `Failed to import configuration: ${error}`;
+        vscode.window.showErrorMessage(errorMessage);
+        outputChannel.appendLine(errorMessage);
+    }
+}
