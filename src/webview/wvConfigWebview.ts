@@ -618,6 +618,17 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle Import/Export buttons
+    if (target.getAttribute('data-action') === 'exportConfig') {
+        vscode.postMessage({ command: 'exportConfig', data: {} });
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'importConfig') {
+        vscode.postMessage({ command: 'importConfig', data: {} });
+        return;
+    }
+
     // Handle move/reorder buttons
     const moveMatch = target.getAttribute('data-action')?.match(/moveRule\((\d+), '(\w+)', (-?\d+)\)/);
     if (moveMatch) {

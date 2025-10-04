@@ -981,9 +981,17 @@ async function exportConfiguration(): Promise<void> {
         // Get last export path or default to home directory
         const lastExportPath = config.get<string>('lastExportPath') || os.homedir();
 
+        // Create filename with YYMMDD datestamp
+        const now = new Date();
+        const year = now.getFullYear().toString().slice(-2); // Get last 2 digits of year
+        const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Month is 0-indexed
+        const day = now.getDate().toString().padStart(2, '0');
+        const dateStamp = `${year}${month}${day}`;
+        const defaultFilename = `git-repo-window-colors-config-${dateStamp}.json`;
+
         // Show save dialog
         const saveUri = await vscode.window.showSaveDialog({
-            defaultUri: vscode.Uri.file(path.join(lastExportPath, 'git-repo-window-colors-config.json')),
+            defaultUri: vscode.Uri.file(path.join(lastExportPath, defaultFilename)),
             filters: {
                 'JSON Files': ['json'],
                 'All Files': ['*'],

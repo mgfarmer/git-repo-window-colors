@@ -49,7 +49,21 @@ body {
     flex: 1;
     gap: 20px;
 }
-.repo-panel,
+.repo-panel {
+    flex: 1;
+    border: 1px solid var(--vscode-panel-border);
+    padding: 0px;
+    padding-top: 10px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+}
+.right-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
 .branch-panel {
     flex: 1;
     border: 1px solid var(--vscode-panel-border);
@@ -58,6 +72,40 @@ body {
     border-radius: 4px;
     display: flex;
     flex-direction: column;
+}
+.import-export-panel {
+    flex: 0 0 auto;
+    height: auto;
+    border: 0px solid var(--vscode-panel-border);
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.import-export-buttons {
+    display: flex;
+    gap: 8px;
+    margin: 0;
+    justify-content: flex-end;
+}
+.import-export-button {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+.import-export-button:hover {
+    background-color: var(--vscode-button-hoverBackground);
+}
+.import-export-button:active {
+    background-color: var(--vscode-button-secondaryBackground);
 }
 .bottom-panel {
     height: 200px;

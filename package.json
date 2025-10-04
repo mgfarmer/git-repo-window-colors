@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
     "icon": "img/icon_602.png",
-    "version": "1.3.7",
+    "version": "1.5.0",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -54,6 +54,16 @@
             {
                 "command": "windowColors.openConfig",
                 "title": "Open Configuration",
+                "category": "GRWC"
+            },
+            {
+                "command": "windowColors.exportConfig",
+                "title": "Export Configuration",
+                "category": "GRWC"
+            },
+            {
+                "command": "windowColors.importConfig",
+                "title": "Import Configuration",
                 "category": "GRWC"
             }
         ],
@@ -167,6 +177,20 @@
                         "default": true,
                         "description": "When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules.",
                         "scope": "application"
+                    },
+                    "windowColors.lastExportPath": {
+                        "order": 28,
+                        "type": "string",
+                        "default": "",
+                        "description": "Last directory used for exporting configuration (internal setting)",
+                        "scope": "application"
+                    },
+                    "windowColors.lastImportPath": {
+                        "order": 29,
+                        "type": "string",
+                        "default": "",
+                        "description": "Last directory used for importing configuration (internal setting)",
+                        "scope": "application"
                     }
                 }
             }
@@ -178,6 +202,7 @@
         "vscode:prepublish": "yarn run compile",
         "package": "vsce package --yarn",
         "publish": "yarn vsce publish",
+        "prepublish": "",
         "publish-prerelease": "yarn version --patch --no-git-tag-version && yarn vsce publish --pre-release"
     },
     "devDependencies": {

@@ -129,6 +129,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'confirmDelete':
                 await this._handleDeleteConfirmation(message.data.deleteData!);
                 break;
+            case 'exportConfig':
+                await vscode.commands.executeCommand('windowColors.exportConfig');
+                break;
+            case 'importConfig':
+                await vscode.commands.executeCommand('windowColors.importConfig');
+                break;
         }
     }
 
@@ -555,48 +561,68 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             <div class="placeholder" aria-live="polite">Loading repository rules...</div>
                         </div>
                     </section>
-                    <section class="branch-panel" aria-labelledby="branch-rules-heading">
-                        <div class="panel-header">
-                            <h2 id="branch-rules-heading">Branch Rules
-                                <button class="tooltip panel-tooltip help-icon" 
-                                        type="button"
-                                        aria-label="Help for Branch Rules"
-                                        aria-describedby="branch-rules-tooltip"
-                                        tabindex="0">ℹ️
-                                    <span class="tooltiptext" 
-                                          id="branch-rules-tooltip" 
-                                          role="tooltip" 
-                                          aria-hidden="true">
-                                        <strong>Branch Rules</strong><br>
-                                        Configure colors for branch name patterns across all repositories.<br><br>
-                                        <strong>Pattern:</strong> Regular expression to match branch names<br>
-                                        <strong>Examples:</strong><br>
-                                        • <code>feature/.*</code> - All feature branches<br>
-                                        • <code>main|master</code> - Main branches<br>
-                                        • <code>release-.*</code> - Release branches<br>
-                                        • <code>hotfix.*</code> - Hotfix branches
+                    <div class="right-column">
+                        <section class="branch-panel" aria-labelledby="branch-rules-heading">
+                            <div class="panel-header">
+                                <h2 id="branch-rules-heading">Branch Rules
+                                    <button class="tooltip panel-tooltip help-icon" 
+                                            type="button"
+                                            aria-label="Help for Branch Rules"
+                                            aria-describedby="branch-rules-tooltip"
+                                            tabindex="0">ℹ️
+                                        <span class="tooltiptext" 
+                                              id="branch-rules-tooltip" 
+                                              role="tooltip" 
+                                              aria-hidden="true">
+                                            <strong>Branch Rules</strong><br>
+                                            Configure colors for branch name patterns across all repositories.<br><br>
+                                            <strong>Pattern:</strong> Regular expression to match branch names<br>
+                                            <strong>Examples:</strong><br>
+                                            • <code>feature/.*</code> - All feature branches<br>
+                                            • <code>main|master</code> - Main branches<br>
+                                            • <code>release-.*</code> - Release branches<br>
+                                            • <code>hotfix.*</code> - Hotfix branches
+                                        </span>
+                                    </button>
+                                </h2>
+                                <button type="button" 
+                                        class="header-add-button tooltip panel-tooltip-left" 
+                                        data-action="addBranchRule" 
+                                        title="Add a new branch rule"
+                                        aria-label="Add Branch Rule (Ctrl+Alt+B)">
+                                    + Add
+                                    <span class="tooltiptext" role="tooltip">
+                                        Add a new branch rule. Branch rules override repository rules for matching branch patterns.
+                                        <br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut.
                                     </span>
                                 </button>
-                            </h2>
-                            <button type="button" 
-                                    class="header-add-button tooltip panel-tooltip-left" 
-                                    data-action="addBranchRule" 
-                                    title="Add a new branch rule"
-                                    aria-label="Add Branch Rule (Ctrl+Alt+B)">
-                                + Add
-                                <span class="tooltiptext" role="tooltip">
-                                    Add a new branch rule. Branch rules override repository rules for matching branch patterns.
-                                    <br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut.
-                                </span>
-                            </button>
-                        </div>
-                        <div class="section-help">
-                            Define color rules based on branch name patterns. These override repository branch rules (if used). The configured color is applied to the Activity Bar when working on a matched branch.
-                        </div>
-                        <div id="branchRulesContent" role="region" aria-label="Branch rules table">
-                            <div class="placeholder" aria-live="polite">Loading branch rules...</div>
-                        </div>
-                    </section>
+                            </div>
+                            <div class="section-help">
+                                Define color rules based on branch name patterns. These override repository branch rules (if used). The configured color is applied to the Activity Bar when working on a matched branch.
+                            </div>
+                            <div id="branchRulesContent" role="region" aria-label="Branch rules table">
+                                <div class="placeholder" aria-live="polite">Loading branch rules...</div>
+                            </div>
+                        </section>
+                        <section class="import-export-panel">
+                            <div class="import-export-buttons">
+                                <button type="button" 
+                                        class="import-export-button" 
+                                        data-action="exportConfig" 
+                                        title="Export current configuration to a JSON file"
+                                        aria-label="Export Configuration">
+                                    📤 Export Config
+                                </button>
+                                <button type="button" 
+                                        class="import-export-button" 
+                                        data-action="importConfig" 
+                                        title="Import configuration from a JSON file"
+                                        aria-label="Import Configuration">
+                                    📥 Import Config
+                                </button>
+                            </div>
+                        </section>
+                    </div>
                 </div>
                 <section class="bottom-panel" aria-labelledby="other-settings-heading">
                     <h2 id="other-settings-heading">Other Settings

@@ -8,9 +8,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ## 🆕 What's New
 
-### Version 1.3.0 - Enhanced Configuration & Status Features
-
-#### 🎨 Modern Configuration Editor
+### 🎨 Modern Configuration Editor
 
 - Brand new visual configuration interface with intuitive rule building
 - Drag & drop rule reordering for priority-based matching
@@ -20,7 +18,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 - Comprehensive accessibility support with keyboard navigation
 - Smart tooltips and contextual help throughout the interface
 
-#### 📍 Status Bar Icon Integration
+### 📍 Status Bar Icon Integration
 
 - Optional status bar icon (palette symbol)
 - Configurable visibility: show always or only when no rules match
@@ -28,19 +26,20 @@ Transform your VS Code experience by automatically applying distinctive colors t
 - Intelligent hiding for non-Git workspaces
 - Seamless integration with existing VS Code UI patterns
 
-#### ✨ User Experience Improvements
+### ✨ User Experience Improvements
 
 - Responsive 3-column layout optimized for different screen sizes
 - Consistent typography using VS Code terminal font
 - Refined spacing and alignment across all UI elements
 - Native VS Code confirmation dialogs for destructive actions
 - Enhanced keyboard shortcuts and accessibility features
+- Import/Export Configurations for easy sharing
 
 ---
 
 ## ⚡ Why You Need This
 
-**The Problem:** You're a productive developer with 5+ VS Code windows open across different repositories. They all look identical. You waste precious seconds (or minutes) figuring out which window contains which project.
+**The Problem:** You're a productive developer with many VS Code windows open across different repositories. They all look identical. You waste precious seconds (or minutes, or YEARS!) figuring out which window contains which project.
 
 **The Solution:** Automatic, intelligent color-coding that makes every repository instantly recognizable at a glance.
 
@@ -65,7 +64,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ### 2. Recommended VS Code Settings
 
-Add these to your User Settings for the best visual experience:
+These global settings are required for the best visual experience:
 
 ```json
 {
@@ -88,8 +87,9 @@ Configure colors for specific repositories. Rules are matched in priority order:
 
 - **Repository Qualifier:** Part of your repo URL (e.g., `my-project`, `github.com/company/app`)
 - **Primary Color:** Main window color for this repository  
-- **Branch Color:** [Optional] different color for non-default branches
-- **Default Branch:** [Optional] Specify your preferred main branch name (default is master|main) for branch-specific coloring.
+- **Branch Color:** [Optional/Legacy] different color for non-default (or default) branches
+- **Default Branch:** [Optional/Legacy] Specify your preferred main branch name for branch-specific coloring.
+- **Branch Rules:** Check out the Branch Rules section below for a more powerful branch coloring system.
 
 ### Branch Rules (Advanced Feature)
 
@@ -100,9 +100,14 @@ Create patterns that work across ALL repositories:
 
 **Examples:**
 
-- `feature/.*:purple` → All feature branches are purple
-- `hotfix.*:red` → All hotfix branches are red  
-- `JIRA-123.*:orange` → Specific ticket work is orange
+- `feature/.*:purple` → All feature branches, regardless of repository, are purple
+- `hotfix.*:red` → All hotfix branches, regardless of repository, are red  
+- `JIRA-123.*:orange` → Specific ticket work, regardless of repository, is orange
+
+Just like Repo Rules, you can tune the color to your preferences.
+
+Unlike Repo Rules, which use a simple string.includes pattern, Branch Rules are regular expressions
+able to match any complexing branch naming strategy.
 
 ---
 
@@ -127,12 +132,12 @@ When entering colors in text fields, enjoy these productivity features:
 - **Keyboard Navigation** - Use arrow keys to browse suggestions, Enter to select, Escape to close
 - **Mouse Support** - Click any suggestion to select it instantly
 - **Auto-scroll** - Dropdown automatically scrolls to keep selected items visible
+- **Random Color Generator** - If specifying a color is too much work, just roll the dice!
 
 ### Keyboard Shortcuts
 
 - `Ctrl+Alt+R` - Add Repository Rule
 - `Ctrl+Alt+B` - Add Branch Rule
-- `Escape` - Close help tooltips
 
 ### Accessibility First
 
@@ -150,8 +155,10 @@ Quick access to essential functions:
 | Command | Purpose |
 |---------|---------|
 | `GRWC: Open Configuration` | Open full configuration UI *(recommended)* |
-| `GRWC: Colorize this repo` | Quick-add current repository |
-| `GRWC: Decolorize this repo` | Remove coloring for current repository |
+| `GRWC: Colorize this repo` | Quick-add current repository with a random color |
+| `GRWC: Decolorize this repo` | Remove the rule that colorizes for current repository |
+| `GRWC: Export Configuration` | Export all settings to JSON file |
+| `GRWC: Import Configuration` | Import settings from JSON file |
 
 ---
 
@@ -159,21 +166,17 @@ Quick access to essential functions:
 
 ### Smart Color Management
 
-- **Automatic Brightness Adjustment** - Activity bar colors auto-adjust for readability
-- **Branch Hue Rotation** - Automatic color variations for branch indicators  
-- **Theme Integration** - Works with light and dark themes
-- **Performance Optimized** - Handles large configurations efficiently
+- **Theme Integration** - Works with light and dark themes. When random colors are generated the current theme is considered to ensure that text lables remain readable.
 
 ### Status Bar Integration
 
-- **Visual Repository Indicator** - Optional status bar icon with color palette icon
+- **Visual Repository Indicator** - Optional status bar icon with color palette icon (on by default)
 - **Smart Visibility Control** - Configure when the icon appears:
   - Always visible for Git repositories, or
   - Only visible when no repository rules match (helps identify unconfigured repos)
   - Hidden for non-Git workspaces automatically
-- **One-Click Access** - Click the status icon to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it.
+- **One-Click Access** - Click the status icon to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it using a random color that you can then tune.
 - **Contextual Information** - Tooltip shows current repository status and rule matching
-- **Performance Optimized** - Handles large configurations efficiently
 
 ### Multi-Element Coloring
 
@@ -183,19 +186,36 @@ Configure which VS Code elements get colored:
 - Activity bar *(recommended)*
 - Editor tabs *(optional)*
 - Status bar *(optional)*
-- Inactive windows *(optional)*
+- Inactive window title *(optional - but highly recommended)*
 
 ### Enterprise Ready
 
 - **Settings Sync Compatible** - Colors follow you across machines
-- **Team Friendly** - Configurations don't pollute repository settings
-- **Multi-workspace Support** - Works with complex project structures
+- **Team Friendly** - Configurations don't pollute repository settings (unless you commit .vscode/settings.json to the repo). And you can share common configs across your team.
+
+### Configuration Import/Export 🆕
+
+Perfect for **team collaboration** and **standardizing workspace colors** across your organization:
+
+- **Export Complete Configuration** - Save all your repository rules, branch patterns, and settings to a JSON file
+- **Automatic Date Stamping** - Exported files include YYMMDD timestamp for easy organization, but feel free to rename it.
+- **Smart Import Options** - Choose to replace existing configuration or merge with current settings
+- **Team Setup Repository** - Commit configuration files to a shared team repository for consistent colors across all team members
+- **One-Click Access** - Import/Export buttons available directly in the configuration interface
+
+**Team Workflow Example:**
+
+1. Team lead configures colors for all company repositories
+2. Exports configuration to `team-colors-config-241004.json`
+3. Commits the config file to team setup repository
+4. Team members import the configuration for instant consistency
+5. Everyone has the same visual repository identification system
 
 ---
 
 ## 📊 Perfect For
 
-- **Full-stack Developers** working across frontend/backend repos
+- **Full-stack Developers** working across frontend/backend/other repos
 - **DevOps Engineers** managing multiple infrastructure projects  
 - **Open Source Contributors** juggling personal and work projects
 - **Team Leads** reviewing code across multiple repositories
@@ -207,9 +227,7 @@ Configure which VS Code elements get colored:
 
 **Colors not applying?** Check the "Git Repo Window Colors" output channel for diagnostic information.
 
-**Multiple windows same color?** Ensure your repository qualifiers are specific enough to differentiate projects.
-
-**Performance issues?** Use the built-in configuration testing to optimize rule complexity.
+**Multiple windows same color?** Ensure your repository qualifiers are specific enough to differentiate repositories.
 
 ---
 
