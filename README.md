@@ -39,7 +39,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ## ⚡ Configuration Editor
 
-![alt](img/config-editor.png)
+![alt](https://github.com/mgfarmer/git-repo-window-colors/blob/master/img/config-editor.png?raw=true)
 
 ## ⚡ Why You Need This
 
