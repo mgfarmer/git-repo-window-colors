@@ -37,6 +37,10 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ---
 
+## ⚡ Configuration Editor
+
+![alt](img/config-editor.png)
+
 ## ⚡ Why You Need This
 
 **The Problem:** You're a productive developer with many VS Code windows open across different repositories. They all look identical. You waste precious seconds (or minutes, or YEARS!) figuring out which window contains which project.

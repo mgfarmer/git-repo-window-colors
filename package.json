@@ -2,8 +2,8 @@
     "name": "git-repo-window-colors",
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
-    "icon": "img/icon_602.png",
-    "version": "1.5.0",
+    "icon": "img/grwc-icon.png",
+    "version": "1.5.1",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -201,7 +201,7 @@
         "watch": "webpack --mode development --watch",
         "vscode:prepublish": "yarn run compile",
         "package": "vsce package --yarn",
-        "publish": "yarn vsce publish",
+        "publish-release": "yarn version --patch --no-git-tag-version && yarn vsce publish",
         "prepublish": "",
         "publish-prerelease": "yarn version --patch --no-git-tag-version && yarn vsce publish --pre-release"
     },
