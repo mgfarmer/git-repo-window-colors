@@ -724,6 +724,7 @@ async function doit(reason: string) {
                 repoColor = Color(item.primaryColor);
                 outputChannel.appendLine('  Repo rule matched: "' + item.repoQualifier + '", using ' + repoColor.hex());
                 if (item.defaultBranch !== undefined) {
+                    defBranch = item.defaultBranch;
                     branchColor = Color(item.branchColor);
                 }
 
