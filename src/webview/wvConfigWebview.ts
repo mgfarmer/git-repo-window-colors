@@ -1242,13 +1242,37 @@ function addRepoRule() {
         currentConfig.matchingIndexes?.repoRule >= 0;
 
     const newRule = {
-        repoQualifier: isCurrentRepoAlreadyMatched ? 'enter-repo-qualifier' : currentRepoName,
+        repoQualifier: currentRepoName,
         defaultBranch: '',
         primaryColor: getThemeAppropriateColor(),
         branchColor: '',
     };
 
-    currentConfig.repoRules.push(newRule);
+    // Determine insertion index:
+    // If current repository matches an existing rule, insert the new rule just ABOVE the first matching rule.
+    // Otherwise append to the end.
+    let insertIndex = currentConfig.repoRules.length; // default append
+
+    if (isCurrentRepoAlreadyMatched) {
+        // matchingIndexes.repoRule holds the FIRST matched rule index (as calculated by backend)
+        const matchedIndex = currentConfig.matchingIndexes?.repoRule;
+        if (matchedIndex !== undefined && matchedIndex !== null && matchedIndex >= 0) {
+            insertIndex = matchedIndex; // insert above the matched rule
+        }
+    } else {
+        // Fallback heuristic: try to locate first rule whose repoQualifier is a substring of the current repository URL
+        const repoUrl = currentConfig.workspaceInfo?.repositoryUrl || '';
+        for (let i = 0; i < currentConfig.repoRules.length; i++) {
+            const qualifier = currentConfig.repoRules[i]?.repoQualifier;
+            if (qualifier && repoUrl.includes(qualifier)) {
+                insertIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Insert at computed index
+    currentConfig.repoRules.splice(insertIndex, 0, newRule);
     sendConfiguration();
 }
 
