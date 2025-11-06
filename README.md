@@ -10,30 +10,19 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ### 🎨 Modern Configuration Editor
 
-- Brand new visual configuration interface with intuitive rule building
+- Brand new visual configuration interface
 - Drag & drop rule reordering for priority-based matching
-- Built-in color picker with support for hex, RGB, HSL, and named colors
-- **NEW:** HTML color name autocomplete with visual previews for all 140 standard colors
+- Built-in color picker with support for hex, RGB, HSL, and named colors (with autocomplete)
 - Real-time validation and error handling
-- Comprehensive accessibility support with keyboard navigation
 - Smart tooltips and contextual help throughout the interface
 
-### 📍 Status Bar Icon Integration
+### Status Bar Icon Integration
 
 - Optional status bar icon (palette symbol)
 - Configurable visibility: show always or only when no rules match
 - One-click access to configuration editor
 - Intelligent hiding for non-Git workspaces
 - Seamless integration with existing VS Code UI patterns
-
-### ✨ User Experience Improvements
-
-- Responsive 3-column layout optimized for different screen sizes
-- Consistent typography using VS Code terminal font
-- Refined spacing and alignment across all UI elements
-- Native VS Code confirmation dialogs for destructive actions
-- Enhanced keyboard shortcuts and accessibility features
-- Import/Export Configurations for easy sharing
 
 ---
 
@@ -48,7 +37,6 @@ Transform your VS Code experience by automatically applying distinctive colors t
 **The Solution:** Automatic, intelligent color-coding that makes every repository instantly recognizable at a glance.
 
 ✅ **Instant Recognition** - Spot the right window immediately  
-✅ **Zero Manual Work** - Automatic coloring based on Git repository  
 ✅ **Highly Customizable** - Fine-tune colors for your workflow  
 ✅ **Branch-Aware** - Different colors for feature branches, hotfixes, etc.  
 ✅ **Taskbar Integration** - Colored thumbnails in Windows/Mac/Linux dock previews  
@@ -57,14 +45,13 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ## 🚀 Quick Start
 
-### 1. Install & Configure (2 minutes)
+### 1. Install & Configure
 
 1. **Install** the extension from VS Code marketplace
-2. **Open Command Palette** (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-3. **Run:** `GRWC: Open Configuration`
-4. **Add your first rule** - Click "+ Add" in Repository Rules
-5. **Done!** Your workspace now has a unique color identity
-6. **More!** Tune the color to your liking, click on the color swatch
+2. **Open a git repo** the extension will ask if you want to colorize this repo. (Hint: Answer 'Yes')
+3. **Done!** Your workspace now has a unique color identity
+4. **Open the Config Editor** Click the palette icon in the status bar
+5. **More!** Tune the color to your liking, click on the color swatch
 
 ### 2. Recommended VS Code Settings
 
@@ -110,8 +97,8 @@ Create patterns that work across ALL repositories:
 
 Just like Repo Rules, you can tune the color to your preferences.
 
-Unlike Repo Rules, which use a simple string.includes pattern, Branch Rules are regular expressions
-able to match any complexing branch naming strategy.
+Unlike Repo Rules, which use a simple string.includes() pattern, Branch Rules are regular expressions
+able to match any complex branch naming strategy.
 
 ---
 
@@ -119,36 +106,24 @@ able to match any complexing branch naming strategy.
 
 ### Modern, Intuitive UI
 
-- **Visual Rule Builder** - No more JSON editing
+- **Visual Rule Builder** - No JSON editing
 - **Drag & Drop Reordering** - Priority-based rule matching
 - **Built-in Color Picker** - Supports hex, RGB, HSL, named colors
 - **HTML Color Autocomplete** - Intelligent suggestions for all 140 standard HTML color names with visual previews
-- **Real-time Preview** - See changes instantly
-- **Smart Validation** - Catch errors before they break anything
+- **Real-time Preview** - See changes instantly for your current workspace.
 
 ### Color Input Features
 
-When entering colors in text fields, enjoy these productivity features:
+When entering colors in text fields:
 
 - **Smart Autocomplete** - Type any part of a color name (e.g., "blue", "dark", "light") to see matching suggestions
 - **Visual Color Preview** - Each autocomplete suggestion includes a color swatch for instant recognition
-- **Full HTML Color Support** - Access to all 140 standard colors: aliceblue, antiquewhite, aqua, azure, beige, bisque, black, blue, brown, coral, crimson, cyan, gold, green, hotpink, indigo, lime, magenta, navy, orange, pink, purple, red, silver, teal, violet, white, yellow, and many more
-- **Keyboard Navigation** - Use arrow keys to browse suggestions, Enter to select, Escape to close
-- **Mouse Support** - Click any suggestion to select it instantly
-- **Auto-scroll** - Dropdown automatically scrolls to keep selected items visible
 - **Random Color Generator** - If specifying a color is too much work, just roll the dice!
 
 ### Keyboard Shortcuts
 
 - `Ctrl+Alt+R` - Add Repository Rule
 - `Ctrl+Alt+B` - Add Branch Rule
-
-### Accessibility First
-
-- Full keyboard navigation
-- Screen reader compatible
-- High contrast support
-- Comprehensive help text
 
 ---
 
@@ -170,7 +145,7 @@ Quick access to essential functions:
 
 ### Smart Color Management
 
-- **Theme Integration** - Works with light and dark themes. When random colors are generated the current theme is considered to ensure that text lables remain readable.
+- **Theme Integration** - Works with light and dark themes. When random colors are generated the current theme is considered to ensure that text remains readable.
 
 ### Status Bar Integration
 
@@ -180,7 +155,7 @@ Quick access to essential functions:
   - Only visible when no repository rules match (helps identify unconfigured repos)
   - Hidden for non-Git workspaces automatically
 - **One-Click Access** - Click the status icon to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it using a random color that you can then tune.
-- **Contextual Information** - Tooltip shows current repository status and rule matching
+- **Contextual Information** - Tooltip shows current repository status
 
 ### Multi-Element Coloring
 
@@ -192,7 +167,7 @@ Configure which VS Code elements get colored:
 - Status bar *(optional)*
 - Inactive window title *(optional - but highly recommended)*
 
-### Enterprise Ready
+### Sync Ready
 
 - **Settings Sync Compatible** - Colors follow you across machines
 - **Team Friendly** - Configurations don't pollute repository settings (unless you commit .vscode/settings.json to the repo). And you can share common configs across your team.
@@ -231,7 +206,7 @@ Perfect for **team collaboration** and **standardizing workspace colors** across
 
 **Colors not applying?** Check the "Git Repo Window Colors" output channel for diagnostic information.
 
-**Multiple windows same color?** Ensure your repository qualifiers are specific enough to differentiate repositories.
+**Multiple windows same color?** Ensure your repository qualifiers are specific enough to differentiate repositories.  Being able to have a rule that colors multiple repositories is a FEATURE!  For instance, if you work in multiple orgs you can color each org differently.
 
 ---
 
