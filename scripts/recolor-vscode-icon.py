@@ -73,7 +73,7 @@ def recolor_icon(
     target_rgb,
     tolerance=30,
     preserve_brightness=True,
-    desktop_mode=False,
+    max_quality=False,
 ):
     """
     Recolor the VS Code icon by replacing blue pixels with the target color.
@@ -142,26 +142,23 @@ def recolor_icon(
         # Determine output format based on file extension
         output_ext = output_path.lower().split(".")[-1]
 
+        # Override to PNG for max quality
+        if max_quality:
+            if output_ext == "ico":
+                output_path = output_path.replace(".ico", ".png")
+                output_ext = "png"
+                print("Using PNG format for maximum quality")
+
         # Save the result
         if output_ext == "ico":
-            # For ICO files, create multiple sizes
-            if desktop_mode:
-                # Desktop icons: include original size if it's large, plus standard sizes
-                original_size = img.size
-                sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+            # For ICO files, use reliable desktop sizes (always include up to 256x256)
+            original_size = img.size
+            sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 
-                # If original image is larger than 256x256, include it as the largest size
-                if original_size[0] > 256 or original_size[1] > 256:
-                    # Add 512x512 and original size for high-res displays
-                    if original_size[0] >= 512 and original_size[1] >= 512:
-                        sizes.extend([(512, 512)])
-                    # Add the original size (but cap at reasonable limit for ICO files)
-                    max_size = min(original_size[0], original_size[1], 1024)
-                    if max_size > 256:
-                        sizes.append((max_size, max_size))
-            else:
-                # Standard sizes for smaller icons
-                sizes = [(16, 16), (32, 32), (48, 48), (64, 64)]
+            # Ensure 256x256 is always included for good desktop icon quality
+            if original_size[0] > 256 or original_size[1] > 256:
+                # Remove duplicates and sort
+                sizes = list(dict.fromkeys(sizes))
 
             print(f"Creating ICO with sizes: {sizes}")
             images = []
@@ -174,11 +171,37 @@ def recolor_icon(
                     images.append(img.copy())
 
             # Save as ICO with multiple sizes
-            images[0].save(
-                output_path,
-                format="ICO",
-                sizes=[(im.size[0], im.size[1]) for im in images],
-            )
+            # ICO format can have issues with very large sizes, so limit to reasonable maximums
+            # Put largest size first to help Windows prioritize it
+            images_sorted = sorted(images, key=lambda x: x.size[0], reverse=True)
+
+            try:
+                images_sorted[0].save(
+                    output_path,
+                    format="ICO",
+                    sizes=[(im.size[0], im.size[1]) for im in images_sorted],
+                )
+            except Exception as e:
+                print(f"Warning: ICO save failed ({e}), trying with limited sizes...")
+                # Fallback: use only smaller sizes that ICO handles better, but keep 256x256
+                limited_images = [img for img in images_sorted if img.size[0] <= 256]
+                if limited_images:
+                    # Sort again with largest first
+                    limited_images_sorted = sorted(
+                        limited_images, key=lambda x: x.size[0], reverse=True
+                    )
+                    limited_images_sorted[0].save(
+                        output_path,
+                        format="ICO",
+                        sizes=[
+                            (im.size[0], im.size[1]) for im in limited_images_sorted
+                        ],
+                    )
+                else:
+                    # Final fallback: just save the largest as PNG
+                    png_path = output_path.replace(".ico", ".png")
+                    images[-1].save(png_path)
+                    print(f"Saved as PNG instead: {png_path}")
         else:
             img.save(output_path)
 
@@ -243,9 +266,9 @@ Examples:
         help="Color matching tolerance (default: 30)",
     )
     parser.add_argument(
-        "--desktop",
+        "--max-quality",
         action="store_true",
-        help="Generate larger icon sizes optimized for desktop use (includes 128x128 and 256x256)",
+        help="Output maximum quality PNG instead of ICO (recommended for high-res sources)",
     )
     parser.add_argument(
         "--no-preserve-brightness",
@@ -308,16 +331,26 @@ Examples:
             print(f"Error: Invalid hex color '{args.hex}'")
             return 1
 
+    # Convert RGB back to hex for filename
+    hex_code = f"#{target_rgb[0]:02x}{target_rgb[1]:02x}{target_rgb[2]:02x}"
+
+    # Modify output filename to include hex code
+    output_path = Path(args.output)
+    stem = output_path.stem
+    suffix = output_path.suffix
+    new_filename = f"{stem}_{hex_code}{suffix}"
+    modified_output_path = output_path.parent / new_filename
+
     # Process the image
     preserve_brightness = not args.no_preserve_brightness
 
     success = recolor_icon(
         input_path,
-        args.output,
+        str(modified_output_path),
         target_rgb,
         tolerance=args.tolerance,
         preserve_brightness=preserve_brightness,
-        desktop_mode=args.desktop,
+        max_quality=args.max_quality,
     )
 
     return 0 if success else 1
