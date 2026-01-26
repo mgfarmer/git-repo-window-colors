@@ -191,6 +191,54 @@
                         "default": "",
                         "description": "Last directory used for importing configuration (internal setting)",
                         "scope": "application"
+                    },
+                    "windowColors.advancedProfiles": {
+                        "order": 30,
+                        "markdownDescription": "Named configuration profiles for Advanced Mode.",
+                        "type": "object",
+                        "default": {},
+                        "scope": "application",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "palette": {
+                                    "type": "object",
+                                    "description": "Definitions for the reference color slots",
+                                    "additionalProperties": {
+                                        "type": "object",
+                                        "properties": {
+                                            "source": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "fixed",
+                                                    "repoColor",
+                                                    "branchColor",
+                                                    "transparent"
+                                                ]
+                                            },
+                                            "value": {
+                                                "type": "string",
+                                                "description": "Hex color value (for source='fixed')"
+                                            },
+                                            "opacity": {
+                                                "type": "number",
+                                                "description": "Opacity (0-1)"
+                                            }
+                                        },
+                                        "required": [
+                                            "source"
+                                        ]
+                                    }
+                                },
+                                "mappings": {
+                                    "type": "object",
+                                    "description": "Maps VS Code keys to palette slots",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

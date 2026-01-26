@@ -4,6 +4,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
+import { resolveProfile } from './profileResolver';
+import { AdvancedProfile } from './types/advancedModeTypes';
 import { ConfigWebviewProvider } from './webview/configWebview';
 
 let currentBranch: undefined | string = undefined;
@@ -13,6 +15,7 @@ type RepoConfig = {
     defaultBranch: string | undefined;
     primaryColor: string;
     branchColor: string | undefined;
+    profileName?: string;
 };
 
 const managedColors = [
@@ -56,6 +59,9 @@ function repoConfigAsString(repoConfig: RepoConfig): string {
     result += ': ' + repoConfig.primaryColor;
     if (repoConfig.branchColor !== undefined) {
         result += SEPARATOR + repoConfig.branchColor;
+    }
+    if (repoConfig.profileName && repoConfig.profileName !== repoConfig.primaryColor) {
+        result += ':' + repoConfig.profileName;
     }
     return result;
 }
@@ -550,9 +556,24 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
             defBranch = repoParts[1].trim();
         }
 
+        // NEW LOGIC: Check for Profiles
+        const advancedProfiles =
+            (workspace.getConfiguration('windowColors').get('advancedProfiles') as { [key: string]: any }) || {};
+
         const colorParts = parts[1].split(SEPARATOR);
         const rColor = colorParts[0].trim();
         let bColor = undefined;
+
+        let profileName: string | undefined = undefined;
+        if (advancedProfiles[rColor]) {
+            profileName = rColor;
+        } else if (parts.length > 2) {
+            const p2 = parts[2].trim();
+            if (advancedProfiles[p2]) {
+                profileName = p2;
+            }
+        }
+
         if (colorParts.length > 1) {
             bColor = colorParts[1].trim();
             if (validate && isActive && defBranch === undefined) {
@@ -565,10 +586,12 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
 
         // Test all the colors to ensure they are parseable
         let colorMessage = '';
-        try {
-            Color(rColor);
-        } catch (error) {
-            colorMessage = '`' + rColor + '` is not a known color';
+        if (!profileName || (profileName && profileName !== rColor)) {
+            try {
+                Color(rColor);
+            } catch (error) {
+                colorMessage = '`' + rColor + '` is not a known color';
+            }
         }
         try {
             if (bColor !== undefined) {
@@ -592,6 +615,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
             defaultBranch: defBranch,
             primaryColor: rColor,
             branchColor: bColor,
+            profileName: profileName,
         };
 
         if (!error) {
@@ -713,47 +737,68 @@ async function doit(reason: string) {
     /** retain initial unrelated colorCustomizations*/
     const cc = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
 
-    let repoColor = undefined;
-    let branchColor = undefined;
+    let repoColor: Color | undefined = undefined;
+    let branchColor: Color | undefined = undefined;
     let defBranch = undefined;
+    let matchedRepoConfig: RepoConfig | undefined = undefined;
 
     if (repoConfigList !== undefined) {
         let item: RepoConfig;
         for (item of repoConfigList) {
             if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
-                repoColor = Color(item.primaryColor);
-                outputChannel.appendLine('  Repo rule matched: "' + item.repoQualifier + '", using ' + repoColor.hex());
+                matchedRepoConfig = item;
+                const isProfileOnly = item.profileName && item.profileName === item.primaryColor;
+
+                if (!isProfileOnly) {
+                    try {
+                        repoColor = Color(item.primaryColor);
+                        outputChannel.appendLine(
+                            '  Repo rule matched: "' + item.repoQualifier + '", using ' + repoColor.hex(),
+                        );
+                    } catch (e) {
+                        outputChannel.appendLine('  Error parsing primary color: ' + item.primaryColor);
+                    }
+                } else {
+                    outputChannel.appendLine(
+                        '  Repo rule matched: "' + item.repoQualifier + '", using Profile ' + item.profileName,
+                    );
+                }
+
                 if (item.defaultBranch !== undefined) {
                     defBranch = item.defaultBranch;
-                    branchColor = Color(item.branchColor);
+                    if (item.branchColor) {
+                        branchColor = Color(item.branchColor);
+                    }
                 }
 
                 break;
             }
         }
 
-        if (repoColor === undefined) {
+        if (!matchedRepoConfig) {
             outputChannel.appendLine('  No repo rule matched');
         } else {
-            if (defBranch !== undefined) {
-                if (
-                    (!invertBranchColorLogic && currentBranch != defBranch) ||
-                    (invertBranchColorLogic && currentBranch === defBranch)
-                ) {
-                    // Not on the default branch
-                    if (branchColor === undefined) {
-                        // No color specified, use modified repo color
-                        branchColor = repoColor?.rotate(hueRotation);
-                        outputChannel.appendLine('  No branch name rule, using rotated color for this repo');
+            if (repoColor) {
+                if (defBranch !== undefined) {
+                    if (
+                        (!invertBranchColorLogic && currentBranch != defBranch) ||
+                        (invertBranchColorLogic && currentBranch === defBranch)
+                    ) {
+                        // Not on the default branch
+                        if (branchColor === undefined) {
+                            // No color specified, use modified repo color
+                            branchColor = repoColor?.rotate(hueRotation);
+                            outputChannel.appendLine('  No branch name rule, using rotated color for this repo');
+                        }
+                    } else {
+                        // On the default branch
+                        branchColor = repoColor;
+                        outputChannel.appendLine('  Using default branch color for this repo: ' + branchColor.hex());
                     }
                 } else {
-                    // On the default branch
+                    outputChannel.appendLine('  No default branch specified, initializing branch color to repo color');
                     branchColor = repoColor;
-                    outputChannel.appendLine('  Using default branch color for this repo: ' + branchColor.hex());
                 }
-            } else {
-                outputChannel.appendLine('  No default branch specified, initializing branch color to repo color');
-                branchColor = repoColor;
             }
         }
     }
@@ -786,7 +831,10 @@ async function doit(reason: string) {
         }
     }
 
-    if (branchColor === undefined || repoColor === undefined) {
+    if (
+        (branchColor === undefined || repoColor === undefined) &&
+        (!matchedRepoConfig || !matchedRepoConfig.profileName)
+    ) {
         // No color specified, so do nothing
         outputChannel.appendLine('  No color configuration data specified for this repo or branch.');
         if (getBooleanSetting('removeManagedColors')) {
@@ -795,71 +843,86 @@ async function doit(reason: string) {
         return;
     }
 
-    let titleBarTextColor: Color = Color('#ffffff');
-    let titleBarColor: Color = Color('#ffffff');
-    let titleInactiveBarColor: Color = Color('#ffffff');
-    //let titleBarBorderColor: Color = Color("red");
-    let activityBarColor: Color = Color('#ffffff');
-    let inactiveTabColor: Color = Color('#ffffff');
-    let activeTabColor: Color = Color('#ffffff');
+    let newColors: any = {};
+    const advancedProfiles =
+        (workspace.getConfiguration('windowColors').get('advancedProfiles') as { [key: string]: AdvancedProfile }) ||
+        {};
 
-    const theme: ColorThemeKind = window.activeColorTheme.kind;
-
-    if (theme === ColorThemeKind.Dark) {
-        // Primary colors
-        titleBarColor = repoColor;
-        if (repoColor.isDark()) {
-            titleBarTextColor = getColorWithLuminosity(titleBarColor, 0.95, 1);
-        } else {
-            titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
-        }
-        titleInactiveBarColor = titleBarColor.darken(0.5);
-
-        // Branch colors (which my be primary color too)
-        activityBarColor = branchColor.lighten(activityBarColorKnob);
-        inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.lighten(activityBarColorKnob);
-        activeTabColor = inactiveTabColor.lighten(0.5);
-    } else if (theme === ColorThemeKind.Light) {
-        // Primary colors
-        titleBarColor = repoColor;
-        titleInactiveBarColor = titleBarColor.lighten(0.15);
-        if (repoColor.isDark()) {
-            titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
-        } else {
-            titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
-        }
-
-        // Branch colors (which my be primary color too)
-        activityBarColor = branchColor.darken(activityBarColorKnob);
-        inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.darken(activityBarColorKnob);
-        activeTabColor = inactiveTabColor.darken(0.4);
-    }
-
-    const newColors = {
-        //"titleBar.border": titleBarBorderColor.hex(),
-        'activityBar.background': activityBarColor.hex(),
-        'activityBar.foreground': titleBarTextColor.hex(),
-        'titleBar.activeBackground': titleBarColor.hex(),
-        'titleBar.activeForeground': titleBarTextColor.hex(),
-        'titleBar.inactiveBackground': doColorInactiveTitlebar ? titleInactiveBarColor.hex() : undefined,
-        'titleBar.inactiveForeground': doColorInactiveTitlebar ? titleBarTextColor.hex() : undefined,
-        'tab.inactiveBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
-        'tab.activeBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
-        'tab.hoverBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
-        'tab.unfocusedHoverBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
-        'editorGroupHeader.tabsBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
-        'titleBar.border': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
-        'sideBarTitle.background': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
-        'statusBar.background': doColorStatusBar ? inactiveTabColor.hex() : undefined,
-    };
-
-    if (repoColor === branchColor) {
-        // If the repo color and branch color are the same, remove the branch color
-        outputChannel.appendLine(`  Applying color for this repo: ${repoColor.hex()}`);
+    if (matchedRepoConfig && matchedRepoConfig.profileName && advancedProfiles[matchedRepoConfig.profileName]) {
+        // Advanced Profile Mode
+        outputChannel.appendLine(`  Applying profile "${matchedRepoConfig.profileName}"`);
+        const profile = advancedProfiles[matchedRepoConfig.profileName];
+        newColors = resolveProfile(profile, repoColor || Color('#000000'), branchColor || Color('#000000'));
     } else {
-        outputChannel.appendLine(
-            `  Applying colors for this repo: repo ${repoColor.hex()}, branch ${branchColor.hex()}`,
-        );
+        // Legacy Mode
+        if (!repoColor || !branchColor) return;
+
+        let titleBarTextColor: Color = Color('#ffffff');
+        let titleBarColor: Color = Color('#ffffff');
+        let titleInactiveBarColor: Color = Color('#ffffff');
+        //let titleBarBorderColor: Color = Color("red");
+        let activityBarColor: Color = Color('#ffffff');
+        let inactiveTabColor: Color = Color('#ffffff');
+        let activeTabColor: Color = Color('#ffffff');
+
+        const theme: ColorThemeKind = window.activeColorTheme.kind;
+
+        if (theme === ColorThemeKind.Dark) {
+            // Primary colors
+            titleBarColor = repoColor;
+            if (repoColor.isDark()) {
+                titleBarTextColor = getColorWithLuminosity(titleBarColor, 0.95, 1);
+            } else {
+                titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
+            }
+            titleInactiveBarColor = titleBarColor.darken(0.5);
+
+            // Branch colors (which my be primary color too)
+            activityBarColor = branchColor.lighten(activityBarColorKnob);
+            inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.lighten(activityBarColorKnob);
+            activeTabColor = inactiveTabColor.lighten(0.5);
+        } else if (theme === ColorThemeKind.Light) {
+            // Primary colors
+            titleBarColor = repoColor;
+            titleInactiveBarColor = titleBarColor.lighten(0.15);
+            if (repoColor.isDark()) {
+                titleBarTextColor = getColorWithLuminosity(repoColor, 0.95, 1);
+            } else {
+                titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
+            }
+
+            // Branch colors (which my be primary color too)
+            activityBarColor = branchColor.darken(activityBarColorKnob);
+            inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.darken(activityBarColorKnob);
+            activeTabColor = inactiveTabColor.darken(0.4);
+        }
+
+        newColors = {
+            //"titleBar.border": titleBarBorderColor.hex(),
+            'activityBar.background': activityBarColor.hex(),
+            'activityBar.foreground': titleBarTextColor.hex(),
+            'titleBar.activeBackground': titleBarColor.hex(),
+            'titleBar.activeForeground': titleBarTextColor.hex(),
+            'titleBar.inactiveBackground': doColorInactiveTitlebar ? titleInactiveBarColor.hex() : undefined,
+            'titleBar.inactiveForeground': doColorInactiveTitlebar ? titleBarTextColor.hex() : undefined,
+            'tab.inactiveBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+            'tab.activeBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
+            'tab.hoverBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
+            'tab.unfocusedHoverBackground': doColorEditorTabs ? activeTabColor.hex() : undefined,
+            'editorGroupHeader.tabsBackground': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+            'titleBar.border': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+            'sideBarTitle.background': doColorEditorTabs ? inactiveTabColor.hex() : undefined,
+            'statusBar.background': doColorStatusBar ? inactiveTabColor.hex() : undefined,
+        };
+
+        if (repoColor === branchColor) {
+            // If the repo color and branch color are the same, remove the branch color
+            outputChannel.appendLine(`  Applying color for this repo: ${repoColor.hex()}`);
+        } else {
+            outputChannel.appendLine(
+                `  Applying colors for this repo: repo ${repoColor.hex()}, branch ${branchColor.hex()}`,
+            );
+        }
     }
     workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
 
