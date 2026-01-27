@@ -1881,25 +1881,33 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
                                         const content = document.getElementById(contentId);
 
                                         if (content) {
-                                            // Look for all divs with labels in this content
-                                            const allDivs = content.querySelectorAll('div');
+                                            // Look for the grid container first, then its direct children
+                                            const gridContainer = content.querySelector('div[style*="grid"]');
+                                            if (gridContainer) {
+                                                // Only look at direct children of the grid (the actual mapping rows)
+                                                const rows = Array.from(gridContainer.children).filter((child) =>
+                                                    child.querySelector('label'),
+                                                );
 
-                                            allDivs.forEach((div) => {
-                                                const label = div.querySelector('label');
-                                                if (label) {
-                                                    const labelText = label.textContent?.trim();
-                                                    if (labelText === themeKey) {
-                                                        (div as HTMLElement).scrollIntoView({
-                                                            behavior: 'smooth',
-                                                            block: 'center',
-                                                        });
-                                                        (div as HTMLElement).classList.add('highlight-fadeout');
-                                                        setTimeout(() => {
-                                                            (div as HTMLElement).classList.remove('highlight-fadeout');
-                                                        }, 2500);
+                                                rows.forEach((row) => {
+                                                    const label = row.querySelector('label');
+                                                    if (label) {
+                                                        const labelText = label.textContent?.trim();
+                                                        if (labelText === themeKey) {
+                                                            (row as HTMLElement).scrollIntoView({
+                                                                behavior: 'smooth',
+                                                                block: 'center',
+                                                            });
+                                                            (row as HTMLElement).classList.add('highlight-fadeout');
+                                                            setTimeout(() => {
+                                                                (row as HTMLElement).classList.remove(
+                                                                    'highlight-fadeout',
+                                                                );
+                                                            }, 2500);
+                                                        }
                                                     }
-                                                }
-                                            });
+                                                });
+                                            }
                                         }
                                     }, 200);
                                 }, 300);
@@ -3096,7 +3104,7 @@ function isNeutralElement(key: string): boolean {
 /**
  * Filter palette slots to only show related options based on element characteristics
  */
-function getFilteredPaletteOptions(elementKey: string, allSlots: string[]): string[] {
+function getFilteredPaletteOptions(elementKey: string, allSlots: string[], currentSlot?: string): string[] {
     if (!limitOptionsEnabled) {
         return allSlots; // Return all if filtering is disabled
     }
@@ -3107,7 +3115,7 @@ function getFilteredPaletteOptions(elementKey: string, allSlots: string[]): stri
     const isInactive = isInactiveElement(elementKey);
     const isNeutral = isNeutralElement(elementKey);
 
-    return allSlots.filter((slot) => {
+    const filtered = allSlots.filter((slot) => {
         if (slot === 'none') return true; // Always include 'none'
 
         const slotLower = slot.toLowerCase();
@@ -3132,6 +3140,13 @@ function getFilteredPaletteOptions(elementKey: string, allSlots: string[]): stri
 
         return true;
     });
+
+    // Always include the current slot if it's set and not already in the filtered list
+    if (currentSlot && currentSlot !== 'none' && currentSlot !== '__fixed__' && !filtered.includes(currentSlot)) {
+        filtered.push(currentSlot);
+    }
+
+    return filtered;
 }
 
 function renderProfiles(profiles: AdvancedProfileMap | undefined) {
@@ -3560,6 +3575,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 let currentOpacity: number | undefined;
                 let currentFixedColor: string | undefined;
 
+                // Debug: Check if mapping exists
+                if (mappingValue !== undefined && mappingValue !== 'none') {
+                    console.log(`[Mapping Debug] ${key}: mappingValue =`, mappingValue);
+                }
+
                 if (typeof mappingValue === 'string') {
                     currentSlot = mappingValue || 'none';
                     currentOpacity = undefined;
@@ -3572,6 +3592,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     currentSlot = 'none';
                     currentOpacity = undefined;
                     currentFixedColor = undefined;
+                }
+
+                // Debug: Check what slot was determined
+                if (currentSlot !== 'none') {
+                    console.log(`[Mapping Debug] ${key}: currentSlot = ${currentSlot}`);
                 }
 
                 // Container for dropdown (and potentially fixed color picker)
@@ -3606,12 +3631,29 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Add palette slot options (filtered)
                 const allPaletteOptions = Object.keys(profile.palette);
-                const filteredPaletteOptions = getFilteredPaletteOptions(key, allPaletteOptions);
+                const filteredPaletteOptions = getFilteredPaletteOptions(key, allPaletteOptions, currentSlot);
+
+                // Debug: Check if current slot is in the filtered options
+                if (currentSlot !== 'none' && currentSlot !== '__fixed__') {
+                    const isInFiltered = filteredPaletteOptions.includes(currentSlot);
+                    console.log(
+                        `[Mapping Debug] ${key}: currentSlot "${currentSlot}" in filtered options?`,
+                        isInFiltered,
+                    );
+                    if (!isInFiltered) {
+                        console.log(`[Mapping Debug] ${key}: filtered options =`, filteredPaletteOptions);
+                        console.log(`[Mapping Debug] ${key}: all options =`, allPaletteOptions);
+                    }
+                }
+
                 filteredPaletteOptions.forEach((opt) => {
                     const option = document.createElement('option');
                     option.value = opt;
                     option.textContent = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
-                    if (opt === currentSlot) option.selected = true;
+                    if (opt === currentSlot) {
+                        option.selected = true;
+                        console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
+                    }
                     select.appendChild(option);
                 });
 

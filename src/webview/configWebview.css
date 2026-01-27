@@ -1335,29 +1335,24 @@ button:focus {
 @keyframes highlight-fade {
     0% {
         background-color: rgba(255, 200, 0, 0.6) !important;
-        border-left: 4px solid rgba(255, 200, 0, 1);
         box-shadow: 0 0 20px rgba(255, 200, 0, 0.8);
     }
     50% {
         background-color: rgba(255, 200, 0, 0.4) !important;
-        border-left: 4px solid rgba(255, 200, 0, 0.7);
         box-shadow: 0 0 15px rgba(255, 200, 0, 0.6);
     }
     100% {
         background-color: transparent !important;
-        border-left: 4px solid transparent;
         box-shadow: none;
     }
 }
 
 .highlight-fadeout {
     animation: highlight-fade 2.5s ease-in-out !important;
-    border-left: 4px solid transparent;
 }
 
 .profile-item.highlight-fadeout {
     animation: highlight-fade 2.5s ease-in-out !important;
-    border-left: 4px solid transparent;
 }
 
 .mapping-tab-badge {
