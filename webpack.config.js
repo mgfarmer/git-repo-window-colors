@@ -61,6 +61,10 @@ const extensionConfig = {
                     from: 'src/webview/*.css',
                     to: 'webview/[name][ext]',
                 },
+                {
+                    from: 'src/webview/*.html',
+                    to: 'webview/[name][ext]',
+                },
             ],
         }),
     ],

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Help</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif);
+            font-size: var(--vscode-font-size, 13px);
+            color: var(--vscode-foreground, #cccccc);
+            background-color: var(--vscode-editor-background, #1e1e1e);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        .help-content {
+            padding: 20px;
+            max-width: 800px;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        h1 {
+            font-size: 1.5em;
+            margin-top: 0;
+            margin-bottom: 1em;
+            color: var(--vscode-foreground, #cccccc);
+            border-bottom: 1px solid var(--vscode-panel-border, #454545);
+            padding-bottom: 0.5em;
+        }
+        h2 {
+            font-size: 1.2em;
+            margin-top: 1.5em;
+            margin-bottom: 0.8em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        h3 {
+            font-size: 1.05em;
+            margin-top: 1.2em;
+            margin-bottom: 0.6em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        p {
+            margin-bottom: 1em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        ul, ol {
+            margin-bottom: 1em;
+            padding-left: 2em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        li {
+            margin-bottom: 0.5em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        code {
+            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
+            color: var(--vscode-textPreformat-foreground, #d7ba7d);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+            font-size: 0.9em;
+        }
+        .note {
+            background-color: var(--vscode-inputValidation-infoBackground, rgba(75, 166, 251, 0.2));
+            border-left: 4px solid var(--vscode-inputValidation-infoBorder, #4ba6fb);
+            color: var(--vscode-foreground, #cccccc);
+            padding: 12px;
+            margin: 1em 0;
+            border-radius: 3px;
+        }
+        .tip {
+            background-color: var(--vscode-inputValidation-warningBackground, rgba(206, 145, 76, 0.2));
+            border-left: 4px solid var(--vscode-inputValidation-warningBorder, #ce914c);
+            color: var(--vscode-foreground, #cccccc);
+            padding: 12px;
+            margin: 1em 0;
+            border-radius: 3px;
+        }
+        .example {
+            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
+            color: var(--vscode-foreground, #cccccc);
+            padding: 12px;
+            margin: 1em 0;
+            border-radius: 3px;
+            border: 1px solid var(--vscode-panel-border, #454545);
+        }
+        strong {
+            color: var(--vscode-foreground, #cccccc);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="help-content">
+        <h1>Advanced Profiles Guide</h1>
+        
+        <h2>What are Profiles?</h2>
+        <p>
+            Profiles are reusable color palettes that let you define a set of reference colors once and apply them to multiple VS Code UI elements. 
+            Instead of setting colors individually for each theme key, you create a palette and map UI elements to slots in that palette.
+        </p>
+
+        <h2>Creating a Profile</h2>
+        <ol>
+            <li>Click the <strong>"+ Add Profile"</strong> button</li>
+            <li>Give your profile a descriptive name</li>
+            <li>Define your color palette using the 10 available slots</li>
+            <li>Map VS Code theme keys to your palette slots</li>
+        </ol>
+
+        <h2>Understanding the Palette</h2>
+        <p>
+            Each profile has a palette with 12 slots organized into 4 groups:
+        </p>
+        <ul>
+            <li><strong>Primary:</strong> Active Bg/Fg, Inactive Bg/Fg - Main UI colors (4 slots)</li>
+            <li><strong>Secondary:</strong> Active Bg/Fg, Inactive Bg/Fg - Accent colors (4 slots)</li>
+            <li><strong>Tertiary:</strong> Terminal Bg/Fg - Terminal-specific colors (2 slots)</li>
+            <li><strong>Quaternary:</strong> Bg/Fg - Additional utility colors (2 slots)</li>
+        </ul>
+
+        <h3>Palette Slot Configuration</h3>
+        <p>Each palette slot can be configured with:</p>
+        <ul>
+            <li><strong>Source:</strong>
+                <ul>
+                    <li><code>Repository Color</code> - Uses the matched repository color</li>
+                    <li><code>Branch Color</code> - Uses the matched branch color</li>
+                    <li><code>Fixed Color</code> - A specific color you define</li>
+                    <li><code>Transparent</code> - No color (transparent)</li>
+                </ul>
+            </li>
+            <li><strong>Opacity:</strong> Adjust transparency (0-100%)</li>
+            <li><strong>Lighten/Darken:</strong> Adjust brightness (-100 to +100)</li>
+            <li><strong>High Contrast:</strong> Generate maximum contrast against repo/branch color</li>
+        </ul>
+
+        <div class="note">
+            <strong>Reference Colors:</strong> The 12 palette slots are "reference colors" - they're defined once in the palette 
+            and then referenced by multiple theme keys. This makes it easy to maintain consistent coloring across your UI.
+        </div>
+</invoke>
+
+        <h2>Mapping Theme Keys</h2>
+        <p>
+            After defining your palette, map VS Code theme keys to your palette slots using the tabs:
+        </p>
+        <ul>
+            <li><strong>Title Bar:</strong> Window title and borders</li>
+            <li><strong>Activity Bar:</strong> Left sidebar with icons</li>
+            <li><strong>Status Bar:</strong> Bottom status bar</li>
+            <li><strong>Tabs & Breadcrumbs:</strong> Editor tabs and navigation</li>
+            <li><strong>Command Center:</strong> Top-center command area</li>
+            <li><strong>Terminal:</strong> Integrated terminal colors</li>
+            <li><strong>Lists & Panels:</strong> Side panels, inputs, badges</li>
+            <li><strong>Side Bar:</strong> File explorer and side panels</li>
+        </ul>
+
+        <h3>Mapping Options</h3>
+        <p>For each theme key, you can choose:</p>
+        <ul>
+            <li><strong>None:</strong> Don't set this theme key</li>
+            <li><strong>Fixed Color:</strong> Assign a specific color (not from the palette)</li>
+            <li><strong>Palette Slot:</strong> Reference one of your 12 palette slots</li>
+        </ul>
+
+        <div class="tip">
+            <strong>Tip:</strong> Enable <strong>"Limit Options"</strong> to filter palette slots by type (background/foreground, active/inactive). 
+            This makes it easier to find the right slot for each theme key.
+        </div>
+
+        <h3>Synchronization Options</h3>
+        <ul>
+            <li><strong>Synchronize fg/bg selections:</strong> Automatically set background when you select foreground (and vice versa)</li>
+            <li><strong>Synchronize active/inactive selections:</strong> Automatically set inactive elements when you configure active elements</li>
+        </ul>
+
+        <h2>Using Profiles in Rules</h2>
+        <p>
+            Once you've created a profile, you can apply it to repository and branch rules:
+        </p>
+        <ol>
+            <li>Go to the <strong>Rules</strong> tab</li>
+            <li>In a repository or branch rule, find the <strong>Profile</strong> dropdown</li>
+            <li>Select your profile instead of (or in addition to) a simple color</li>
+        </ol>
+
+        <div class="note">
+            <strong>Note:</strong> When a profile is assigned to a rule, the colors are determined by:
+            <ul>
+                <li>The profile's palette definition</li>
+                <li>The profile's theme key mappings</li>
+                <li>The repository/branch color (if the palette references it)</li>
+            </ul>
+        </div>
+
+        <h2>Fixed Colors vs. Reference Colors</h2>
+        <p>
+            You have two ways to assign colors to theme keys:
+        </p>
+        <ul>
+            <li><strong>Fixed Color:</strong> A specific color set directly on the theme key. Use this for elements that should always have the same color regardless of the palette.</li>
+            <li><strong>Reference Color (Palette Slot):</strong> A reference to a palette slot that derives its color from the repository/branch. Use this for elements that should adapt based on the active repository/branch.</li>
+        </ul>
+
+        <div class="example">
+            <strong>Example Workflow:</strong><br>
+            1. Create a profile named "Dark Theme Custom"<br>
+            2. Set Primary Active Bg to "Repository Color" (100% opacity, -20 darken)<br>
+            3. Set Primary Active Fg to "Fixed Color" #FFFFFF with "High Contrast"<br>
+            4. Map <code>titleBar.activeBackground</code> → Primary Active Bg<br>
+            5. Map <code>titleBar.activeForeground</code> → Primary Active Fg<br>
+            6. Apply this profile to your repository rule
+        </div>
+
+        <h2>Best Practices</h2>
+        <ul>
+            <li>Start with a simple profile and gradually add mappings</li>
+            <li>Use Primary slots for most important UI elements (title bar, activity bar)</li>
+            <li>Use Secondary slots for less prominent elements (status bar)</li>
+            <li>Test your profile with different repository/branch colors</li>
+            <li>Create multiple profiles for different use cases (light themes, dark themes, etc.)</li>
+            <li>Use descriptive profile names to remember their purpose</li>
+        </ul>
+
+        <h2>Troubleshooting</h2>
+        <ul>
+            <li><strong>Colors not showing:</strong> Make sure the profile is assigned to a matching rule and the rule is enabled</li>
+            <li><strong>Wrong colors:</strong> Check the Color Report tab to see which profile/rule is being applied</li>
+            <li><strong>Contrast issues:</strong> Use the "High Contrast" option or adjust lighten/darken values</li>
+            <li><strong>Too complex:</strong> Start simple - you don't need to map every theme key</li>
+        </ul>
+    </div>
+</body>
+</html>

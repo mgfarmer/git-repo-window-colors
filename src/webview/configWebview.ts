@@ -139,6 +139,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'updateAdvancedProfiles':
                 await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
                 break;
+            case 'requestProfileHelp':
+                await this._sendProfileHelpContent();
+                break;
         }
     }
 
@@ -508,6 +511,26 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _sendProfileHelpContent(): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'profile-help.html');
+            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
+            const contentString = Buffer.from(helpContent).toString('utf8');
+
+            this._panel.webview.postMessage({
+                command: 'profileHelpContent',
+                data: { content: contentString },
+            });
+        } catch (error) {
+            console.error('Failed to load profile help content:', error);
+            vscode.window.showErrorMessage('Failed to load help content');
+        }
+    }
+
     private _openColorPicker(colorPickerData: any): void {
         // Skip VS Code color picker if using native HTML color picker
         if (USE_NATIVE_COLOR_PICKER) {
@@ -732,6 +755,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 </div>
                 
                 <div id="profiles-tab" role="tabpanel" aria-labelledby="tab-profiles" class="tab-content">
+                     <button type="button" class="help-button" data-action="openProfileHelp" title="Help" aria-label="Open Profile Help">?</button>
                      <!-- Top section: Profiles List + Palette Editor side by side -->
                      <div class="profiles-top-section">
                         <section class="profiles-list-section">
@@ -857,6 +881,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     </section>
                 </div>
             
+            </div>
+            
+            <!-- Help Panel -->
+            <div class="help-panel-overlay" id="helpPanelOverlay" data-action="closeProfileHelp"></div>
+            <div class="help-panel" id="helpPanel">
+                <div class="help-panel-header">
+                    <h2 class="help-panel-title">Profile Help</h2>
+                    <button type="button" class="help-panel-close" data-action="closeProfileHelp" aria-label="Close help panel">×</button>
+                </div>
+                <div class="help-panel-content" id="helpPanelContent">
+                    <!-- Help content will be loaded here -->
+                </div>
             </div>
             
             <script nonce="${nonce}">

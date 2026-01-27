@@ -508,6 +508,9 @@ window.addEventListener('message', (event) => {
         case 'deleteConfirmed':
             handleDeleteConfirmed(message.data);
             break;
+        case 'profileHelpContent':
+            handleProfileHelpContent(message.data);
+            break;
     }
 });
 
@@ -567,6 +570,44 @@ function handleDeleteConfirmed(data: any) {
         console.log('Rule deleted successfully');
     } else {
         console.log('Rule deletion was cancelled');
+    }
+}
+
+function handleProfileHelpContent(data: { content: string }) {
+    const contentDiv = document.getElementById('helpPanelContent');
+    if (contentDiv && data.content) {
+        // Create an iframe to display the HTML content
+        const iframe = document.createElement('iframe');
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.srcdoc = data.content;
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(iframe);
+    }
+}
+
+function openProfileHelp() {
+    // Request help content from backend
+    vscode.postMessage({
+        command: 'requestProfileHelp',
+    });
+
+    // Show the help panel
+    const overlay = document.getElementById('helpPanelOverlay');
+    const panel = document.getElementById('helpPanel');
+    if (overlay && panel) {
+        overlay.classList.add('active');
+        panel.classList.add('active');
+    }
+}
+
+function closeProfileHelp() {
+    const overlay = document.getElementById('helpPanelOverlay');
+    const panel = document.getElementById('helpPanel');
+    if (overlay && panel) {
+        overlay.classList.remove('active');
+        panel.classList.remove('active');
     }
 }
 
@@ -710,6 +751,17 @@ function handleDocumentClick(event: Event) {
 
     if (target.getAttribute('data-action') === 'addBranchRule') {
         addBranchRule();
+        return;
+    }
+
+    // Handle help panel buttons
+    if (target.getAttribute('data-action') === 'openProfileHelp') {
+        openProfileHelp();
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'closeProfileHelp') {
+        closeProfileHelp();
         return;
     }
 
@@ -3574,11 +3626,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 let currentSlot: string;
                 let currentOpacity: number | undefined;
                 let currentFixedColor: string | undefined;
-
-                // Debug: Check if mapping exists
-                if (mappingValue !== undefined && mappingValue !== 'none') {
-                    console.log(`[Mapping Debug] ${key}: mappingValue =`, mappingValue);
-                }
 
                 if (typeof mappingValue === 'string') {
                     currentSlot = mappingValue || 'none';
