@@ -128,7 +128,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 this._openColorPicker(message.data.colorPickerData!);
                 break;
             case 'confirmDelete':
-                await this._handleDeleteConfirmation(message.data.deleteData!);
+                if (message.data && (message.data as any).type === 'profile') {
+                    await this._handleProfileDeleteConfirmation((message.data as any).name);
+                } else if (message.data && message.data.deleteData) {
+                    await this._handleDeleteConfirmation(message.data.deleteData);
+                }
                 break;
             case 'exportConfig':
                 await vscode.commands.executeCommand('windowColors.exportConfig');
@@ -517,6 +521,24 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _handleProfileDeleteConfirmation(profileName: string): Promise<void> {
+        const result = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete the profile "${profileName}"?`,
+            { modal: true },
+            'Delete',
+        );
+
+        if (result === 'Delete') {
+            // Send confirmation back to webview to perform the deletion
+            if (this._panel) {
+                this._panel.webview.postMessage({
+                    command: 'confirmDeleteProfile',
+                    data: { profileName },
+                });
+            }
+        }
+    }
+
     private async _sendProfileHelpContent(): Promise<void> {
         if (!this._panel) {
             return;
@@ -824,7 +846,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             <div class="profile-header">
                                 <input type="text" id="profileNameInput" placeholder="Profile Name">
                                 <div class="profile-actions">
-                                   <!-- actions like clone, delete -->
+                                   <button type="button" class="profile-action-btn" data-action="duplicateProfile" title="Duplicate Profile" aria-label="Duplicate Profile">📋</button>
+                                   <button type="button" class="profile-action-btn" data-action="deleteProfile" title="Delete Profile" aria-label="Delete Profile">🗑️</button>
                                 </div>
                             </div>
                             

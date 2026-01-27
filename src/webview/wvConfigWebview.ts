@@ -517,6 +517,11 @@ window.addEventListener('message', (event) => {
         case 'reportHelpContent':
             handleReportHelpContent(message.data);
             break;
+        case 'confirmDeleteProfile':
+            if (message.data && message.data.profileName) {
+                confirmDeleteProfile(message.data.profileName);
+            }
+            break;
     }
 });
 
@@ -3525,6 +3530,17 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
         nameInput.onchange = (e) => renameProfile(name, (e.target as HTMLInputElement).value);
     }
 
+    // Wire up action buttons
+    const deleteBtn = document.querySelector('[data-action="deleteProfile"]') as HTMLElement;
+    if (deleteBtn) {
+        deleteBtn.onclick = () => deleteProfile(name);
+    }
+
+    const duplicateBtn = document.querySelector('[data-action="duplicateProfile"]') as HTMLElement;
+    if (duplicateBtn) {
+        duplicateBtn.onclick = () => duplicateProfile(name);
+    }
+
     // Palette Editor
     const paletteGrid = document.getElementById('paletteEditor');
     if (paletteGrid) {
@@ -4323,6 +4339,60 @@ function renameProfile(oldName: string, newName: string) {
     saveProfiles();
     renderProfiles(currentConfig.advancedProfiles);
     selectProfile(newName);
+}
+
+function deleteProfile(profileName: string) {
+    if (!profileName || !currentConfig.advancedProfiles[profileName]) return;
+
+    // Confirm deletion
+    vscode.postMessage({
+        command: 'confirmDelete',
+        data: {
+            type: 'profile',
+            name: profileName,
+        },
+    });
+}
+
+function duplicateProfile(profileName: string) {
+    if (!profileName || !currentConfig.advancedProfiles[profileName]) return;
+
+    // Create a new profile name
+    let newName = profileName + ' (copy)';
+    let counter = 1;
+    while (currentConfig.advancedProfiles[newName]) {
+        counter++;
+        newName = profileName + ' (copy ' + counter + ')';
+    }
+
+    // Deep clone the profile
+    const originalProfile = currentConfig.advancedProfiles[profileName];
+    currentConfig.advancedProfiles[newName] = JSON.parse(JSON.stringify(originalProfile));
+
+    selectedProfileName = newName;
+    saveProfiles();
+    renderProfiles(currentConfig.advancedProfiles);
+    selectProfile(newName);
+}
+
+function confirmDeleteProfile(profileName: string) {
+    if (!profileName || !currentConfig.advancedProfiles[profileName]) return;
+
+    delete currentConfig.advancedProfiles[profileName];
+
+    // Select another profile if available
+    const remainingProfiles = Object.keys(currentConfig.advancedProfiles);
+    if (remainingProfiles.length > 0) {
+        selectedProfileName = remainingProfiles[0];
+    } else {
+        selectedProfileName = null;
+    }
+
+    saveProfiles();
+    renderProfiles(currentConfig.advancedProfiles);
+    if (selectedProfileName) {
+        selectProfile(selectedProfileName);
+    }
 }
 
 function saveProfiles() {

@@ -1132,11 +1132,38 @@ button:focus {
 }
 
 #profileNameInput {
+    max-width: 250px;
     padding: 5px;
     font-size: 16px;
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border);
+}
+
+.profile-actions {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.profile-action-btn {
+    background: transparent;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+    opacity: 0.7;
+}
+
+.profile-action-btn:hover {
+    opacity: 1;
+    background: var(--vscode-toolbar-hoverBackground);
+}
+
+.profile-action-btn:active {
+    opacity: 0.5;
 }
 
 /* Palette Editor */
