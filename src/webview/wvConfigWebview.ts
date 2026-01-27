@@ -37,6 +37,8 @@ interface Palette {
     secondaryInactiveFg: PaletteSlotDefinition;
     terminalBg: PaletteSlotDefinition;
     terminalFg: PaletteSlotDefinition;
+    quaternaryBg: PaletteSlotDefinition;
+    quaternaryFg: PaletteSlotDefinition;
     [key: string]: PaletteSlotDefinition;
 }
 
@@ -2245,8 +2247,10 @@ const PALETTE_SLOT_LABELS: Record<string, string> = {
     secondaryActiveFg: 'Secondary Active Foreground',
     secondaryInactiveBg: 'Secondary Inactive Background',
     secondaryInactiveFg: 'Secondary Inactive Foreground',
-    terminalBg: 'Terminal Background',
-    terminalFg: 'Terminal Foreground',
+    terminalBg: 'Tertiary Background',
+    terminalFg: 'Tertiary Foreground',
+    quaternaryBg: 'Quaternary Background',
+    quaternaryFg: 'Quaternary Foreground',
 };
 
 // Explicit ordering for palette slots to ensure Bg/Fg pairs stay together
@@ -2261,6 +2265,8 @@ const PALETTE_SLOT_ORDER: string[] = [
     'secondaryInactiveFg',
     'terminalBg',
     'terminalFg',
+    'quaternaryBg',
+    'quaternaryFg',
 ];
 
 const DEFAULT_PALETTE: Palette = {
@@ -2274,6 +2280,8 @@ const DEFAULT_PALETTE: Palette = {
     secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
     terminalBg: { source: 'fixed', value: '#1E1E1E' },
     terminalFg: { source: 'fixed', value: '#CCCCCC' },
+    quaternaryBg: { source: 'fixed', value: '#2D2D30' },
+    quaternaryFg: { source: 'fixed', value: '#D4D4D4' },
 };
 
 const DEFAULT_MAPPINGS: SectionMappings = {
@@ -2815,6 +2823,15 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
     const paletteGrid = document.getElementById('paletteEditor');
     if (paletteGrid) {
         paletteGrid.innerHTML = '';
+
+        // Ensure all palette slots exist (migration for older profiles)
+        if (!profile.palette.quaternaryBg) {
+            profile.palette.quaternaryBg = DEFAULT_PALETTE.quaternaryBg;
+        }
+        if (!profile.palette.quaternaryFg) {
+            profile.palette.quaternaryFg = DEFAULT_PALETTE.quaternaryFg;
+        }
+
         // Use explicit ordering to maintain Bg/Fg pairs
         // Process pairs: Each row has Bg+Fg wrapper | combined swatch
         for (let i = 0; i < PALETTE_SLOT_ORDER.length; i += 2) {
