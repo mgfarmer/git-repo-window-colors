@@ -145,6 +145,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'requestRulesHelp':
                 await this._sendRulesHelpContent();
                 break;
+            case 'requestReportHelp':
+                await this._sendReportHelpContent();
+                break;
         }
     }
 
@@ -554,6 +557,26 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _sendReportHelpContent(): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'report-help.html');
+            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
+            const contentString = Buffer.from(helpContent).toString('utf8');
+
+            this._panel.webview.postMessage({
+                command: 'reportHelpContent',
+                data: { content: contentString },
+            });
+        } catch (error) {
+            console.error('Failed to load report help content:', error);
+            vscode.window.showErrorMessage('Failed to load help content');
+        }
+    }
+
     private _openColorPicker(colorPickerData: any): void {
         // Skip VS Code color picker if using native HTML color picker
         if (USE_NATIVE_COLOR_PICKER) {
@@ -884,6 +907,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 </div>
                 
                 <div id="report-tab" role="tabpanel" aria-labelledby="tab-report" class="tab-content">
+                    <button type="button" class="help-button" data-action="openReportHelp" title="Open Report Help">?</button>
                     <section class="report-panel">
                         <div class="panel-header">
                             <h2>Color Report
@@ -928,6 +952,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     <button type="button" class="help-panel-close" data-action="closeRulesHelp" aria-label="Close help panel">×</button>
                 </div>
                 <div class="help-panel-content" id="rulesHelpPanelContent">
+                    <!-- Help content will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Report Help Panel -->
+            <div class="help-panel-overlay" id="reportHelpPanelOverlay" data-action="closeReportHelp"></div>
+            <div class="help-panel" id="reportHelpPanel">
+                <div class="help-panel-header">
+                    <h2 class="help-panel-title">Color Report Help</h2>
+                    <button type="button" class="help-panel-close" data-action="closeReportHelp" aria-label="Close help panel">×</button>
+                </div>
+                <div class="help-panel-content" id="reportHelpPanelContent">
                     <!-- Help content will be loaded here -->
                 </div>
             </div>

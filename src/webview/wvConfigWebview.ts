@@ -514,6 +514,9 @@ window.addEventListener('message', (event) => {
         case 'rulesHelpContent':
             handleRulesHelpContent(message.data);
             break;
+        case 'reportHelpContent':
+            handleReportHelpContent(message.data);
+            break;
     }
 });
 
@@ -649,6 +652,41 @@ function closeRulesHelp() {
     if (overlay && panel) {
         overlay.classList.remove('active');
         panel.classList.remove('active');
+    }
+}
+
+function openReportHelp() {
+    vscode.postMessage({ command: 'requestReportHelp' });
+
+    // Show the help panel
+    const overlay = document.getElementById('reportHelpPanelOverlay');
+    const panel = document.getElementById('reportHelpPanel');
+    if (overlay && panel) {
+        overlay.classList.add('active');
+        panel.classList.add('active');
+    }
+}
+
+function closeReportHelp() {
+    const overlay = document.getElementById('reportHelpPanelOverlay');
+    const panel = document.getElementById('reportHelpPanel');
+    if (overlay && panel) {
+        overlay.classList.remove('active');
+        panel.classList.remove('active');
+    }
+}
+
+function handleReportHelpContent(data: any) {
+    const contentDiv = document.getElementById('reportHelpPanelContent');
+    if (contentDiv && data.content) {
+        // Create an iframe to display the HTML content
+        const iframe = document.createElement('iframe');
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.srcdoc = data.content;
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(iframe);
     }
 }
 
@@ -813,6 +851,16 @@ function handleDocumentClick(event: Event) {
 
     if (target.getAttribute('data-action') === 'closeRulesHelp') {
         closeRulesHelp();
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'openReportHelp') {
+        openReportHelp();
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'closeReportHelp') {
+        closeReportHelp();
         return;
     }
 

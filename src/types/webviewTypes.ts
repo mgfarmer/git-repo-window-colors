@@ -36,7 +36,10 @@ export interface WebviewMessage {
         | 'confirmDelete'
         | 'exportConfig'
         | 'importConfig'
-        | 'updateAdvancedProfiles';
+        | 'updateAdvancedProfiles'
+        | 'requestProfileHelp'
+        | 'requestRulesHelp'
+        | 'requestReportHelp';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];

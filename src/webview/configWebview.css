@@ -1218,6 +1218,16 @@ button:focus {
 /* Color Report Styles */
 .report-panel {
     padding: 20px;
+    position: relative;
+    z-index: 1;
+}
+
+#report-tab {
+    position: relative;
+}
+
+#report-tab .help-button {
+    z-index: 101;
 }
 
 .report-table {
