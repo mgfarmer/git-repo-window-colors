@@ -619,9 +619,36 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
 
     const result = new Array<RepoConfig>();
     const isActive = vscode.window.state.active;
+
+    // NEW LOGIC: Check for Profiles (get once before loop)
+    const advancedProfiles =
+        (workspace.getConfiguration('windowColors').get('advancedProfiles') as { [key: string]: any }) || {};
+
     for (const item in json) {
         let error = false;
         const setting = json[item];
+
+        // Try parsing as JSON first (new format with enabled field)
+        if (setting.trim().startsWith('{')) {
+            try {
+                const obj = JSON.parse(setting);
+                const repoConfig: RepoConfig = {
+                    repoQualifier: obj.repoQualifier || '',
+                    defaultBranch: obj.defaultBranch,
+                    primaryColor: obj.primaryColor || '',
+                    branchColor: obj.branchColor,
+                    profileName: obj.profileName,
+                    enabled: obj.enabled,
+                };
+                result.push(repoConfig);
+                continue;
+            } catch (err) {
+                // If JSON parsing fails, fall through to legacy parsing
+                outputChannel.appendLine(`Failed to parse JSON rule: ${setting}`);
+            }
+        }
+
+        // Legacy string format parsing
         const parts = setting.split(':');
         if (validate && isActive && parts.length < 2) {
             // Invalid entry
@@ -639,10 +666,6 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
         if (repoParts.length > 1) {
             defBranch = repoParts[1].trim();
         }
-
-        // NEW LOGIC: Check for Profiles
-        const advancedProfiles =
-            (workspace.getConfiguration('windowColors').get('advancedProfiles') as { [key: string]: any }) || {};
 
         const colorParts = parts[1].split(SEPARATOR);
         const rColor = colorParts[0].trim();
@@ -723,8 +746,34 @@ function getBranchData(validate: boolean = false): Map<string, string> {
 
     const result = new Map<string, string>();
 
+    // Get advanced profiles once before the loop
+    const advancedProfiles = workspace
+        .getConfiguration('windowColors')
+        .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+
     for (const item in json) {
         const setting = json[item];
+
+        // Try parsing as JSON first (new format with enabled field)
+        if (setting.trim().startsWith('{')) {
+            try {
+                const obj = JSON.parse(setting);
+                // Skip disabled rules
+                if (obj.enabled === false) {
+                    continue;
+                }
+                // Add enabled rules to the map
+                if (obj.pattern && obj.color) {
+                    result.set(obj.pattern, obj.color);
+                }
+                continue;
+            } catch (err) {
+                // If JSON parsing fails, fall through to legacy parsing
+                outputChannel.appendLine(`Failed to parse JSON branch rule: ${setting}`);
+            }
+        }
+
+        // Legacy string format parsing
         const parts = setting.split(':');
         if (validate && parts.length < 2) {
             // Invalid entry
@@ -740,10 +789,6 @@ function getBranchData(validate: boolean = false): Map<string, string> {
         // Test all the colors to ensure they are parseable
         let colorMessage = '';
 
-        // Get advanced profiles for validation
-        const advancedProfiles = workspace
-            .getConfiguration('windowColors')
-            .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
         const profileName = extractProfileName(branchColor, advancedProfiles);
 
         // Only validate as a color if it's not a profile name
@@ -1114,6 +1159,34 @@ async function doit(reason: string) {
             }
         });
         outputChannel.appendLine(`  After merge: ${Object.keys(newColors).length} total color mappings`);
+    }
+
+    // If branch color is specified (but no branch profile), override activity bar
+    if (branchColor && !branchProfileName && repoProfileName) {
+        outputChannel.appendLine(`  Branch rule color overrides activity bar: ${branchColor.hex()}`);
+
+        const theme: ColorThemeKind = window.activeColorTheme.kind;
+        let titleBarTextColor: Color = Color('#ffffff');
+        let activityBarColor: Color = Color('#ffffff');
+
+        if (theme === ColorThemeKind.Dark) {
+            activityBarColor = branchColor.lighten(activityBarColorKnob);
+            if (branchColor.isDark()) {
+                titleBarTextColor = getColorWithLuminosity(branchColor, 0.95, 1);
+            } else {
+                titleBarTextColor = getColorWithLuminosity(branchColor, 0, 0.01);
+            }
+        } else if (theme === ColorThemeKind.Light) {
+            activityBarColor = branchColor.darken(activityBarColorKnob);
+            if (branchColor.isDark()) {
+                titleBarTextColor = getColorWithLuminosity(branchColor, 0.95, 1);
+            } else {
+                titleBarTextColor = getColorWithLuminosity(branchColor, 0, 0.01);
+            }
+        }
+
+        newColors['activityBar.background'] = activityBarColor.hex();
+        newColors['activityBar.foreground'] = titleBarTextColor.hex();
     }
 
     // If we have any profile-based colors, show them

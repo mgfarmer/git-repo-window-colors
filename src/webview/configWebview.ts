@@ -447,6 +447,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 defaultBranch: rule.defaultBranch,
                 primaryColor: rule.primaryColor,
                 branchColor: rule.branchColor,
+                profileName: rule.profileName,
                 enabled: false,
             });
         }

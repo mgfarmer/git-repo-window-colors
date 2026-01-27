@@ -10,9 +10,11 @@ let currentConfig: any = null;
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
 let selectedMappingTab: string | null = null; // Track which mapping tab is active
-let syncFgBgEnabled = true; // Default to true for fg/bg synchronization
-let syncActiveInactiveEnabled = true; // Default to true for active/inactive synchronization
-let limitOptionsEnabled = false; // Default to false for limiting dropdown options
+
+// Load checkbox states from localStorage with defaults
+let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
+let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
+let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') === 'true'; // Default to false
 
 // Advanced Mode Types
 type PaletteSlotSource = 'fixed' | 'repoColor' | 'branchColor' | 'transparent';
@@ -734,7 +736,9 @@ function handleDocumentClick(event: Event) {
     if (target.classList.contains('goto-btn') || target.classList.contains('goto-link')) {
         const gotoData = target.getAttribute('data-goto');
         if (gotoData) {
-            handleGotoSource(gotoData);
+            // Store target in global for handleGotoSource to access
+            (window as any)._gotoTarget = target;
+            handleGotoSource(gotoData, target.textContent || '');
         }
         return;
     }
@@ -1400,8 +1404,20 @@ function renderColorReport(config: any) {
         if (isActivityBarKey && matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
             const gotoData = `branch:${config.matchingIndexes.branchRule}`;
+
+            // Check if using a profile
+            if (matchedBranchRule.profileName) {
+                const profileName = matchedBranchRule.profileName;
+                const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
+                return {
+                    description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${escapeHtml(pattern)}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    gotoData: profileGotoData,
+                };
+            }
+
+            const color = escapeHtml(matchedBranchRule.color);
             return {
-                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>"`,
+                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
             };
         }
@@ -1411,15 +1427,16 @@ function renderColorReport(config: any) {
             const gotoData = `repo:${config.matchingIndexes.repoRule}`;
             // For repo rules, check if using a profile
             if (matchedRepoRule.profileName) {
-                const profileName = escapeHtml(matchedRepoRule.profileName);
-                const profileGotoData = `profile:${profileName}:${escapeHtml(key)}`;
+                const profileName = matchedRepoRule.profileName;
+                const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
                 return {
-                    description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (Profile: "<span class="goto-link" data-goto="${profileGotoData}">${profileName}</span>")`,
+                    description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
                     gotoData: profileGotoData,
                 };
             }
+            const primaryColor = escapeHtml(matchedRepoRule.primaryColor);
             return {
-                description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>"`,
+                description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${primaryColor}</span>)`,
                 gotoData: gotoData,
             };
         }
@@ -1427,8 +1444,20 @@ function renderColorReport(config: any) {
         if (matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
             const gotoData = `branch:${config.matchingIndexes.branchRule}`;
+
+            // Check if using a profile
+            if (matchedBranchRule.profileName) {
+                const profileName = matchedBranchRule.profileName;
+                const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
+                return {
+                    description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    gotoData: profileGotoData,
+                };
+            }
+
+            const color = escapeHtml(matchedBranchRule.color);
             return {
-                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>"`,
+                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
             };
         }
@@ -1447,25 +1476,46 @@ function renderColorReport(config: any) {
             // Determine goto target
             let gotoTarget = '';
             if (isActivityBarKey && matchedBranchRule) {
-                gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+                // Check if branch rule uses a profile
+                const branchProfileName =
+                    matchedBranchRule.profileName ||
+                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
+                        ? matchedBranchRule.color
+                        : null);
+                if (branchProfileName) {
+                    gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
+                } else {
+                    gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+                }
             } else if (matchedRepoRule) {
-                if (matchedRepoRule.profileName) {
-                    gotoTarget = `data-goto="profile:${escapeHtml(matchedRepoRule.profileName)}:${escapeHtml(key)}"`;
+                // Check if repo rule uses a profile (can be in profileName or primaryColor field)
+                const repoProfileName =
+                    matchedRepoRule.profileName ||
+                    (matchedRepoRule.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
+                        ? matchedRepoRule.primaryColor
+                        : null);
+                if (repoProfileName) {
+                    gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(repoProfileName)}" data-theme-key="${escapeHtml(key)}"`;
                 } else {
                     gotoTarget = `data-goto="repo:${config.matchingIndexes.repoRule}"`;
                 }
             } else if (matchedBranchRule) {
-                gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+                // Check if branch rule uses a profile
+                const branchProfileName =
+                    matchedBranchRule.profileName ||
+                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
+                        ? matchedBranchRule.color
+                        : null);
+                if (branchProfileName) {
+                    gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
+                } else {
+                    gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+                }
             }
 
             rows.push(`
                 <tr>
-                    <td class="goto-cell">
-                        <button class="goto-btn" ${gotoTarget} title="Go to source" aria-label="Go to source rule">
-                            ➜
-                        </button>
-                    </td>
-                    <td class="theme-key"><code>${escapeHtml(key)}</code></td>
+                    <td class="theme-key"><code><span class="goto-link" ${gotoTarget}>${escapeHtml(key)}</span></code></td>
                     <td class="color-value">
                         <div class="color-display">
                             <span class="report-swatch" style="background-color: ${escapeHtml(color)};"></span>
@@ -1490,7 +1540,6 @@ function renderColorReport(config: any) {
         <table class="report-table" role="table" aria-label="Applied colors report">
             <thead>
                 <tr>
-                    <th scope="col" class="goto-col">Go To</th>
                     <th scope="col">Theme Key</th>
                     <th scope="col">Applied Color</th>
                     <th scope="col">Applied By</th>
@@ -1769,7 +1818,139 @@ function toggleRule(index: number, ruleType: string) {
     sendConfiguration();
 }
 
-function handleGotoSource(gotoData: string) {
+function handleGotoSource(gotoData: string, linkText: string = '') {
+    // Check if this is a click event with data attributes
+    const targetElement = (window as any)._gotoTarget as HTMLElement;
+
+    if (targetElement) {
+        const profileName = targetElement.getAttribute('data-profile-name');
+        const themeKey = targetElement.getAttribute('data-theme-key');
+
+        if (profileName && gotoData === 'profile') {
+            // Navigate to Profiles tab
+            const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+            if (profilesTab) {
+                profilesTab.click();
+            }
+
+            // Select the profile and highlight the mapping
+            setTimeout(() => {
+                const profileItems = document.querySelectorAll('.profile-item');
+                profileItems.forEach((item) => {
+                    if ((item as HTMLElement).dataset.profileName === profileName) {
+                        (item as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        (item as HTMLElement).click();
+
+                        // Apply highlight to profile after re-render
+                        setTimeout(() => {
+                            const updatedProfileItems = document.querySelectorAll('.profile-item');
+                            updatedProfileItems.forEach((updatedItem) => {
+                                if ((updatedItem as HTMLElement).dataset.profileName === profileName) {
+                                    (updatedItem as HTMLElement).classList.add('highlight-fadeout');
+                                    setTimeout(() => {
+                                        (updatedItem as HTMLElement).classList.remove('highlight-fadeout');
+                                    }, 2500);
+                                }
+                            });
+                        }, 100);
+
+                        // Highlight the mapping row for the theme key
+                        if (themeKey) {
+                            // Find which tab contains this theme key
+                            let tabName: string | null = null;
+                            for (const [sectionName, keys] of Object.entries(SECTION_DEFINITIONS)) {
+                                if (keys.includes(themeKey)) {
+                                    tabName = sectionName;
+                                    break;
+                                }
+                            }
+
+                            if (tabName) {
+                                // Click the correct tab
+                                setTimeout(() => {
+                                    const tabBtns = document.querySelectorAll('.mapping-tab-btn');
+                                    tabBtns.forEach((btn) => {
+                                        if ((btn as HTMLElement).textContent?.includes(tabName!)) {
+                                            (btn as HTMLElement).click();
+                                        }
+                                    });
+
+                                    // Now try to find and highlight the mapping row
+                                    setTimeout(() => {
+                                        const contentId = 'mapping-section-' + tabName!.replace(/\s+/g, '-');
+                                        const content = document.getElementById(contentId);
+
+                                        if (content) {
+                                            // Look for all divs with labels in this content
+                                            const allDivs = content.querySelectorAll('div');
+
+                                            allDivs.forEach((div) => {
+                                                const label = div.querySelector('label');
+                                                if (label) {
+                                                    const labelText = label.textContent?.trim();
+                                                    if (labelText === themeKey) {
+                                                        (div as HTMLElement).scrollIntoView({
+                                                            behavior: 'smooth',
+                                                            block: 'center',
+                                                        });
+                                                        (div as HTMLElement).classList.add('highlight-fadeout');
+                                                        setTimeout(() => {
+                                                            (div as HTMLElement).classList.remove('highlight-fadeout');
+                                                        }, 2500);
+                                                    }
+                                                }
+                                            });
+                                        }
+                                    }, 200);
+                                }, 300);
+                            }
+                        }
+                    }
+                });
+            }, 200);
+            return;
+        }
+    }
+
+    // First check if the link text is a known profile name
+    if (linkText && currentConfig?.advancedProfiles && linkText in currentConfig.advancedProfiles) {
+        // Navigate to Profiles tab
+        const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+        if (profilesTab) {
+            profilesTab.click();
+        }
+
+        // Select the profile in the list
+        setTimeout(() => {
+            const profileItems = document.querySelectorAll('.profile-item');
+
+            profileItems.forEach((item) => {
+                const itemProfileName = (item as HTMLElement).dataset.profileName;
+
+                if (itemProfileName === linkText) {
+                    (item as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    (item as HTMLElement).click();
+
+                    // Apply highlight after the re-render from click
+                    setTimeout(() => {
+                        // Re-query the profile items after re-render
+                        const updatedProfileItems = document.querySelectorAll('.profile-item');
+                        updatedProfileItems.forEach((updatedItem) => {
+                            if ((updatedItem as HTMLElement).dataset.profileName === linkText) {
+                                (updatedItem as HTMLElement).classList.add('highlight-fadeout');
+
+                                setTimeout(() => {
+                                    (updatedItem as HTMLElement).classList.remove('highlight-fadeout');
+                                }, 2500);
+                            }
+                        });
+                    }, 100);
+                }
+            });
+        }, 200);
+        return;
+    }
+
     const parts = gotoData.split(':');
     const type = parts[0];
 
@@ -1809,34 +1990,46 @@ function handleGotoSource(gotoData: string) {
         // Highlight the profile and mapping
         setTimeout(() => {
             const profileName = parts[1];
-            const themeKey = parts[2];
+            const themeKey = parts[2]; // May be undefined
 
             // Select the profile in the list
             const profileItems = document.querySelectorAll('.profile-item');
             profileItems.forEach((item) => {
                 if ((item as HTMLElement).dataset.profileName === profileName) {
+                    (item as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
                     (item as HTMLElement).click();
-                    (item as HTMLElement).classList.add('highlight-fadeout');
+
+                    // Apply highlight after re-render
                     setTimeout(() => {
-                        (item as HTMLElement).classList.remove('highlight-fadeout');
-                    }, 2000);
+                        const updatedProfileItems = document.querySelectorAll('.profile-item');
+                        updatedProfileItems.forEach((updatedItem) => {
+                            if ((updatedItem as HTMLElement).dataset.profileName === profileName) {
+                                (updatedItem as HTMLElement).classList.add('highlight-fadeout');
+                                setTimeout(() => {
+                                    (updatedItem as HTMLElement).classList.remove('highlight-fadeout');
+                                }, 2500);
+                            }
+                        });
+                    }, 100);
                 }
             });
 
-            // Highlight the mapping row for this theme key
-            setTimeout(() => {
-                const mappingRows = document.querySelectorAll('.mapping-row');
-                mappingRows.forEach((row) => {
-                    const label = row.querySelector('.mapping-label');
-                    if (label && label.textContent?.includes(themeKey)) {
-                        (row as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        (row as HTMLElement).classList.add('highlight-fadeout');
-                        setTimeout(() => {
-                            (row as HTMLElement).classList.remove('highlight-fadeout');
-                        }, 2000);
-                    }
-                });
-            }, 200);
+            // Highlight the mapping row for this theme key (if provided)
+            if (themeKey) {
+                setTimeout(() => {
+                    const mappingRows = document.querySelectorAll('.mapping-row');
+                    mappingRows.forEach((row) => {
+                        const label = row.querySelector('.mapping-label');
+                        if (label && label.textContent?.includes(themeKey)) {
+                            (row as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            (row as HTMLElement).classList.add('highlight-fadeout');
+                            setTimeout(() => {
+                                (row as HTMLElement).classList.remove('highlight-fadeout');
+                            }, 2500);
+                        }
+                    });
+                }, 300);
+            }
         }, 100);
     }
 }
@@ -2993,6 +3186,7 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
         Object.keys(profiles).forEach((name) => {
             const el = document.createElement('div');
             el.className = 'profile-item';
+            el.dataset.profileName = name;
             if (name === selectedProfileName) el.classList.add('selected');
 
             // Create name span with badge
@@ -3760,25 +3954,31 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             tabToActivate.style.fontWeight = 'bold';
         }
 
-        // Set up sync checkbox event listeners
+        // Set up sync checkbox event listeners and restore their states
         const syncFgBgCheckbox = document.getElementById('syncFgBgCheckbox') as HTMLInputElement;
         if (syncFgBgCheckbox) {
+            syncFgBgCheckbox.checked = syncFgBgEnabled;
             syncFgBgCheckbox.addEventListener('change', () => {
                 syncFgBgEnabled = syncFgBgCheckbox.checked;
+                localStorage.setItem('syncFgBgEnabled', syncFgBgEnabled.toString());
             });
         }
 
         const syncActiveInactiveCheckbox = document.getElementById('syncActiveInactiveCheckbox') as HTMLInputElement;
         if (syncActiveInactiveCheckbox) {
+            syncActiveInactiveCheckbox.checked = syncActiveInactiveEnabled;
             syncActiveInactiveCheckbox.addEventListener('change', () => {
                 syncActiveInactiveEnabled = syncActiveInactiveCheckbox.checked;
+                localStorage.setItem('syncActiveInactiveEnabled', syncActiveInactiveEnabled.toString());
             });
         }
 
         const limitOptionsCheckbox = document.getElementById('limitOptionsCheckbox') as HTMLInputElement;
         if (limitOptionsCheckbox) {
+            limitOptionsCheckbox.checked = limitOptionsEnabled;
             limitOptionsCheckbox.addEventListener('change', () => {
                 limitOptionsEnabled = limitOptionsCheckbox.checked;
+                localStorage.setItem('limitOptionsEnabled', limitOptionsEnabled.toString());
                 // Re-render the profile editor to update all dropdowns
                 if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
                     renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
