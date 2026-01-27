@@ -1932,6 +1932,34 @@ function convertColorToHex(color: string): string {
     return '#4A90E2';
 }
 
+/**
+ * Convert hex color to rgba with opacity
+ */
+function hexToRgba(hex: string, opacity: number): string {
+    // Remove # if present
+    hex = hex.replace('#', '');
+
+    // Parse the hex values
+    let r: number, g: number, b: number;
+
+    if (hex.length === 3) {
+        // Short form like #RGB
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length === 6) {
+        // Long form like #RRGGBB
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+    } else {
+        // Invalid hex, return transparent
+        return 'rgba(0, 0, 0, 0)';
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
 function runConfigurationTests() {
     console.log('Running configuration tests...');
 
@@ -3117,6 +3145,36 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 opacityContainer.appendChild(opacitySlider);
                 opacityContainer.appendChild(opacityValue);
 
+                // Create color swatch preview
+                const colorSwatch = document.createElement('div');
+                colorSwatch.style.width = '22px';
+                colorSwatch.style.height = '22px';
+                colorSwatch.style.border = '1px solid var(--vscode-panel-border)';
+                colorSwatch.style.borderRadius = '2px';
+                colorSwatch.style.flexShrink = '0';
+
+                // Function to update the swatch color
+                const updateSwatchColor = () => {
+                    const slotName = select.value;
+                    if (slotName === 'none') {
+                        colorSwatch.style.background = 'transparent';
+                    } else if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        const profile = currentConfig.advancedProfiles[selectedProfileName];
+                        const slotDef = profile.palette[slotName];
+                        if (slotDef && slotDef.value) {
+                            const color = convertColorToHex(slotDef.value);
+                            const opacity = parseInt(opacitySlider.value) / 100;
+                            const rgbaColor = hexToRgba(color, opacity);
+                            colorSwatch.style.background = rgbaColor;
+                        } else {
+                            colorSwatch.style.background = 'transparent';
+                        }
+                    }
+                };
+
+                // Initial swatch color
+                updateSwatchColor();
+
                 // Update function for both select and opacity
                 const updateMapping = () => {
                     if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
@@ -3144,11 +3202,13 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Update display value when slider changes
                 opacitySlider.oninput = () => {
                     opacityValue.textContent = opacitySlider.value + '%';
+                    updateSwatchColor();
                 };
 
                 select.onchange = () => {
                     updateMapping();
                     updateSliderGradient();
+                    updateSwatchColor();
 
                     const newSlot = select.value;
                     const keysToSync: string[] = [];
@@ -3228,6 +3288,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 row.appendChild(label);
                 row.appendChild(select);
+                row.appendChild(colorSwatch);
                 row.appendChild(opacityContainer);
                 grid.appendChild(row);
 
