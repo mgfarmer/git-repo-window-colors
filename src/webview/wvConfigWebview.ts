@@ -2832,55 +2832,82 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             profile.palette.quaternaryFg = DEFAULT_PALETTE.quaternaryFg;
         }
 
-        // Use explicit ordering to maintain Bg/Fg pairs
-        // Process pairs: Each row has Bg+Fg wrapper | combined swatch
-        for (let i = 0; i < PALETTE_SLOT_ORDER.length; i += 2) {
-            const bgKey = PALETTE_SLOT_ORDER[i];
-            const fgKey = PALETTE_SLOT_ORDER[i + 1];
+        // Define groups with their respective pairs
+        const paletteGroups = [
+            {
+                name: 'Primary',
+                slots: ['primaryActiveBg', 'primaryActiveFg', 'primaryInactiveBg', 'primaryInactiveFg'],
+            },
+            {
+                name: 'Secondary',
+                slots: ['secondaryActiveBg', 'secondaryActiveFg', 'secondaryInactiveBg', 'secondaryInactiveFg'],
+            },
+            { name: 'Tertiary', slots: ['terminalBg', 'terminalFg'] },
+            { name: 'Quaternary', slots: ['quaternaryBg', 'quaternaryFg'] },
+        ];
 
-            if (!bgKey || !fgKey) continue;
+        // Render each group with a border
+        paletteGroups.forEach((group) => {
+            // Create group container
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'palette-group';
 
-            const bgDef = profile.palette[bgKey];
-            const fgDef = profile.palette[fgKey];
+            // Create grid for this group's pairs
+            const groupGrid = document.createElement('div');
+            groupGrid.className = 'palette-group-grid';
 
-            if (!bgDef || !fgDef) continue;
+            // Process pairs within this group
+            for (let i = 0; i < group.slots.length; i += 2) {
+                const bgKey = group.slots[i];
+                const fgKey = group.slots[i + 1];
 
-            // Create combined swatch showing Bg + Fg together
-            const swatch = document.createElement('div');
-            swatch.className = 'palette-pair-swatch';
-            updatePairSwatch(swatch, bgDef.value || '#000000', fgDef.value || '#FFFFFF');
+                if (!bgKey || !fgKey) continue;
 
-            // Create wrapper for Bg+Fg pair
-            const pairWrapper = document.createElement('div');
-            pairWrapper.className = 'palette-pair-wrapper';
+                const bgDef = profile.palette[bgKey];
+                const fgDef = profile.palette[fgKey];
 
-            // Create Bg slot element
-            const bgEl = createPaletteSlotElement(bgKey, bgDef, (newDef) => {
-                if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
-                    currentConfig.advancedProfiles[selectedProfileName].palette[bgKey] = newDef;
-                    saveProfiles();
-                    // Update the combined swatch
-                    updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
-                }
-            });
+                if (!bgDef || !fgDef) continue;
 
-            // Create Fg slot element
-            const fgEl = createPaletteSlotElement(fgKey, fgDef, (newDef) => {
-                if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
-                    currentConfig.advancedProfiles[selectedProfileName].palette[fgKey] = newDef;
-                    saveProfiles();
-                    // Update the combined swatch
-                    updatePairSwatch(swatch, bgDef.value || '#000000', newDef.value || '#FFFFFF');
-                }
-            });
+                // Create combined swatch showing Bg + Fg together
+                const swatch = document.createElement('div');
+                swatch.className = 'palette-pair-swatch';
+                updatePairSwatch(swatch, bgDef.value || '#000000', fgDef.value || '#FFFFFF');
 
-            pairWrapper.appendChild(bgEl);
-            pairWrapper.appendChild(fgEl);
+                // Create wrapper for Bg+Fg pair
+                const pairWrapper = document.createElement('div');
+                pairWrapper.className = 'palette-pair-wrapper';
 
-            // Append to grid: wrapper (col 1-2) | swatch (col 3)
-            paletteGrid.appendChild(pairWrapper);
-            paletteGrid.appendChild(swatch);
-        }
+                // Create Bg slot element
+                const bgEl = createPaletteSlotElement(bgKey, bgDef, (newDef) => {
+                    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        currentConfig.advancedProfiles[selectedProfileName].palette[bgKey] = newDef;
+                        saveProfiles();
+                        // Update the combined swatch
+                        updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
+                    }
+                });
+
+                // Create Fg slot element
+                const fgEl = createPaletteSlotElement(fgKey, fgDef, (newDef) => {
+                    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        currentConfig.advancedProfiles[selectedProfileName].palette[fgKey] = newDef;
+                        saveProfiles();
+                        // Update the combined swatch
+                        updatePairSwatch(swatch, bgDef.value || '#000000', newDef.value || '#FFFFFF');
+                    }
+                });
+
+                pairWrapper.appendChild(bgEl);
+                pairWrapper.appendChild(fgEl);
+
+                // Append to group grid: wrapper (col 1-2) | swatch (col 3)
+                groupGrid.appendChild(pairWrapper);
+                groupGrid.appendChild(swatch);
+            }
+
+            groupContainer.appendChild(groupGrid);
+            paletteGrid.appendChild(groupContainer);
+        });
     }
 
     // Mappings Editor (Tabbed)

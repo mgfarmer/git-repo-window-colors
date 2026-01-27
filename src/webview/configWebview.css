@@ -1092,6 +1092,19 @@ button:focus {
 
 /* Palette Editor */
 .palette-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.palette-group {
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 15px;
+    background: var(--vscode-editor-background);
+}
+
+.palette-group-grid {
     display: grid;
     grid-template-columns: 1fr 120px; /* Bg+Fg pair wrapper | Swatch column */
     gap: 10px;
