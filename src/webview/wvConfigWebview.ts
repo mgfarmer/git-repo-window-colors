@@ -511,6 +511,9 @@ window.addEventListener('message', (event) => {
         case 'profileHelpContent':
             handleProfileHelpContent(message.data);
             break;
+        case 'rulesHelpContent':
+            handleRulesHelpContent(message.data);
+            break;
     }
 });
 
@@ -574,7 +577,21 @@ function handleDeleteConfirmed(data: any) {
 }
 
 function handleProfileHelpContent(data: { content: string }) {
-    const contentDiv = document.getElementById('helpPanelContent');
+    const contentDiv = document.getElementById('profileHelpPanelContent');
+    if (contentDiv && data.content) {
+        // Create an iframe to display the HTML content
+        const iframe = document.createElement('iframe');
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.srcdoc = data.content;
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(iframe);
+    }
+}
+
+function handleRulesHelpContent(data: { content: string }) {
+    const contentDiv = document.getElementById('rulesHelpPanelContent');
     if (contentDiv && data.content) {
         // Create an iframe to display the HTML content
         const iframe = document.createElement('iframe');
@@ -594,8 +611,8 @@ function openProfileHelp() {
     });
 
     // Show the help panel
-    const overlay = document.getElementById('helpPanelOverlay');
-    const panel = document.getElementById('helpPanel');
+    const overlay = document.getElementById('profileHelpPanelOverlay');
+    const panel = document.getElementById('profileHelpPanel');
     if (overlay && panel) {
         overlay.classList.add('active');
         panel.classList.add('active');
@@ -603,8 +620,32 @@ function openProfileHelp() {
 }
 
 function closeProfileHelp() {
-    const overlay = document.getElementById('helpPanelOverlay');
-    const panel = document.getElementById('helpPanel');
+    const overlay = document.getElementById('profileHelpPanelOverlay');
+    const panel = document.getElementById('profileHelpPanel');
+    if (overlay && panel) {
+        overlay.classList.remove('active');
+        panel.classList.remove('active');
+    }
+}
+
+function openRulesHelp() {
+    // Request help content from backend
+    vscode.postMessage({
+        command: 'requestRulesHelp',
+    });
+
+    // Show the help panel
+    const overlay = document.getElementById('rulesHelpPanelOverlay');
+    const panel = document.getElementById('rulesHelpPanel');
+    if (overlay && panel) {
+        overlay.classList.add('active');
+        panel.classList.add('active');
+    }
+}
+
+function closeRulesHelp() {
+    const overlay = document.getElementById('rulesHelpPanelOverlay');
+    const panel = document.getElementById('rulesHelpPanel');
     if (overlay && panel) {
         overlay.classList.remove('active');
         panel.classList.remove('active');
@@ -762,6 +803,16 @@ function handleDocumentClick(event: Event) {
 
     if (target.getAttribute('data-action') === 'closeProfileHelp') {
         closeProfileHelp();
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'openRulesHelp') {
+        openRulesHelp();
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'closeRulesHelp') {
+        closeRulesHelp();
         return;
     }
 

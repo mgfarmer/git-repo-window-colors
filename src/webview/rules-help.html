@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rules Help</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif);
+            font-size: var(--vscode-font-size, 13px);
+            color: var(--vscode-foreground, #cccccc);
+            background-color: var(--vscode-editor-background, #1e1e1e);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        .help-content {
+            padding: 20px;
+            max-width: 800px;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        h1 {
+            font-size: 1.5em;
+            margin-top: 0;
+            margin-bottom: 1em;
+            color: var(--vscode-foreground, #cccccc);
+            border-bottom: 1px solid var(--vscode-panel-border, #454545);
+            padding-bottom: 0.5em;
+        }
+        h2 {
+            font-size: 1.2em;
+            margin-top: 1.5em;
+            margin-bottom: 0.8em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        h3 {
+            font-size: 1.05em;
+            margin-top: 1.2em;
+            margin-bottom: 0.6em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        p {
+            margin-bottom: 1em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        ul, ol {
+            margin-bottom: 1em;
+            padding-left: 2em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        li {
+            margin-bottom: 0.5em;
+            color: var(--vscode-foreground, #cccccc);
+        }
+        code {
+            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
+            color: var(--vscode-textPreformat-foreground, #d7ba7d);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+            font-size: 0.9em;
+        }
+        .note {
+            background-color: var(--vscode-inputValidation-infoBackground, rgba(75, 166, 251, 0.2));
+            border-left: 4px solid var(--vscode-inputValidation-infoBorder, #4ba6fb);
+            color: var(--vscode-foreground, #cccccc);
+            padding: 12px;
+            margin: 1em 0;
+            border-radius: 3px;
+        }
+        .tip {
+            background-color: var(--vscode-inputValidation-warningBackground, rgba(206, 145, 76, 0.2));
+            border-left: 4px solid var(--vscode-inputValidation-warningBorder, #ce914c);
+            color: var(--vscode-foreground, #cccccc);
+            padding: 12px;
+            margin: 1em 0;
+            border-radius: 3px;
+        }
+        .warning {
+            background-color: var(--vscode-inputValidation-errorBackground, rgba(244, 71, 71, 0.2));
+            border-left: 4px solid var(--vscode-inputValidation-errorBorder, #f44747);
+            color: var(--vscode-foreground, #cccccc);
+            padding: 12px;
+            margin: 1em 0;
+            border-radius: 3px;
+        }
+        .example {
+            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
+            color: var(--vscode-foreground, #cccccc);
+            padding: 12px;
+            margin: 1em 0;
+            border-radius: 3px;
+            border: 1px solid var(--vscode-panel-border, #454545);
+        }
+        strong {
+            color: var(--vscode-foreground, #cccccc);
+            font-weight: 600;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+        }
+        th, td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--vscode-panel-border, #454545);
+            color: var(--vscode-foreground, #cccccc);
+        }
+        th {
+            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="help-content">
+        <h1>Rules Guide</h1>
+        
+        <h2>What are Rules?</h2>
+        <p>
+            Rules allow you to automatically apply colors to VS Code based on which repository or branch you're working in. 
+            There are two types of rules: <strong>Repository Rules</strong> and <strong>Branch Rules</strong>.
+        </p>
+
+        <h2>Repository Rules</h2>
+        <p>
+            Repository rules match against your repository's URL and apply colors to the VS Code window. 
+            Rules are processed from top to bottom, and the <strong>first matching rule</strong> is applied.
+        </p>
+
+        <h3>Repository Rule Fields</h3>
+        
+        <h4>Repository Qualifier</h4>
+        <p>
+            A substring to match against your repository URL. This is <strong>not</strong> a regular expression—it's a simple text match.
+        </p>
+        <div class="example">
+            <strong>Examples:</strong><br>
+            • <code>myproject</code> - Matches any repo with "myproject" in the URL<br>
+            • <code>github.com/user/repo</code> - Matches that specific GitHub repository<br>
+            • <code>work-client</code> - Matches repos containing "work-client"
+        </div>
+
+        <h4>Primary Color</h4>
+        <p>
+            The color or profile applied to your VS Code window when working in this repository. 
+            The Primary Color field supports two modes: <strong>Simple Colors</strong> and <strong>Profiles</strong>.
+        </p>
+
+        <h5>Simple Color Mode</h5>
+        <p>
+            In simple mode, you specify a single color that is applied to various UI elements. This color affects:
+        </p>
+        <ul>
+            <li>Title bar background and foreground (with auto-contrasting text)</li>
+            <li>Activity bar (left sidebar) background and icons</li>
+            <li>Optional: Status bar and editor tabs (if enabled in Other Settings)</li>
+        </ul>
+        <p>
+            You can specify simple colors as:
+        </p>
+        <ul>
+            <li><strong>Hex codes:</strong> <code>#4A90E2</code></li>
+            <li><strong>RGB:</strong> <code>rgb(74, 144, 226)</code></li>
+            <li><strong>RGBA:</strong> <code>rgba(74, 144, 226, 0.8)</code> - with transparency</li>
+            <li><strong>Named colors:</strong> <code>blue</code>, <code>coral</code>, <code>steelblue</code>, etc.</li>
+        </ul>
+        <p>
+            The extension applies your color to multiple UI elements with automatic contrast adjustments for text readability. 
+            You can fine-tune the brightness of non-title bar elements using the <strong>Color Knob</strong> setting 
+            in Other Settings (values from -10 to +10).
+        </p>
+
+        <h5>Profile Mode</h5>
+        <p>
+            Profiles provide advanced color schemes with fine-grained control over individual UI elements. 
+            When you select a profile from the dropdown, the extension uses:
+        </p>
+        <ul>
+            <li><strong>12 palette slots</strong> - A set of predefined colors in the profile</li>
+            <li><strong>Theme key mappings</strong> - Precise assignment of which palette slot applies to each VS Code UI element</li>
+            <li><strong>Opacity controls</strong> - Per-element transparency adjustments</li>
+        </ul>
+        <p>
+            To use a profile:
+        </p>
+        <ol>
+            <li>Enable the Profiles feature in Other Settings</li>
+            <li>Create and configure a profile in the Profiles tab</li>
+            <li>Type the profile name in the Primary Color field (autocomplete will help)</li>
+            <li>Or select it from the dropdown that appears when you focus the field</li>
+        </ol>
+        <div class="tip">
+            <strong>Profile Benefits:</strong> Profiles let you create reusable color schemes that you can apply 
+            to multiple repositories. They give you precise control over many VS Code UI elements (title bar, activity bar, 
+            status bar, tabs, panels, and more), and you can adjust colors in one place to update all repositories using that profile.
+        </div>
+
+        <div class="note">
+            <strong>Branch-Specific Features:</strong> Repository rules include optional branch-specific columns 
+            (Default Branch and Branch Color). This is a deprecated feature and is not documented here. 
+            For branch-based coloring, use Branch Rules instead.
+        </div>
+
+        <h3>Rule Controls</h3>
+        <p>Each rule has several controls on the left side:</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Control</th>
+                    <th>Function</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>⋮⋮</strong> (Drag Handle)</td>
+                    <td>Click and drag to reorder rules. Rules at the top take precedence.</td>
+                </tr>
+                <tr>
+                    <td><strong>▲</strong> (Move Up)</td>
+                    <td>Move this rule up in priority</td>
+                </tr>
+                <tr>
+                    <td><strong>▼</strong> (Move Down)</td>
+                    <td>Move this rule down in priority</td>
+                </tr>
+                <tr>
+                    <td><strong>👁️</strong> or <strong>⊗</strong> (Eye)</td>
+                    <td>Enable or disable this rule without deleting it</td>
+                </tr>
+                <tr>
+                    <td><strong>🗙</strong> (Delete)</td>
+                    <td>Delete this rule permanently</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Rule Matching</h3>
+        <p>
+            When you open a workspace, the extension checks your repository URL against each rule in order. 
+            The first rule whose Repository Qualifier is found anywhere in the URL will be applied.
+        </p>
+        <div class="tip">
+            <strong>Tip:</strong> Place more specific rules (like <code>github.com/user/specific-repo</code>) 
+            above more general rules (like <code>github.com</code>) to ensure the correct rule matches.
+        </div>
+
+        <h2>Branch Rules</h2>
+        <p>
+            Branch rules match against your current Git branch name and apply colors to the Activity Bar. 
+            They override repository colors for the Activity Bar when you're on a matching branch.
+        </p>
+
+        <h3>Branch Rule Fields</h3>
+
+        <h4>Branch Pattern</h4>
+        <p>
+            A regular expression pattern to match against your current branch name. Common patterns:
+        </p>
+        <div class="example">
+            <strong>Pattern Examples:</strong><br>
+            • <code>main</code> - Matches exactly "main"<br>
+            • <code>main|master</code> - Matches either "main" or "master"<br>
+            • <code>feature/.*</code> - Matches any branch starting with "feature/"<br>
+            • <code>.*-wip$</code> - Matches branches ending with "-wip"<br>
+            • <code>release-.*</code> - Matches branches starting with "release-"
+        </div>
+
+        <h4>Color</h4>
+        <p>
+            The color or profile applied to VS Code when on a matching branch. Branch rules support both 
+            <strong>simple colors</strong> and <strong>profiles</strong>.
+        </p>
+
+        <h5>Simple Color Mode (Branch Rules)</h5>
+        <p>
+            When you use a simple color (hex, RGB, or named color), the color is applied <strong>only to the Activity Bar</strong>. 
+            This provides a visual indicator of your current branch without affecting the rest of the window.
+        </p>
+
+        <h5>Profile Mode (Branch Rules)</h5>
+        <p>
+            When you assign a profile to a branch rule, the profile's color scheme is applied to multiple VS Code UI elements 
+            (title bar, activity bar, status bar, tabs, etc.) based on the profile's configuration. This provides comprehensive 
+            theming for branch-specific work.
+        </p>
+
+        <div class="note">
+            <strong>How Branch Rules Work:</strong> When you're on a branch that matches a branch rule:
+            <ul style="margin-top: 8px; margin-bottom: 0;">
+                <li><strong>With simple colors:</strong> The color affects only the Activity Bar, while the repository rule continues to control the title bar and other elements</li>
+                <li><strong>With profiles:</strong> The branch profile takes over UI element coloring, replacing the repository rule's colors</li>
+            </ul>
+        </div>
+
+        <h3>Rule Priority</h3>
+        <p>
+            Like repository rules, branch rules are processed top to bottom, and the first match is used. 
+            Reorder rules to control which pattern takes precedence.
+        </p>
+
+        <h2>Working with Colors</h2>
+
+        <h3>Color Picker</h3>
+        <h3>Color Picker Features</h3>
+        <p>
+            Each color field includes:
+        </p>
+        <ul>
+            <li><strong>Color swatch:</strong> Click to open the native color picker</li>
+            <li><strong>🎲 (Random):</strong> Generate a random theme-appropriate color</li>
+            <li><strong>Text input:</strong> Type colors manually (hex, RGB, names, or profile names)</li>
+            <li><strong>Autocomplete:</strong> In the Primary Color field, start typing to see matching profile names and recent colors</li>
+        </ul>
+
+        <h3>Choosing Between Simple Colors and Profiles</h3>
+        <p>
+            <strong>Use Simple Colors when:</strong>
+        </p>
+        <ul>
+            <li>You want a quick, straightforward setup</li>
+            <li>You're okay with the extension's automatic UI element coloring</li>
+            <li>You want different colors for each repository without reusing schemes</li>
+            <li>You don't need fine control over individual UI elements</li>
+        </ul>
+        <p>
+            <strong>Use Profiles when:</strong>
+        </p>
+        <ul>
+            <li>You want to reuse the same color scheme across multiple repositories</li>
+            <li>You need precise control over specific UI elements (tabs, status bar, etc.)</li>
+            <li>You want to adjust opacity or have different colors for active/inactive elements</li>
+            <li>You have multiple projects that should share the same visual theme</li>
+            <li>You want to update colors in one place and have them apply to all matching repositories</li>
+        </ul>
+        <div class="tip">
+            <strong>Tip:</strong> You can mix both approaches—use simple colors for most repositories 
+            and profiles for special cases where you need more control or want consistency across multiple repos.
+        </div>
+
+        <h2>Best Practices</h2>
+        <ul>
+            <li><strong>Order matters:</strong> Place specific rules before general ones</li>
+            <li><strong>Use meaningful qualifiers:</strong> Choose substrings that uniquely identify repositories</li>
+            <li><strong>Choose distinct colors:</strong> Use different colors for different projects to easily identify which repo you're in</li>
+            <li><strong>Test patterns:</strong> For branch rules, test your regex patterns to ensure they match as expected</li>
+            <li><strong>Disable instead of delete:</strong> Use the eye button to temporarily disable rules while testing</li>
+            <li><strong>Keep it simple:</strong> Start with repository rules before adding branch-specific coloring</li>
+        </ul>
+
+        <h2>Keyboard Shortcuts</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Shortcut</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>Ctrl+Alt+R</code> (or <code>Cmd+Alt+R</code>)</td>
+                    <td>Add a new repository rule</td>
+                </tr>
+                <tr>
+                    <td><code>Ctrl+Alt+B</code> (or <code>Cmd+Alt+B</code>)</td>
+                    <td>Add a new branch rule</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Troubleshooting</h2>
+        
+        <h3>My rule isn't matching</h3>
+        <ul>
+            <li>Check that the Repository Qualifier is a substring of your repo URL (visible in the title bar)</li>
+            <li>Look for a rule above it that might be matching first</li>
+            <li>Ensure the rule is enabled (eye icon should be 👁️, not ⊗)</li>
+            <li>Check the Color Report tab to see which rule is currently matched</li>
+        </ul>
+
+        <h3>Branch rule not applying</h3>
+        <ul>
+            <li>Verify you have a repository rule matched (branch rules only affect Activity Bar, not the whole window)</li>
+            <li>Check that your branch pattern is correct regex syntax</li>
+            <li>Ensure you're on a Git branch (not detached HEAD)</li>
+            <li>Look for a higher-priority branch rule that might be matching instead</li>
+        </ul>
+
+        <h3>Colors look wrong</h3>
+        <ul>
+            <li>Check the Color Report tab to see exactly what colors are being applied</li>
+            <li>Verify color format is valid (hex codes should start with #)</li>
+            <li>If using profiles, ensure the profile is properly configured</li>
+            <li>Check Other Settings for options like "Color Status Bar" and "Color Editor Tabs"</li>
+        </ul>
+
+        <div class="tip">
+            <strong>Pro Tip:</strong> Use the Color Report tab to see exactly which rules are being applied 
+            and which theme keys are being colored. This is invaluable for debugging rule matching issues.
+        </div>
+    </div>
+</body>
+</html>

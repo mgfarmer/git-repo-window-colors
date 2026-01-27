@@ -438,6 +438,9 @@ h2 {
 .header-add-button:hover {
     background: var(--vscode-button-hoverBackground);
 }
+.branch-panel .panel-header {
+    padding-right: 40px;
+}
 .validation-error {
     border: 1px solid var(--vscode-errorBorder) !important;
     background-color: var(--vscode-inputValidation-errorBackground) !important;
@@ -823,7 +826,7 @@ input[type='range'] {
 .repo-panel .section-help,
 .branch-panel .section-help {
     padding-left: 18px;
-    padding-right: 80px;
+    padding-right: 140px;
 }
 .help-icon {
     display: inline-block;

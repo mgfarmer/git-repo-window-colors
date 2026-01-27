@@ -142,6 +142,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'requestProfileHelp':
                 await this._sendProfileHelpContent();
                 break;
+            case 'requestRulesHelp':
+                await this._sendRulesHelpContent();
+                break;
         }
     }
 
@@ -531,6 +534,26 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _sendRulesHelpContent(): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'rules-help.html');
+            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
+            const contentString = Buffer.from(helpContent).toString('utf8');
+
+            this._panel.webview.postMessage({
+                command: 'rulesHelpContent',
+                data: { content: contentString },
+            });
+        } catch (error) {
+            console.error('Failed to load rules help content:', error);
+            vscode.window.showErrorMessage('Failed to load help content');
+        }
+    }
+
     private _openColorPicker(colorPickerData: any): void {
         // Skip VS Code color picker if using native HTML color picker
         if (USE_NATIVE_COLOR_PICKER) {
@@ -623,6 +646,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <div class="config-container" role="main" aria-label="Git Repository Window Colors Configuration">
                 
                 <div id="rules-tab" role="tabpanel" aria-labelledby="tab-rules" class="tab-content active">
+                    <button type="button" class="help-button" data-action="openRulesHelp" title="Open Rules Help">?</button>
                     <div class="top-panels">
                         <section class="repo-panel" aria-labelledby="repo-rules-heading">
                             <div class="panel-header">
@@ -690,7 +714,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                         </button>
                                     </h2>
                                     <button type="button" 
-                                            class="header-add-button tooltip panel-tooltip-left" 
+                                            class="header-add-button branch-add-button tooltip panel-tooltip-left" 
                                             data-action="addBranchRule" 
                                             title="Add a new branch rule"
                                             aria-label="Add Branch Rule (Ctrl+Alt+B)">
@@ -883,14 +907,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             
             </div>
             
-            <!-- Help Panel -->
-            <div class="help-panel-overlay" id="helpPanelOverlay" data-action="closeProfileHelp"></div>
-            <div class="help-panel" id="helpPanel">
+            <!-- Help Panels -->
+            <!-- Profile Help Panel -->
+            <div class="help-panel-overlay" id="profileHelpPanelOverlay" data-action="closeProfileHelp"></div>
+            <div class="help-panel" id="profileHelpPanel">
                 <div class="help-panel-header">
                     <h2 class="help-panel-title">Profile Help</h2>
                     <button type="button" class="help-panel-close" data-action="closeProfileHelp" aria-label="Close help panel">×</button>
                 </div>
-                <div class="help-panel-content" id="helpPanelContent">
+                <div class="help-panel-content" id="profileHelpPanelContent">
+                    <!-- Help content will be loaded here -->
+                </div>
+            </div>
+            
+            <!-- Rules Help Panel -->
+            <div class="help-panel-overlay" id="rulesHelpPanelOverlay" data-action="closeRulesHelp"></div>
+            <div class="help-panel" id="rulesHelpPanel">
+                <div class="help-panel-header">
+                    <h2 class="help-panel-title">Rules Help</h2>
+                    <button type="button" class="help-panel-close" data-action="closeRulesHelp" aria-label="Close help panel">×</button>
+                </div>
+                <div class="help-panel-content" id="rulesHelpPanelContent">
                     <!-- Help content will be loaded here -->
                 </div>
             </div>
