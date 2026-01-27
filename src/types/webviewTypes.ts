@@ -1,3 +1,5 @@
+import { AdvancedProfileMap } from './advancedModeTypes';
+
 export interface RepoRule {
     repoQualifier: string;
     defaultBranch?: string;
@@ -32,11 +34,13 @@ export interface WebviewMessage {
         | 'addRepoRule'
         | 'confirmDelete'
         | 'exportConfig'
-        | 'importConfig';
+        | 'importConfig'
+        | 'updateAdvancedProfiles';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
         otherSettings?: OtherSettings;
+        advancedProfiles?: AdvancedProfileMap;
         workspaceInfo?: {
             repositoryUrl: string;
             currentBranch: string;

@@ -9,6 +9,80 @@ const vscode = acquireVsCodeApi();
 let currentConfig: any = null;
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
+let selectedMappingTab: string | null = null; // Track which mapping tab is active
+let syncFgBgEnabled = true; // Default to true for fg/bg synchronization
+let syncActiveInactiveEnabled = true; // Default to true for active/inactive synchronization
+let limitOptionsEnabled = false; // Default to false for limiting dropdown options
+
+// Advanced Mode Types
+type PaletteSlotSource = 'fixed' | 'repoColor' | 'branchColor' | 'transparent';
+
+interface PaletteSlotDefinition {
+    source: PaletteSlotSource;
+    value?: string;
+    opacity?: number;
+    lighten?: number;
+    darken?: number;
+    highContrast?: boolean;
+}
+
+interface Palette {
+    primaryActiveBg: PaletteSlotDefinition;
+    primaryActiveFg: PaletteSlotDefinition;
+    primaryInactiveBg: PaletteSlotDefinition;
+    primaryInactiveFg: PaletteSlotDefinition;
+    secondaryActiveBg: PaletteSlotDefinition;
+    secondaryActiveFg: PaletteSlotDefinition;
+    secondaryInactiveBg: PaletteSlotDefinition;
+    secondaryInactiveFg: PaletteSlotDefinition;
+    terminalBg: PaletteSlotDefinition;
+    terminalFg: PaletteSlotDefinition;
+    [key: string]: PaletteSlotDefinition;
+}
+
+interface MappingValue {
+    slot: string;
+    opacity?: number;
+}
+
+interface SectionMappings {
+    [vscodeKey: string]: string | MappingValue;
+}
+
+interface AdvancedProfile {
+    palette: Palette;
+    mappings: SectionMappings;
+}
+
+type AdvancedProfileMap = {
+    [profileName: string]: AdvancedProfile;
+};
+
+// Tab Switching
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            const target = e.currentTarget as HTMLElement;
+            const tabId = target.getAttribute('aria-controls');
+            if (!tabId) return;
+
+            document.querySelectorAll('.tab-button').forEach((b) => {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
+            document.querySelectorAll('.tab-content').forEach((c) => {
+                c.classList.remove('active');
+            });
+
+            target.classList.add('active');
+            target.setAttribute('aria-selected', 'true');
+            const content = document.getElementById(tabId);
+            if (content) content.classList.add('active');
+        });
+    });
+}
+initTabs();
 
 // HTML Color Names for auto-complete
 const HTML_COLOR_NAMES = [
@@ -499,6 +573,7 @@ function renderConfiguration(config: any) {
     renderRepoRules(config.repoRules, config.matchingIndexes?.repoRule);
     renderBranchRules(config.branchRules, config.matchingIndexes?.branchRule);
     renderOtherSettings(config.otherSettings);
+    renderProfiles(config.advancedProfiles);
     renderWorkspaceInfo(config.workspaceInfo);
 
     // Attach event listeners after DOM is updated
@@ -1080,7 +1155,7 @@ function renderOtherSettings(settings: any) {
                            id="color-status-bar"
                            ${settings.colorStatusBar ? 'checked' : ''}
                            data-action="updateOtherSetting('colorStatusBar', this.checked)">
-                    Color Status Bar
+                    Color Status Bar*
                 </label>
                 <span class="tooltiptext" role="tooltip">
                     Apply repository colors to the status bar at the bottom of the VS Code window. 
@@ -1103,7 +1178,7 @@ function renderOtherSettings(settings: any) {
                 </span>
             </div>
             <div class="setting-item range-slider tooltip">
-                <label for="activity-bar-knob">Color Knob:</label>
+                <label for="activity-bar-knob">Color Knob:*</label>
                 <div class="range-controls">
                     <input type="range" 
                            id="activity-bar-knob" 
@@ -1126,7 +1201,7 @@ function renderOtherSettings(settings: any) {
                            id="color-editor-tabs"
                            ${settings.colorEditorTabs ? 'checked' : ''}
                            data-action="updateOtherSetting('colorEditorTabs', this.checked)">
-                    Color Editor Tabs
+                    Color Editor Tabs*
                 </label>
                 <span class="tooltiptext" role="tooltip">
                     Apply repository colors to editor tabs. This give the repository color more prominence.
@@ -1145,7 +1220,7 @@ function renderOtherSettings(settings: any) {
                 </span>
             </div>
             <div class="setting-item range-slider tooltip">
-                <label for="branch-hue-rotation">Branch Hue Rotation:</label>
+                <label for="branch-hue-rotation">Branch Hue Rotation:*</label>
                 <div class="range-controls">
                     <input type="range" 
                            id="branch-hue-rotation" 
@@ -1170,7 +1245,7 @@ function renderOtherSettings(settings: any) {
                            id="color-inactive-titlebar"
                            ${settings.colorInactiveTitlebar ? 'checked' : ''}
                            data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
-                    Color Inactive Title Bar
+                    Color Inactive Title Bar*
                 </label>
                 <span class="tooltiptext" role="tooltip">
                     Apply colors to the title bar even when the VS Code window is not focused. 
@@ -1814,6 +1889,17 @@ function convertColorToHex(color: string): string {
 
     //console.log(`[DEBUG] convertColorToHex called with: "${color}"`);
 
+    // Check if it's a profile name (exists in current config)
+    if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[color]) {
+        // It's a profile, return a representative color from the profile
+        const profile = currentConfig.advancedProfiles[color];
+        if (profile.palette?.primaryActiveBg?.value) {
+            return convertColorToHex(profile.palette.primaryActiveBg.value);
+        }
+        // Fallback to a distinct color to indicate it's a profile
+        return '#9B59B6'; // Purple to indicate profile
+    }
+
     // If it's already a hex color, return it
     if (color.startsWith('#')) {
         // console.log(`[DEBUG] "${color}" is already hex`);
@@ -1938,17 +2024,31 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
         return;
     }
 
-    // Filter color names that start with the input value
-    const matches = HTML_COLOR_NAMES.filter(
-        (colorName) => colorName.toLowerCase().includes(value), // && colorName.toLowerCase() !== value,
-    );
+    const matches: string[] = [];
+
+    // Check if this is a palette slot input (should not show profiles)
+    const isPaletteSlot = input.hasAttribute('data-palette-slot');
+
+    // 1. Add matching profile names first (only for non-palette inputs)
+    if (!isPaletteSlot && currentConfig?.advancedProfiles) {
+        const profileNames = Object.keys(currentConfig.advancedProfiles);
+        profileNames.forEach((name) => {
+            if (name.toLowerCase().includes(value)) {
+                matches.push(name);
+            }
+        });
+    }
+
+    // 2. Add matching color names
+    const colorMatches = HTML_COLOR_NAMES.filter((colorName) => colorName.toLowerCase().includes(value));
+    matches.push(...colorMatches);
 
     if (matches.length === 0) {
         hideAutoCompleteDropdown();
         return;
     }
 
-    showAutoCompleteDropdown(input, matches.slice(0, 20)); // Show max 10 suggestions
+    showAutoCompleteDropdown(input, matches.slice(0, 20)); // Show max 20 suggestions
 }
 
 function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]) {
@@ -1965,12 +2065,23 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
         item.setAttribute('role', 'option');
         item.textContent = suggestion;
         item.dataset.index = index.toString();
+        item.dataset.value = suggestion; // Store original value
 
-        // Add color preview
-        const preview = document.createElement('span');
-        preview.className = 'color-preview';
-        preview.style.backgroundColor = suggestion;
-        item.appendChild(preview);
+        // Add color preview (only for actual color names, not profile references)
+        const isProfile = currentConfig?.advancedProfiles && currentConfig.advancedProfiles[suggestion];
+        if (!isProfile) {
+            const preview = document.createElement('span');
+            preview.className = 'color-preview';
+            preview.style.backgroundColor = suggestion;
+            item.appendChild(preview);
+        } else {
+            // Add profile indicator
+            const indicator = document.createElement('span');
+            indicator.className = 'profile-indicator';
+            indicator.textContent = ' ⚙';
+            indicator.title = 'Advanced Profile';
+            item.appendChild(indicator);
+        }
 
         item.addEventListener('mousedown', (e) => {
             e.preventDefault(); // Prevent input from losing focus
@@ -2038,8 +2149,8 @@ function handleAutoCompleteKeydown(event: KeyboardEvent) {
         case 'Enter':
             if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < items.length) {
                 event.preventDefault();
-                const selectedItem = items[selectedSuggestionIndex];
-                const colorName = selectedItem.textContent?.replace(/\s+$/, '') || ''; // Remove trailing spaces from preview
+                const selectedItem = items[selectedSuggestionIndex] as HTMLElement;
+                const colorName = selectedItem.dataset.value || '';
                 selectAutoCompleteSuggestion(activeAutoCompleteInput!, colorName);
             }
             break;
@@ -2121,3 +2232,1170 @@ document.addEventListener('focusout', (event) => {
         }, 150);
     }
 });
+
+// --- Advanced Profiles Implementation ---
+
+// Friendly display names for palette slots
+const PALETTE_SLOT_LABELS: Record<string, string> = {
+    primaryActiveBg: 'Primary Active Background',
+    primaryActiveFg: 'Primary Active Foreground',
+    primaryInactiveBg: 'Primary Inactive Background',
+    primaryInactiveFg: 'Primary Inactive Foreground',
+    secondaryActiveBg: 'Secondary Active Background',
+    secondaryActiveFg: 'Secondary Active Foreground',
+    secondaryInactiveBg: 'Secondary Inactive Background',
+    secondaryInactiveFg: 'Secondary Inactive Foreground',
+    terminalBg: 'Terminal Background',
+    terminalFg: 'Terminal Foreground',
+};
+
+// Explicit ordering for palette slots to ensure Bg/Fg pairs stay together
+const PALETTE_SLOT_ORDER: string[] = [
+    'primaryActiveBg',
+    'primaryActiveFg',
+    'primaryInactiveBg',
+    'primaryInactiveFg',
+    'secondaryActiveBg',
+    'secondaryActiveFg',
+    'secondaryInactiveBg',
+    'secondaryInactiveFg',
+    'terminalBg',
+    'terminalFg',
+];
+
+const DEFAULT_PALETTE: Palette = {
+    primaryActiveBg: { source: 'fixed', value: '#4A90E2' },
+    primaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
+    primaryInactiveBg: { source: 'fixed', value: '#2E5C8A' },
+    primaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
+    secondaryActiveBg: { source: 'fixed', value: '#5FA3E8' },
+    secondaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
+    secondaryInactiveBg: { source: 'fixed', value: '#4278B0' },
+    secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
+    terminalBg: { source: 'fixed', value: '#1E1E1E' },
+    terminalFg: { source: 'fixed', value: '#CCCCCC' },
+};
+
+const DEFAULT_MAPPINGS: SectionMappings = {
+    'activityBar.background': 'primaryActiveBg',
+    'activityBar.foreground': 'primaryActiveFg',
+    'activityBar.inactiveForeground': 'primaryInactiveFg',
+    'statusBar.background': 'secondaryActiveBg',
+    'statusBar.foreground': 'secondaryActiveFg',
+    'titleBar.activeBackground': 'primaryActiveBg',
+    'titleBar.activeForeground': 'primaryActiveFg',
+    'titleBar.inactiveBackground': 'primaryInactiveBg',
+    'titleBar.inactiveForeground': 'primaryInactiveFg',
+};
+
+const SECTION_DEFINITIONS: { [name: string]: string[] } = {
+    'Title Bar': [
+        'titleBar.activeBackground',
+        'titleBar.activeForeground',
+        'titleBar.inactiveBackground',
+        'titleBar.inactiveForeground',
+        'titleBar.border',
+    ],
+    'Activity Bar': [
+        'activityBar.background',
+        'activityBar.foreground',
+        'activityBar.inactiveForeground',
+        'activityBar.border',
+    ],
+    'Status Bar': ['statusBar.background', 'statusBar.foreground', 'statusBar.border'],
+    'Tabs & Breadcrumbs': [
+        'tab.activeBackground',
+        'tab.activeForeground',
+        'tab.inactiveBackground',
+        'tab.inactiveForeground',
+        'tab.hoverBackground',
+        'tab.unfocusedHoverBackground',
+        'tab.activeBorder',
+        'editorGroupHeader.tabsBackground',
+        'breadcrumb.background',
+        'breadcrumb.foreground',
+    ],
+    'Command Center': [
+        'commandCenter.background',
+        'commandCenter.foreground',
+        'commandCenter.activeBackground',
+        'commandCenter.activeForeground',
+    ],
+    Terminal: ['terminal.background', 'terminal.foreground'],
+    'Lists & Panels': [
+        'panel.background',
+        'panel.border',
+        'panelTitle.activeForeground',
+        'panelTitle.inactiveForeground',
+        'panelTitle.activeBorder',
+        'list.activeSelectionBackground',
+        'list.activeSelectionForeground',
+        'list.inactiveSelectionBackground',
+        'list.inactiveSelectionForeground',
+        'list.focusOutline',
+        'list.hoverBackground',
+        'list.hoverForeground',
+        'badge.background',
+        'badge.foreground',
+        'panelTitleBadge.background',
+        'panelTitleBadge.foreground',
+        'input.background',
+        'input.foreground',
+        'input.border',
+        'input.placeholderForeground',
+        'focusBorder',
+    ],
+    'Side Bar': ['sideBar.background', 'sideBar.foreground', 'sideBar.border'],
+};
+
+let selectedProfileName: string | null = (() => {
+    try {
+        return localStorage.getItem('selectedProfileName');
+    } catch {
+        return null;
+    }
+})();
+
+// selectedMappingTab and syncFgBgEnabled are declared at the top of the file
+
+/**
+ * Definitive mapping of foreground/background pairs
+ * Maps each foreground key to its background counterpart (and implicitly vice versa)
+ */
+const FG_BG_PAIRS: { [key: string]: string } = {
+    // Title Bar
+    'titleBar.activeForeground': 'titleBar.activeBackground',
+    'titleBar.activeBackground': 'titleBar.activeForeground',
+    'titleBar.inactiveForeground': 'titleBar.inactiveBackground',
+    'titleBar.inactiveBackground': 'titleBar.inactiveForeground',
+
+    // Activity Bar
+    'activityBar.foreground': 'activityBar.background',
+    'activityBar.background': 'activityBar.foreground',
+    'activityBar.inactiveForeground': 'activityBar.background',
+
+    // Status Bar
+    'statusBar.foreground': 'statusBar.background',
+    'statusBar.background': 'statusBar.foreground',
+
+    // Tabs
+    'tab.activeForeground': 'tab.activeBackground',
+    'tab.activeBackground': 'tab.activeForeground',
+    'tab.inactiveForeground': 'tab.inactiveBackground',
+    'tab.inactiveBackground': 'tab.inactiveForeground',
+
+    // Breadcrumbs
+    'breadcrumb.foreground': 'breadcrumb.background',
+    'breadcrumb.background': 'breadcrumb.foreground',
+
+    // Command Center
+    'commandCenter.foreground': 'commandCenter.background',
+    'commandCenter.background': 'commandCenter.foreground',
+    'commandCenter.activeForeground': 'commandCenter.activeBackground',
+    'commandCenter.activeBackground': 'commandCenter.activeForeground',
+
+    // Terminal
+    'terminal.foreground': 'terminal.background',
+    'terminal.background': 'terminal.foreground',
+
+    // Panels
+    'panelTitle.activeForeground': 'panel.background',
+    'panelTitle.inactiveForeground': 'panel.background',
+
+    // Lists
+    'list.activeSelectionForeground': 'list.activeSelectionBackground',
+    'list.activeSelectionBackground': 'list.activeSelectionForeground',
+    'list.inactiveSelectionForeground': 'list.inactiveSelectionBackground',
+    'list.inactiveSelectionBackground': 'list.inactiveSelectionForeground',
+    'list.hoverForeground': 'list.hoverBackground',
+    'list.hoverBackground': 'list.hoverForeground',
+
+    // Badges
+    'badge.foreground': 'badge.background',
+    'badge.background': 'badge.foreground',
+    'panelTitleBadge.foreground': 'panelTitleBadge.background',
+    'panelTitleBadge.background': 'panelTitleBadge.foreground',
+
+    // Input
+    'input.foreground': 'input.background',
+    'input.background': 'input.foreground',
+    'input.placeholderForeground': 'input.background',
+
+    // Side Bar
+    'sideBar.foreground': 'sideBar.background',
+    'sideBar.background': 'sideBar.foreground',
+};
+
+/**
+ * Definitive mapping of active/inactive pairs
+ * Maps each active key to its inactive counterpart (and implicitly vice versa)
+ */
+const ACTIVE_INACTIVE_PAIRS: { [key: string]: string } = {
+    // Title Bar
+    'titleBar.activeBackground': 'titleBar.inactiveBackground',
+    'titleBar.inactiveBackground': 'titleBar.activeBackground',
+    'titleBar.activeForeground': 'titleBar.inactiveForeground',
+    'titleBar.inactiveForeground': 'titleBar.activeForeground',
+
+    // Activity Bar (note: activity bar uses different naming)
+    'activityBar.foreground': 'activityBar.inactiveForeground',
+    'activityBar.inactiveForeground': 'activityBar.foreground',
+
+    // Tabs
+    'tab.activeBackground': 'tab.inactiveBackground',
+    'tab.inactiveBackground': 'tab.activeBackground',
+    'tab.activeForeground': 'tab.inactiveForeground',
+    'tab.inactiveForeground': 'tab.activeForeground',
+
+    // Command Center
+    'commandCenter.background': 'commandCenter.activeBackground',
+    'commandCenter.activeBackground': 'commandCenter.background',
+    'commandCenter.foreground': 'commandCenter.activeForeground',
+    'commandCenter.activeForeground': 'commandCenter.foreground',
+
+    // Panel titles
+    'panelTitle.activeForeground': 'panelTitle.inactiveForeground',
+    'panelTitle.inactiveForeground': 'panelTitle.activeForeground',
+
+    // Lists
+    'list.activeSelectionBackground': 'list.inactiveSelectionBackground',
+    'list.inactiveSelectionBackground': 'list.activeSelectionBackground',
+    'list.activeSelectionForeground': 'list.inactiveSelectionForeground',
+    'list.inactiveSelectionForeground': 'list.activeSelectionForeground',
+};
+
+/**
+ * Find the corresponding foreground or background element key using definitive mapping
+ */
+function findCorrespondingFgBg(key: string): string | null {
+    return FG_BG_PAIRS[key] || null;
+}
+
+/**
+ * Get the corresponding palette slot for a given slot
+ * e.g., 'primaryActiveFg' <-> 'primaryActiveBg'
+ */
+function getCorrespondingPaletteSlot(slotName: string): string | null {
+    if (slotName === 'none') return null;
+
+    if (slotName.endsWith('Fg')) {
+        return slotName.replace('Fg', 'Bg');
+    } else if (slotName.endsWith('Bg')) {
+        return slotName.replace('Bg', 'Fg');
+    }
+    return null;
+}
+
+/**
+ * Find the corresponding active or inactive element key using definitive mapping
+ */
+function findCorrespondingActiveInactive(key: string): string | null {
+    return ACTIVE_INACTIVE_PAIRS[key] || null;
+}
+
+/**
+ * Get the corresponding active/inactive palette slot
+ * e.g., 'primaryActiveFg' <-> 'primaryInactiveFg'
+ */
+function getCorrespondingActiveInactiveSlot(slotName: string): string | null {
+    if (slotName === 'none') return null;
+
+    if (slotName.includes('Active')) {
+        return slotName.replace('Active', 'Inactive');
+    } else if (slotName.includes('Inactive')) {
+        return slotName.replace('Inactive', 'Active');
+    }
+    return null;
+}
+
+/**
+ * Determine if an element key is for a background color
+ */
+function isBackgroundElement(key: string): boolean {
+    return key.toLowerCase().includes('background') || key.toLowerCase().endsWith('bg');
+}
+
+/**
+ * Determine if an element key is for a foreground color
+ */
+function isForegroundElement(key: string): boolean {
+    return key.toLowerCase().includes('foreground') || key.toLowerCase().endsWith('fg');
+}
+
+/**
+ * Determine if an element key is for an active state
+ */
+function isActiveElement(key: string): boolean {
+    // Check for 'active' in the key but not 'inactive'
+    const keyLower = key.toLowerCase();
+    return keyLower.includes('active') && !keyLower.includes('inactive');
+}
+
+/**
+ * Determine if an element key is for an inactive state
+ */
+function isInactiveElement(key: string): boolean {
+    return key.toLowerCase().includes('inactive');
+}
+
+/**
+ * Determine if an element key is for neither active nor inactive (neutral)
+ */
+function isNeutralElement(key: string): boolean {
+    const keyLower = key.toLowerCase();
+    return !keyLower.includes('active') && !keyLower.includes('inactive');
+}
+
+/**
+ * Filter palette slots to only show related options based on element characteristics
+ */
+function getFilteredPaletteOptions(elementKey: string, allSlots: string[]): string[] {
+    if (!limitOptionsEnabled) {
+        return allSlots; // Return all if filtering is disabled
+    }
+
+    const isBg = isBackgroundElement(elementKey);
+    const isFg = isForegroundElement(elementKey);
+    const isActive = isActiveElement(elementKey);
+    const isInactive = isInactiveElement(elementKey);
+    const isNeutral = isNeutralElement(elementKey);
+
+    return allSlots.filter((slot) => {
+        if (slot === 'none') return true; // Always include 'none'
+
+        const slotLower = slot.toLowerCase();
+
+        // Check bg/fg match
+        const slotIsBg = slotLower.endsWith('bg');
+        const slotIsFg = slotLower.endsWith('fg');
+
+        // For elements that are clearly bg or fg, filter by that
+        if (isBg && !slotIsBg) return false;
+        if (isFg && !slotIsFg) return false;
+
+        // Check active/inactive match
+        const slotIsActive = slotLower.includes('active') && !slotLower.includes('inactive');
+        const slotIsInactive = slotLower.includes('inactive');
+        const slotIsNeutral = !slotLower.includes('active') && !slotLower.includes('inactive');
+
+        // For elements with active/inactive state, filter accordingly
+        if (isActive && !(slotIsActive || slotIsNeutral)) return false;
+        if (isInactive && !(slotIsInactive || slotIsNeutral)) return false;
+        if (isNeutral && !slotIsNeutral) return false;
+
+        return true;
+    });
+}
+
+function renderProfiles(profiles: AdvancedProfileMap | undefined) {
+    const listContainer = document.getElementById('profilesList');
+    const editorTop = document.getElementById('profileEditorTop');
+    const editorBottom = document.getElementById('profileEditorBottom');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '';
+
+    // Restore last selected profile if it still exists
+    if (selectedProfileName && profiles && !profiles[selectedProfileName]) {
+        selectedProfileName = null;
+        try {
+            localStorage.removeItem('selectedProfileName');
+        } catch {}
+    }
+
+    // Auto-select first profile if none selected but profiles exist
+    if (!selectedProfileName && profiles && Object.keys(profiles).length > 0) {
+        selectedProfileName = Object.keys(profiles)[0];
+        try {
+            localStorage.setItem('selectedProfileName', selectedProfileName);
+        } catch {}
+    }
+
+    // Hide editor sections by default, show only when selection exists
+    if (editorTop) {
+        editorTop.style.visibility = selectedProfileName ? 'visible' : 'hidden';
+        editorTop.style.opacity = selectedProfileName ? '1' : '0';
+    }
+    if (editorBottom) {
+        editorBottom.style.visibility = selectedProfileName ? 'visible' : 'hidden';
+        editorBottom.style.opacity = selectedProfileName ? '1' : '0';
+    }
+
+    if (!profiles || Object.keys(profiles).length === 0) {
+        // Initialize default if empty just for UI or display empty
+        listContainer.innerHTML =
+            '<div style="padding:10px; color:var(--vscode-descriptionForeground); font-style:italic;">No profiles defined. Click "+ Add" to create one.</div>';
+        // Ensure selection is cleared if no profiles exist
+        selectedProfileName = null;
+        if (editorTop) {
+            editorTop.style.visibility = 'hidden';
+            editorTop.style.opacity = '0';
+        }
+        if (editorBottom) {
+            editorBottom.style.visibility = 'hidden';
+            editorBottom.style.opacity = '0';
+        }
+    } else {
+        Object.keys(profiles).forEach((name) => {
+            const el = document.createElement('div');
+            el.className = 'profile-item';
+            if (name === selectedProfileName) el.classList.add('selected');
+
+            // Create name span with badge
+            const nameContainer = document.createElement('div');
+            nameContainer.className = 'profile-name-container';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'profile-name';
+            nameSpan.textContent = name;
+
+            // Count total active mappings for badge
+            const profile = profiles[name];
+            const totalActive = countTotalActiveMappings(profile);
+
+            const badge = document.createElement('span');
+            badge.className = 'profile-count-badge';
+            badge.textContent = totalActive.toString();
+            badge.title = `${totalActive} elements being colored`;
+
+            nameContainer.appendChild(nameSpan);
+            nameContainer.appendChild(badge);
+
+            // Create color swatch
+            const swatch = document.createElement('div');
+            swatch.className = 'profile-color-swatch';
+
+            // Get the profile colors
+            let bgColor = '#4A90E2'; // Default
+            let fgColor = '#FFFFFF'; // Default
+
+            if (profile?.palette?.primaryActiveBg?.value) {
+                bgColor = convertColorToHex(profile.palette.primaryActiveBg.value);
+            }
+            if (profile?.palette?.primaryActiveFg?.value) {
+                fgColor = convertColorToHex(profile.palette.primaryActiveFg.value);
+            }
+
+            swatch.style.backgroundColor = bgColor;
+            swatch.style.color = fgColor;
+            swatch.textContent = 'sample';
+
+            el.appendChild(nameContainer);
+            el.appendChild(swatch);
+            el.onclick = () => selectProfile(name);
+            listContainer.appendChild(el);
+        });
+    }
+
+    // Attach Add Handler
+    const addBtn = document.querySelector('[data-action="addProfile"]');
+    if (addBtn) {
+        (addBtn as HTMLElement).onclick = () => addNewProfile();
+    }
+
+    // Render the selected profile if one exists
+    if (selectedProfileName && profiles && profiles[selectedProfileName]) {
+        renderProfileEditor(selectedProfileName, profiles[selectedProfileName]);
+    }
+}
+
+function selectProfile(name: string) {
+    selectedProfileName = name;
+    try {
+        localStorage.setItem('selectedProfileName', name);
+    } catch {}
+    renderProfiles(currentConfig.advancedProfiles); // Re-render list to update selection
+
+    // Explicitly show editor sections
+    const editorTop = document.getElementById('profileEditorTop');
+    const editorBottom = document.getElementById('profileEditorBottom');
+    if (editorTop) {
+        editorTop.style.visibility = 'visible';
+        editorTop.style.opacity = '1';
+    }
+    if (editorBottom) {
+        editorBottom.style.visibility = 'visible';
+        editorBottom.style.opacity = '1';
+    }
+
+    const profile = currentConfig.advancedProfiles[name];
+    renderProfileEditor(name, profile);
+}
+
+/**
+ * Checks if a string is a valid HTML color name.
+ * Returns true if it's a color, false otherwise.
+ */
+function isHtmlColor(str: string): boolean {
+    if (!str) return false;
+    const s = new Option().style;
+    s.color = str;
+    return s.color !== '';
+}
+
+function addNewProfile() {
+    let name = 'Profile ' + (Object.keys(currentConfig.advancedProfiles || {}).length + 1);
+
+    // Ensure the generated name is not a valid HTML color
+    let counter = Object.keys(currentConfig.advancedProfiles || {}).length + 1;
+    while (isHtmlColor(name)) {
+        counter++;
+        name = 'Profile ' + counter;
+    }
+
+    if (!currentConfig.advancedProfiles) currentConfig.advancedProfiles = {};
+
+    currentConfig.advancedProfiles[name] = {
+        palette: JSON.parse(JSON.stringify(DEFAULT_PALETTE)),
+        mappings: JSON.parse(JSON.stringify(DEFAULT_MAPPINGS)),
+    };
+
+    saveProfiles();
+    selectProfile(name);
+}
+
+/**
+ * Count how many mappings in a section have non-None values
+ */
+function countActiveMappings(profile: AdvancedProfile, sectionKeys: string[]): number {
+    let count = 0;
+    sectionKeys.forEach((key: string) => {
+        const mappingValue = profile.mappings[key];
+        let slot: string;
+
+        if (typeof mappingValue === 'string') {
+            slot = mappingValue || 'none';
+        } else if (mappingValue) {
+            slot = mappingValue.slot || 'none';
+        } else {
+            slot = 'none';
+        }
+
+        if (slot !== 'none') {
+            count++;
+        }
+    });
+    return count;
+}
+
+/**
+ * Count total active mappings across all sections in a profile
+ */
+function countTotalActiveMappings(profile: AdvancedProfile): number {
+    let total = 0;
+    Object.keys(profile.mappings || {}).forEach((key: string) => {
+        const mappingValue = profile.mappings[key];
+        let slot: string;
+
+        if (typeof mappingValue === 'string') {
+            slot = mappingValue || 'none';
+        } else if (mappingValue) {
+            slot = mappingValue.slot || 'none';
+        } else {
+            slot = 'none';
+        }
+
+        if (slot !== 'none') {
+            total++;
+        }
+    });
+    return total;
+}
+
+function renderProfileEditor(name: string, profile: AdvancedProfile) {
+    // Name Input
+    const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
+    if (nameInput) {
+        nameInput.value = name;
+        // Handle name change
+        nameInput.onchange = (e) => renameProfile(name, (e.target as HTMLInputElement).value);
+    }
+
+    // Palette Editor
+    const paletteGrid = document.getElementById('paletteEditor');
+    if (paletteGrid) {
+        paletteGrid.innerHTML = '';
+        // Use explicit ordering to maintain Bg/Fg pairs
+        // Process pairs: Each row has Bg+Fg wrapper | combined swatch
+        for (let i = 0; i < PALETTE_SLOT_ORDER.length; i += 2) {
+            const bgKey = PALETTE_SLOT_ORDER[i];
+            const fgKey = PALETTE_SLOT_ORDER[i + 1];
+
+            if (!bgKey || !fgKey) continue;
+
+            const bgDef = profile.palette[bgKey];
+            const fgDef = profile.palette[fgKey];
+
+            if (!bgDef || !fgDef) continue;
+
+            // Create combined swatch showing Bg + Fg together
+            const swatch = document.createElement('div');
+            swatch.className = 'palette-pair-swatch';
+            updatePairSwatch(swatch, bgDef.value || '#000000', fgDef.value || '#FFFFFF');
+
+            // Create wrapper for Bg+Fg pair
+            const pairWrapper = document.createElement('div');
+            pairWrapper.className = 'palette-pair-wrapper';
+
+            // Create Bg slot element
+            const bgEl = createPaletteSlotElement(bgKey, bgDef, (newDef) => {
+                if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                    currentConfig.advancedProfiles[selectedProfileName].palette[bgKey] = newDef;
+                    saveProfiles();
+                    // Update the combined swatch
+                    updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
+                }
+            });
+
+            // Create Fg slot element
+            const fgEl = createPaletteSlotElement(fgKey, fgDef, (newDef) => {
+                if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                    currentConfig.advancedProfiles[selectedProfileName].palette[fgKey] = newDef;
+                    saveProfiles();
+                    // Update the combined swatch
+                    updatePairSwatch(swatch, bgDef.value || '#000000', newDef.value || '#FFFFFF');
+                }
+            });
+
+            pairWrapper.appendChild(bgEl);
+            pairWrapper.appendChild(fgEl);
+
+            // Append to grid: wrapper (col 1-2) | swatch (col 3)
+            paletteGrid.appendChild(pairWrapper);
+            paletteGrid.appendChild(swatch);
+        }
+    }
+
+    // Mappings Editor (Tabbed)
+    const mappingsContainer = document.getElementById('mappingsEditor');
+    if (mappingsContainer) {
+        mappingsContainer.innerHTML = '';
+
+        // 1. Create Tab Headers
+        const tabsHeader = document.createElement('div');
+        tabsHeader.className = 'mapping-tabs-header';
+        tabsHeader.style.display = 'flex';
+        tabsHeader.style.gap = '5px';
+        tabsHeader.style.marginBottom = '10px';
+        tabsHeader.style.overflowX = 'auto';
+        tabsHeader.style.borderBottom = '1px solid var(--vscode-panel-border)';
+
+        const tabsContent = document.createElement('div');
+        tabsContent.className = 'mapping-tabs-content';
+
+        let firstTab = true;
+        let tabToActivate: HTMLButtonElement | null = null;
+
+        Object.keys(SECTION_DEFINITIONS).forEach((sectionName) => {
+            const keys = SECTION_DEFINITIONS[sectionName];
+
+            // Count active mappings in this section
+            const activeCount = countActiveMappings(profile, keys);
+
+            // Tab Button
+            const tabBtn = document.createElement('button');
+            tabBtn.className = 'mapping-tab-btn';
+
+            // Tab text
+            const tabText = document.createElement('span');
+            tabText.textContent = sectionName;
+            tabBtn.appendChild(tabText);
+
+            // Badge with count (only show if > 0)
+            if (activeCount > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'mapping-tab-badge';
+                badge.textContent = activeCount.toString();
+                tabBtn.appendChild(badge);
+            }
+            tabBtn.style.padding = '5px 10px';
+            tabBtn.style.background = 'transparent';
+            tabBtn.style.border = 'none';
+            tabBtn.style.color = 'var(--vscode-foreground)';
+            tabBtn.style.cursor = 'pointer';
+            tabBtn.style.borderBottom = '2px solid transparent';
+
+            // Check if this tab should be active (either it was selected before, or it's the first tab)
+            const shouldActivate = selectedMappingTab === sectionName || (firstTab && !selectedMappingTab);
+            if (shouldActivate) {
+                tabToActivate = tabBtn;
+                if (!selectedMappingTab) selectedMappingTab = sectionName; // Set initial tab
+            }
+
+            tabBtn.onclick = () => {
+                // Track the selected tab
+                selectedMappingTab = sectionName;
+
+                // Deactivate all
+                Array.from(tabsHeader.children).forEach((c: any) => {
+                    c.style.borderBottomColor = 'transparent';
+                    c.style.fontWeight = 'normal';
+                });
+                Array.from(tabsContent.children).forEach((c: any) => (c.style.display = 'none'));
+
+                // Activate self
+                tabBtn.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+                tabBtn.style.fontWeight = 'bold';
+
+                const content = document.getElementById('mapping-section-' + sectionName.replace(/\s+/g, '-'));
+                if (content) content.style.display = 'block';
+            };
+
+            tabsHeader.appendChild(tabBtn);
+
+            // Tab Content
+            const contentDiv = document.createElement('div');
+            contentDiv.id = 'mapping-section-' + sectionName.replace(/\s+/g, '-');
+            const shouldShow = selectedMappingTab === sectionName || (firstTab && !selectedMappingTab);
+            contentDiv.style.display = shouldShow ? 'block' : 'none';
+            firstTab = false;
+
+            // Use 2-column grid layout
+            const grid = document.createElement('div');
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = '1fr 1px 1fr';
+            grid.style.gap = '8px 20px';
+            grid.style.padding = '10px 0';
+
+            keys.forEach((key: string) => {
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.gap = '8px';
+
+                const label = document.createElement('label');
+                label.textContent = key;
+                label.style.fontSize = '12px';
+                label.style.color = 'var(--vscode-foreground)';
+                label.style.minWidth = '200px';
+                label.style.flexShrink = '0';
+
+                // Get current mapping value (handle both string and object formats)
+                const mappingValue = profile.mappings[key];
+                let currentSlot: string;
+                let currentOpacity: number | undefined;
+
+                if (typeof mappingValue === 'string') {
+                    currentSlot = mappingValue || 'none';
+                    currentOpacity = undefined;
+                } else if (mappingValue) {
+                    currentSlot = mappingValue.slot || 'none';
+                    currentOpacity = mappingValue.opacity;
+                } else {
+                    currentSlot = 'none';
+                    currentOpacity = undefined;
+                }
+
+                const select = document.createElement('select');
+                select.title = `Select palette color for ${key}`;
+                select.style.flex = '1';
+                select.style.background = 'var(--vscode-dropdown-background)';
+                select.style.color = 'var(--vscode-dropdown-foreground)';
+                select.style.border = '1px solid var(--vscode-dropdown-border)';
+                select.style.padding = '4px';
+                select.style.fontSize = '12px';
+
+                // Options: Palette keys + 'none', filtered based on element characteristics
+                const allOptions = ['none', ...Object.keys(profile.palette)];
+                const options = getFilteredPaletteOptions(key, allOptions);
+                options.forEach((opt) => {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    // Use friendly name for palette slots
+                    option.textContent = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
+                    if (opt === currentSlot) option.selected = true;
+                    select.appendChild(option);
+                });
+
+                // Opacity control
+                const opacityContainer = document.createElement('div');
+                opacityContainer.style.display = 'flex';
+                opacityContainer.style.alignItems = 'center';
+                opacityContainer.style.gap = '6px';
+                opacityContainer.style.minWidth = '140px';
+
+                const opacityLabel = document.createElement('span');
+                opacityLabel.textContent = 'α:';
+                opacityLabel.style.fontSize = '11px';
+                opacityLabel.style.color = 'var(--vscode-descriptionForeground)';
+
+                const opacitySlider = document.createElement('input');
+                opacitySlider.type = 'range';
+                opacitySlider.className = 'opacity-slider';
+                opacitySlider.min = '0';
+                opacitySlider.max = '100';
+                opacitySlider.step = '5';
+                const initialOpacity = currentOpacity !== undefined ? currentOpacity : 1;
+                opacitySlider.value = Math.round(initialOpacity * 100).toString();
+                opacitySlider.style.flex = '1';
+                opacitySlider.style.minWidth = '70px';
+
+                // Get the color from the selected palette slot to create gradient
+                const updateSliderGradient = () => {
+                    const slotName = select.value;
+                    if (slotName === 'none') {
+                        // Disable and gray out opacity controls when 'none' is selected
+                        opacitySlider.disabled = true;
+                        opacitySlider.style.opacity = '0.4';
+                        opacitySlider.style.cursor = 'not-allowed';
+                        opacitySlider.style.setProperty('--slider-color', '#808080');
+                        opacityValue.style.opacity = '0.4';
+                        opacityLabel.style.opacity = '0.4';
+                    } else {
+                        // Enable opacity controls
+                        opacitySlider.disabled = false;
+                        opacitySlider.style.opacity = '1';
+                        opacitySlider.style.cursor = 'pointer';
+                        opacityValue.style.opacity = '1';
+                        opacityLabel.style.opacity = '1';
+
+                        if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                            const profile = currentConfig.advancedProfiles[selectedProfileName];
+                            const slotDef = profile.palette[slotName];
+                            if (slotDef && slotDef.value) {
+                                const color = convertColorToHex(slotDef.value);
+                                opacitySlider.style.setProperty('--slider-color', color);
+                            }
+                        }
+                    }
+                };
+
+                const opacityValue = document.createElement('span');
+                opacityValue.textContent = Math.round(initialOpacity * 100) + '%';
+                opacityValue.style.fontSize = '11px';
+                opacityValue.style.minWidth = '35px';
+                opacityValue.style.color = 'var(--vscode-descriptionForeground)';
+
+                // Call after all elements are created
+                updateSliderGradient();
+
+                opacityContainer.appendChild(opacityLabel);
+                opacityContainer.appendChild(opacitySlider);
+                opacityContainer.appendChild(opacityValue);
+
+                // Update function for both select and opacity
+                const updateMapping = () => {
+                    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        const newSlot = select.value;
+                        const newOpacity = parseInt(opacitySlider.value) / 100;
+
+                        if (newSlot === 'none') {
+                            delete currentConfig.advancedProfiles[selectedProfileName].mappings[key];
+                        } else {
+                            // Only store opacity if it's not 1.0 (default)
+                            if (newOpacity < 1 && newOpacity >= 0) {
+                                currentConfig.advancedProfiles[selectedProfileName].mappings[key] = {
+                                    slot: newSlot,
+                                    opacity: newOpacity,
+                                };
+                            } else {
+                                // Store as simple string for backwards compatibility when opacity is 1.0
+                                currentConfig.advancedProfiles[selectedProfileName].mappings[key] = newSlot;
+                            }
+                        }
+                        saveProfiles();
+                    }
+                };
+
+                // Update display value when slider changes
+                opacitySlider.oninput = () => {
+                    opacityValue.textContent = opacitySlider.value + '%';
+                };
+
+                select.onchange = () => {
+                    updateMapping();
+                    updateSliderGradient();
+
+                    const newSlot = select.value;
+                    const keysToSync: string[] = [];
+
+                    // Collect all keys to sync based on enabled options
+                    if (syncFgBgEnabled) {
+                        const fgBgKey = findCorrespondingFgBg(key);
+                        if (fgBgKey) keysToSync.push(fgBgKey);
+                    }
+
+                    if (syncActiveInactiveEnabled) {
+                        const activeInactiveKey = findCorrespondingActiveInactive(key);
+                        if (activeInactiveKey) keysToSync.push(activeInactiveKey);
+                    }
+
+                    // If both syncs are enabled, also sync the diagonal (e.g., activeFg -> inactiveBg)
+                    if (syncFgBgEnabled && syncActiveInactiveEnabled) {
+                        const fgBgKey = findCorrespondingFgBg(key);
+                        if (fgBgKey) {
+                            const diagonalKey = findCorrespondingActiveInactive(fgBgKey);
+                            if (diagonalKey && !keysToSync.includes(diagonalKey)) {
+                                keysToSync.push(diagonalKey);
+                            }
+                        }
+                    }
+
+                    // Update all corresponding elements
+                    keysToSync.forEach((correspondingKey) => {
+                        let correspondingSlot = newSlot;
+
+                        // Map the slot appropriately based on the transformation
+                        if (correspondingSlot !== 'none') {
+                            // Apply fg/bg transformation if needed
+                            if (
+                                findCorrespondingFgBg(key) === correspondingKey ||
+                                (syncFgBgEnabled &&
+                                    syncActiveInactiveEnabled &&
+                                    correspondingKey.includes(
+                                        findCorrespondingFgBg(key)?.split('.')[1]?.substring(0, 6) || '',
+                                    ))
+                            ) {
+                                const fgBgSlot = getCorrespondingPaletteSlot(correspondingSlot);
+                                if (fgBgSlot) correspondingSlot = fgBgSlot;
+                            }
+
+                            // Apply active/inactive transformation if needed
+                            if (
+                                findCorrespondingActiveInactive(key) === correspondingKey ||
+                                (syncFgBgEnabled &&
+                                    syncActiveInactiveEnabled &&
+                                    key !== correspondingKey &&
+                                    findCorrespondingFgBg(key) !== correspondingKey)
+                            ) {
+                                const activeInactiveSlot = getCorrespondingActiveInactiveSlot(correspondingSlot);
+                                if (activeInactiveSlot) correspondingSlot = activeInactiveSlot;
+                            }
+                        }
+
+                        // Find and update the corresponding select element
+                        const allSelects = document.querySelectorAll('select');
+                        allSelects.forEach((otherSelect: any) => {
+                            if (otherSelect.title === `Select palette color for ${correspondingKey}`) {
+                                otherSelect.value = correspondingSlot;
+                                // Trigger change event to update the mapping (but prevent recursive syncing)
+                                const tempFgBg = syncFgBgEnabled;
+                                const tempActiveInactive = syncActiveInactiveEnabled;
+                                syncFgBgEnabled = false;
+                                syncActiveInactiveEnabled = false;
+                                otherSelect.dispatchEvent(new Event('change'));
+                                syncFgBgEnabled = tempFgBg;
+                                syncActiveInactiveEnabled = tempActiveInactive;
+                            }
+                        });
+                    });
+                };
+                opacitySlider.onchange = updateMapping;
+
+                row.appendChild(label);
+                row.appendChild(select);
+                row.appendChild(opacityContainer);
+                grid.appendChild(row);
+
+                // Add separator after every odd-indexed item (after first column items)
+                const index = keys.indexOf(key);
+                if (index % 2 === 0 && index < keys.length - 1) {
+                    const separator = document.createElement('div');
+                    separator.style.gridRow = `${Math.floor(index / 2) + 1} / span 1`;
+                    separator.style.gridColumn = '2';
+                    separator.style.background = 'var(--vscode-panel-border)';
+                    separator.style.width = '1px';
+                    separator.style.height = '100%';
+                    separator.style.marginLeft = '10px';
+                    separator.style.marginRight = '10px';
+                    grid.appendChild(separator);
+                }
+            });
+            contentDiv.appendChild(grid);
+            tabsContent.appendChild(contentDiv);
+        });
+
+        mappingsContainer.appendChild(tabsHeader);
+        mappingsContainer.appendChild(tabsContent);
+
+        // Activate the selected tab
+        if (tabToActivate) {
+            tabToActivate.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+            tabToActivate.style.fontWeight = 'bold';
+        }
+
+        // Set up sync checkbox event listeners
+        const syncFgBgCheckbox = document.getElementById('syncFgBgCheckbox') as HTMLInputElement;
+        if (syncFgBgCheckbox) {
+            syncFgBgCheckbox.addEventListener('change', () => {
+                syncFgBgEnabled = syncFgBgCheckbox.checked;
+            });
+        }
+
+        const syncActiveInactiveCheckbox = document.getElementById('syncActiveInactiveCheckbox') as HTMLInputElement;
+        if (syncActiveInactiveCheckbox) {
+            syncActiveInactiveCheckbox.addEventListener('change', () => {
+                syncActiveInactiveEnabled = syncActiveInactiveCheckbox.checked;
+            });
+        }
+
+        const limitOptionsCheckbox = document.getElementById('limitOptionsCheckbox') as HTMLInputElement;
+        if (limitOptionsCheckbox) {
+            limitOptionsCheckbox.addEventListener('change', () => {
+                limitOptionsEnabled = limitOptionsCheckbox.checked;
+                // Re-render the profile editor to update all dropdowns
+                if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                    renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+                }
+            });
+        }
+    }
+}
+
+function createPaletteSlotElement(
+    key: string,
+    def: PaletteSlotDefinition,
+    onChange: (d: PaletteSlotDefinition) => void,
+): HTMLElement {
+    const el = document.createElement('div');
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.gap = '2px';
+
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.justifyContent = 'space-between';
+    row.style.gap = '5px';
+
+    const title = document.createElement('span');
+    title.textContent = (PALETTE_SLOT_LABELS[key] || key) + ':';
+    title.style.fontWeight = 'bold';
+    title.style.fontSize = '12px';
+    row.appendChild(title);
+
+    // Color input controls (matching the Rules tab)
+    const colorContainer = document.createElement('div');
+    colorContainer.className = 'color-input-container native-picker';
+    colorContainer.style.display = 'flex';
+    colorContainer.style.alignItems = 'center';
+    colorContainer.style.gap = '5px';
+    colorContainer.style.justifyContent = 'flex-end';
+    colorContainer.style.flex = '1';
+
+    // Native color picker
+    const colorPicker = document.createElement('input');
+    colorPicker.type = 'color';
+    colorPicker.className = 'native-color-input';
+    colorPicker.value = convertColorToHex(def.value || '#000000');
+    colorPicker.title = 'Select color';
+    colorPicker.onchange = () => {
+        def.value = colorPicker.value;
+        def.source = 'fixed';
+        textInput.value = colorPicker.value;
+        onChange(def);
+    };
+
+    // Random color button
+    const randomBtn = document.createElement('button');
+    randomBtn.className = 'random-color-btn';
+    randomBtn.textContent = '🎲';
+    randomBtn.title = 'Generate random color';
+    randomBtn.onclick = () => {
+        const randomColor = getThemeAppropriateColor();
+        def.value = randomColor;
+        def.source = 'fixed';
+        colorPicker.value = convertColorToHex(randomColor);
+        textInput.value = randomColor;
+        onChange(def);
+    };
+
+    // Text input
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.className = 'color-input text-input';
+    textInput.value = def.value || '#000000';
+    textInput.placeholder = 'e.g., blue, #4A90E2';
+    textInput.style.maxWidth = '90px';
+    textInput.setAttribute('data-palette-slot', 'true'); // Mark as palette slot input
+
+    textInput.oninput = () => {
+        const hexColor = convertColorToHex(textInput.value);
+        if (hexColor) {
+            colorPicker.value = hexColor;
+        }
+    };
+
+    textInput.onchange = () => {
+        def.value = textInput.value;
+        def.source = 'fixed';
+        onChange(def);
+    };
+
+    colorContainer.appendChild(colorPicker);
+    colorContainer.appendChild(randomBtn);
+    colorContainer.appendChild(textInput);
+
+    row.appendChild(colorContainer);
+    el.appendChild(row);
+
+    return el;
+}
+
+// Helper function to update a combined pair swatch
+function updatePairSwatch(swatch: HTMLElement, bgColor: string, fgColor: string) {
+    const bgHex = convertColorToHex(bgColor);
+    const fgHex = convertColorToHex(fgColor);
+
+    swatch.style.backgroundColor = bgHex;
+    swatch.style.color = fgHex;
+    swatch.textContent = 'Sample';
+}
+
+// Helper function to get contrasting text color (black or white)
+function getContrastingColor(hexColor: string): string {
+    // Convert hex to RGB
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+
+    // Calculate relative luminance
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    // Return black for light colors, white for dark colors
+    return luminance > 0.5 ? '#000000' : '#FFFFFF';
+}
+
+function renameProfile(oldName: string, newName: string) {
+    if (oldName === newName) return;
+    if (!newName) return;
+
+    // Check if new name is a valid HTML color
+    if (isHtmlColor(newName)) {
+        vscode.postMessage({
+            command: 'showError',
+            data: { message: 'Profile name cannot be a valid HTML color name (e.g., "red", "blue", "#fff", etc.)' },
+        });
+        // Reset the input to old name
+        const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
+        if (nameInput) nameInput.value = oldName;
+        return;
+    }
+
+    if (currentConfig.advancedProfiles[newName]) {
+        vscode.postMessage({
+            command: 'showError',
+            data: { message: 'A profile with this name already exists.' },
+        });
+        // Reset the input to old name
+        const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
+        if (nameInput) nameInput.value = oldName;
+        return;
+    }
+
+    currentConfig.advancedProfiles[newName] = currentConfig.advancedProfiles[oldName];
+    delete currentConfig.advancedProfiles[oldName];
+    selectedProfileName = newName;
+    saveProfiles();
+    renderProfiles(currentConfig.advancedProfiles);
+    selectProfile(newName);
+}
+
+function saveProfiles() {
+    vscode.postMessage({
+        command: 'updateAdvancedProfiles',
+        data: {
+            advancedProfiles: currentConfig.advancedProfiles,
+        },
+    });
+}

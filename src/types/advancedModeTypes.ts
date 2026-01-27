@@ -27,8 +27,13 @@ export interface Palette {
     [key: string]: PaletteSlotDefinition;
 }
 
+export interface MappingValue {
+    slot: string; // Maps to a key in Palette (e.g. "primaryActiveBg") or "none"
+    opacity?: number; // Optional opacity override (0-1)
+}
+
 export interface SectionMappings {
-    [vscodeKey: string]: string; // Maps to a key in Palette (e.g. "primaryActiveBg") or "none"/"transparent"
+    [vscodeKey: string]: string | MappingValue; // Backwards compatible: can be string or object
 }
 
 export interface AdvancedProfile {

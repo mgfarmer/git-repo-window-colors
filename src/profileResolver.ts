@@ -55,14 +55,36 @@ export function resolveProfile(
     // 2. Resolve Mappings
     const finalColors: { [key: string]: string | undefined } = {};
     if (profile.mappings) {
-        for (const [uiKey, slotName] of Object.entries(profile.mappings)) {
+        for (const [uiKey, mappingValue] of Object.entries(profile.mappings)) {
+            // Handle both string (legacy) and object (new with opacity) formats
+            let slotName: string;
+            let mappingOpacity: number | undefined;
+
+            if (typeof mappingValue === 'string') {
+                slotName = mappingValue;
+            } else {
+                slotName = mappingValue.slot;
+                mappingOpacity = mappingValue.opacity;
+            }
+
             if (!slotName || slotName === 'none' || slotName === 'transparent') {
+                // Keep 'transparent' check for backwards compatibility
                 finalColors[uiKey] = undefined;
             } else if (paletteResults[slotName]) {
-                const c = paletteResults[slotName];
+                let c = paletteResults[slotName];
+
+                // Apply mapping-level opacity if specified
+                if (mappingOpacity !== undefined && mappingOpacity >= 0 && mappingOpacity <= 1) {
+                    c = c.alpha(mappingOpacity);
+                }
+
                 if (c.alpha() < 1) {
-                    // Use rgba string for transparency support
-                    finalColors[uiKey] = c.rgb().string();
+                    // Use #RRGGBBAA format for colors with alpha channel
+                    const hex = c.hex();
+                    const alpha = Math.round(c.alpha() * 255)
+                        .toString(16)
+                        .padStart(2, '0');
+                    finalColors[uiKey] = hex + alpha;
                 } else {
                     finalColors[uiKey] = c.hex();
                 }

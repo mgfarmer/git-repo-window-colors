@@ -11,6 +11,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 ### 🎨 Modern Configuration Editor
 
 - Brand new visual configuration interface
+- **Advanced Color Profiles** for complete UI customization (optional)
 - Drag & drop rule reordering for priority-based matching
 - Built-in color picker with support for hex, RGB, HSL, and named colors (with autocomplete)
 - Real-time validation and error handling
@@ -77,8 +78,8 @@ The extension will check these settings an offer to set them for you.
 Configure colors for specific repositories. Rules are matched in priority order:
 
 - **Repository Qualifier:** Part of your repo URL (e.g., `my-project`, `github.com/company/app`)
-- **Primary Color:** Main window color for this repository  
-- **Branch Color:** [Optional/Legacy] different color for non-default (or default) branches
+- **Primary Color:** Main window color for this repository (can be a simple color OR a profile name)
+- **Branch Color:** [Optional/Legacy] different color for non-default (or default) branches (can be a simple color OR a profile name)
 - **Default Branch:** [Optional/Legacy] Specify your preferred main branch name for branch-specific coloring.
 - **Branch Rules:** Check out the Branch Rules section below for a more powerful branch coloring system.
 
@@ -87,7 +88,7 @@ Configure colors for specific repositories. Rules are matched in priority order:
 Create patterns that work across ALL repositories:
 
 - **Pattern:** Regular expression matching branch names
-- **Color:** Applied when pattern matches
+- **Color:** Applied when pattern matches (can be a simple color OR a profile name)
 
 **Examples:**
 
@@ -99,6 +100,150 @@ Just like Repo Rules, you can tune the color to your preferences.
 
 Unlike Repo Rules, which use a simple string.includes() pattern, Branch Rules are regular expressions
 able to match any complex branch naming strategy.
+
+---
+
+## 🎨 Color Profiles (Advanced)
+
+**Note:** Profiles are an **optional advanced feature** for users who want complete control over their workspace appearance. The existing simple color-based system continues to work exactly as before - no changes required to your current configuration!
+
+### What Are Profiles?
+
+Color Profiles provide a comprehensive way to define complete color schemes for your VS Code workspace. Instead of applying a single color and letting the extension automatically derive colors for various UI elements, profiles give you **precise control** over every colorable element.
+
+**When to Use Profiles:**
+
+- ✅ You want consistent, branded color schemes across multiple repositories
+- ✅ You need specific colors for different UI elements (title bar, activity bar, tabs, etc.)
+- ✅ You're creating a shared team color standard
+- ✅ You want to reuse color schemes across different branches or repositories
+
+**When to Use Simple Colors:**
+
+- ✅ You just want quick, automatic coloring (recommended for most users)
+- ✅ You're happy with the extension's smart color derivation
+- ✅ You prefer simplicity over granular control
+
+### How Profiles Work
+
+1. **Create a Profile** - Define a palette of colors and map them to VS Code UI elements
+2. **Reference the Profile** - Use the profile name in repository or branch rules instead of a color
+3. **Automatic Application** - The profile applies whenever that rule matches
+
+**Example:** Create a "Blue Corporate" profile that matches your company branding, then reference it across multiple repositories:
+
+```
+Repository Rules:
+- company-frontend:Blue Corporate
+- company-backend:Blue Corporate
+- company-mobile:Blue Corporate
+```
+
+### Profile Components
+
+Each profile consists of two parts:
+
+**1. Palette Slots** (10 standard colors)
+
+- Primary Active Background & Foreground
+- Primary Inactive Background & Foreground  
+- Secondary Active Background & Foreground
+- Secondary Inactive Background & Foreground
+- Terminal Background & Foreground
+
+**2. Mappings** (which palette colors go where)
+
+- Title bar colors
+- Activity bar colors
+- Status bar colors
+- Editor tabs colors
+- And 60+ other VS Code UI elements
+
+### Creating Profiles in the UI
+
+1. Open the configuration editor (click status bar icon or use Command Palette)
+2. Navigate to the **"Profiles"** tab
+3. Click **"+ Add Profile"** to create a new profile
+4. Set up your **Palette** - define your 10 base colors
+5. Configure **Mappings** - assign palette colors to VS Code UI elements
+
+**Pro Tips:**
+
+- Use the color picker or enter color values directly
+- Set opacity on individual UI elements for subtle effects
+- Leave mappings set to "none" to use VS Code's default colors
+
+### Using Profiles in Rules
+
+Once you've created a profile, simply reference it by name in your rules.  The autocomplete dropdown will list all matching profiles at the top of the list.
+
+**Repository Rules:**
+
+```
+myrepo:My Profile Name
+```
+
+**Branch Rules:**
+
+```
+feature/.*:Feature Profile
+hotfix.*:Hotfix Profile
+```
+
+**Combined (Repository Profile + Branch Profile):**
+
+```
+Repository: myrepo:Base Profile
+Branch: feature/.*:Feature Overlay
+```
+
+When both are specified, the branch profile **overrides** colors from the repository profile, allowing you to have a base color scheme with branch-specific variations.
+
+### Profile Precedence & Mixing
+
+You can mix and match simple colors with profiles:
+
+- **Repo Color + Branch Profile** ✅ Base colors use simple color logic, branch profile overlays specific elements
+- **Repo Profile + Branch Color** ✅ Profile uses the branch color in its palette slots
+- **Repo Profile + Branch Profile** ✅ Branch profile overrides specific colors from repo profile
+- **Simple Colors Only** ✅ Traditional mode, works exactly as before
+
+### Example Use Cases
+
+**Case 1: Consistent Team Branding**
+
+```
+Create "Company Blue" profile → Reference in all company repos
+```
+
+**Case 2: Feature Branch Highlighting**
+
+```
+Repo uses simple blue → Feature branches use "Feature Work" profile
+Result: Most of the time simple blue, but feature branches get special highlighting
+```
+
+**Case 3: Project-Specific Schemes**
+
+```
+Frontend repos: "Light Theme" profile
+Backend repos: "Dark Theme" profile  
+DevOps repos: "Terminal Focus" profile
+```
+
+**Case 4: Branch Type Indication**
+
+```
+Base Repo: "Standard" profile
+Hotfix branches: "Alert Red" profile (overrides critical elements)
+Release branches: "Calm Green" profile (overrides with soothing colors)
+```
+
+### Migration Path
+
+**Existing users:** Your current simple color configuration continues to work with zero changes. Try profiles when you're ready for more control.
+
+**New users:** Start with simple colors (just click "Colorize this repo"). Explore profiles later when you want more customization.
 
 ---
 

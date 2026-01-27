@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
 //import { outputChannel } from '../extension';
 
@@ -135,6 +136,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'importConfig':
                 await vscode.commands.executeCommand('windowColors.importConfig');
                 break;
+            case 'updateAdvancedProfiles':
+                await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                break;
         }
     }
 
@@ -146,6 +150,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const repoRules = this._getRepoRules();
         const branchRules = this._getBranchRules();
         const otherSettings = this._getOtherSettings();
+        const advancedProfiles = this._getAdvancedProfiles();
         const workspaceInfo = this._getWorkspaceInfo();
 
         // Calculate matching rule indexes using the same logic as the extension
@@ -161,6 +166,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             repoRules,
             branchRules,
             otherSettings,
+            advancedProfiles,
         };
 
         const msgData = {
@@ -269,6 +275,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         };
     }
 
+    private _getAdvancedProfiles(): { [key: string]: AdvancedProfile } {
+        const config = vscode.workspace.getConfiguration('windowColors');
+        return config.get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+    }
+
     private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string } {
         return this._workspaceInfo;
     }
@@ -359,6 +370,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     return `${rule.pattern}:${rule.color}`;
                 });
                 updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
+            }
+
+            // Update advanced profiles
+            if (data.advancedProfiles) {
+                updatePromises.push(config.update('advancedProfiles', data.advancedProfiles, true));
             }
 
             // Update other settings
@@ -518,138 +534,255 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <link href="${cssUri}" rel="stylesheet">
         </head>
         <body>
+            <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
+                <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles (Advanced)</button>
+            </div>
+            
             <div class="config-container" role="main" aria-label="Git Repository Window Colors Configuration">
-                <div class="top-panels">
-                    <section class="repo-panel" aria-labelledby="repo-rules-heading">
-                        <div class="panel-header">
-                            <h2 id="repo-rules-heading">Repository Rules 
-                                <button class="tooltip panel-tooltip help-icon" 
-                                        type="button"
-                                        aria-label="Help for Repository Rules"
-                                        aria-describedby="repo-rules-tooltip"
-                                        tabindex="0">ℹ️
-                                    <span class="tooltiptext" 
-                                          id="repo-rules-tooltip" 
-                                          role="tooltip" 
-                                          aria-hidden="true">
-                                        <strong>Repository Rules</strong><br>
-                                        Configure colors for specific repositories. Rules are matched in order from top to bottom.<br><br>
-                                        <strong>Repository Qualifier:</strong> Part of your repo URL (e.g., "myrepo", "github.com/user/repo")<br>
-                                        <strong>Default Branch:</strong> Optional. Specify main branch name for branch-specific coloring<br>
-                                        <strong>Primary Color:</strong> Main window color for this repository<br>
-                                        <strong>Branch Color:</strong> Optional. Color used when not on the default branch<br><br>
-                                        <strong>Note:</strong> Branch-related columns (Default Branch, Branch Color) can be hidden using the setting in Other Settings.
-                                    </span>
-                                </button>
-                            </h2>
-                            <button type="button" 
-                                    class="header-add-button tooltip panel-tooltip" 
-                                    data-action="addRepoRule" 
-                                    title="Add a new repository rule"
-                                    aria-label="Add Repository Rule (Ctrl+Alt+R)">
-                                + Add
-                                <span class="tooltiptext" role="tooltip">
-                                    Add a new repository rule. Rules are processed in order, with the first match being applied.
-                                    <br><br><strong>Tip:</strong> Use Ctrl+Alt+R as a keyboard shortcut.
-                                </span>
-                            </button>
-                        </div>
-                        <div class="section-help" aria-describedby="repo-rules-heading">
-                            Define color rules for specific repositories. The <strong>FIRST MATCHING</strong> rule will be used. The qualifier is a simple substring match against the repository URL, not a regular expression.
-                        </div>
-                        <div id="repoRulesContent" role="region" aria-label="Repository rules table">
-                            <div class="placeholder" aria-live="polite">Loading repository rules...</div>
-                        </div>
-                    </section>
-                    <div class="right-column">
-                        <section class="branch-panel" aria-labelledby="branch-rules-heading">
+                
+                <div id="rules-tab" role="tabpanel" aria-labelledby="tab-rules" class="tab-content active">
+                    <div class="top-panels">
+                        <section class="repo-panel" aria-labelledby="repo-rules-heading">
                             <div class="panel-header">
-                                <h2 id="branch-rules-heading">Branch Rules
+                                <h2 id="repo-rules-heading">Repository Rules 
                                     <button class="tooltip panel-tooltip help-icon" 
                                             type="button"
-                                            aria-label="Help for Branch Rules"
-                                            aria-describedby="branch-rules-tooltip"
+                                            aria-label="Help for Repository Rules"
+                                            aria-describedby="repo-rules-tooltip"
                                             tabindex="0">ℹ️
                                         <span class="tooltiptext" 
-                                              id="branch-rules-tooltip" 
-                                              role="tooltip" 
-                                              aria-hidden="true">
-                                            <strong>Branch Rules</strong><br>
-                                            Configure colors for branch name patterns across all repositories.<br><br>
-                                            <strong>Pattern:</strong> Regular expression to match branch names<br>
-                                            <strong>Examples:</strong><br>
-                                            • <code>feature/.*</code> - All feature branches<br>
-                                            • <code>main|master</code> - Main branches<br>
-                                            • <code>release-.*</code> - Release branches<br>
-                                            • <code>hotfix.*</code> - Hotfix branches
+                                            id="repo-rules-tooltip" 
+                                            role="tooltip" 
+                                            aria-hidden="true">
+                                            <strong>Repository Rules</strong><br>
+                                            Configure colors for specific repositories. Rules are matched in order from top to bottom.<br><br>
+                                            <strong>Repository Qualifier:</strong> Part of your repo URL (e.g., "myrepo", "github.com/user/repo")<br>
+                                            <strong>Default Branch:</strong> Optional. Specify main branch name for branch-specific coloring<br>
+                                            <strong>Primary Color:</strong> Main window color for this repository<br>
+                                            <strong>Branch Color:</strong> Optional. Color used when not on the default branch<br><br>
+                                            <strong>Note:</strong> Branch-related columns (Default Branch, Branch Color) can be hidden using the setting in Other Settings.
                                         </span>
                                     </button>
                                 </h2>
                                 <button type="button" 
-                                        class="header-add-button tooltip panel-tooltip-left" 
-                                        data-action="addBranchRule" 
-                                        title="Add a new branch rule"
-                                        aria-label="Add Branch Rule (Ctrl+Alt+B)">
+                                        class="header-add-button tooltip panel-tooltip" 
+                                        data-action="addRepoRule" 
+                                        title="Add a new repository rule"
+                                        aria-label="Add Repository Rule (Ctrl+Alt+R)">
                                     + Add
                                     <span class="tooltiptext" role="tooltip">
-                                        Add a new branch rule. Branch rules override repository rules for matching branch patterns.
-                                        <br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut.
+                                        Add a new repository rule. Rules are processed in order, with the first match being applied.
+                                        <br><br><strong>Tip:</strong> Use Ctrl+Alt+R as a keyboard shortcut.
                                     </span>
                                 </button>
                             </div>
-                            <div class="section-help">
-                                Define color rules based on branch name patterns. These override repository branch rules (if used). The configured color is applied to the Activity Bar when working on a matched branch.
+                            <div class="section-help" aria-describedby="repo-rules-heading">
+                                Define color rules for specific repositories. The <strong>FIRST MATCHING</strong> rule will be used. The qualifier is a simple substring match against the repository URL, not a regular expression.
                             </div>
-                            <div id="branchRulesContent" role="region" aria-label="Branch rules table">
-                                <div class="placeholder" aria-live="polite">Loading branch rules...</div>
-                            </div>
-                        </section>
-                        <section class="import-export-panel">
-                            <div class="import-export-buttons">
-                                <button type="button" 
-                                        class="import-export-button" 
-                                        data-action="exportConfig" 
-                                        title="Export current configuration to a JSON file"
-                                        aria-label="Export Configuration">
-                                    📤 Export Config
-                                </button>
-                                <button type="button" 
-                                        class="import-export-button" 
-                                        data-action="importConfig" 
-                                        title="Import configuration from a JSON file"
-                                        aria-label="Import Configuration">
-                                    📥 Import Config
-                                </button>
+                            <div id="repoRulesContent" role="region" aria-label="Repository rules table">
+                                <div class="placeholder" aria-live="polite">Loading repository rules...</div>
                             </div>
                         </section>
+                        <div class="right-column">
+                            <section class="branch-panel" aria-labelledby="branch-rules-heading">
+                                <div class="panel-header">
+                                    <h2 id="branch-rules-heading">Branch Rules
+                                        <button class="tooltip panel-tooltip help-icon" 
+                                                type="button"
+                                                aria-label="Help for Branch Rules"
+                                                aria-describedby="branch-rules-tooltip"
+                                                tabindex="0">ℹ️
+                                            <span class="tooltiptext" 
+                                                id="branch-rules-tooltip" 
+                                                role="tooltip" 
+                                                aria-hidden="true">
+                                                <strong>Branch Rules</strong><br>
+                                                Configure colors for branch name patterns across all repositories.<br><br>
+                                                <strong>Pattern:</strong> Regular expression to match branch names<br>
+                                                <strong>Examples:</strong><br>
+                                                • <code>feature/.*</code> - All feature branches<br>
+                                                • <code>main|master</code> - Main branches<br>
+                                                • <code>release-.*</code> - Release branches<br>
+                                                • <code>hotfix.*</code> - Hotfix branches
+                                            </span>
+                                        </button>
+                                    </h2>
+                                    <button type="button" 
+                                            class="header-add-button tooltip panel-tooltip-left" 
+                                            data-action="addBranchRule" 
+                                            title="Add a new branch rule"
+                                            aria-label="Add Branch Rule (Ctrl+Alt+B)">
+                                        + Add
+                                        <span class="tooltiptext" role="tooltip">
+                                            Add a new branch rule. Branch rules override repository rules for matching branch patterns.
+                                            <br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut.
+                                        </span>
+                                    </button>
+                                </div>
+                                <div class="section-help">
+                                    Define color rules based on branch name patterns. These override repository branch rules (if used). The configured color is applied to the Activity Bar when working on a matched branch.
+                                </div>
+                                <div id="branchRulesContent" role="region" aria-label="Branch rules table">
+                                    <div class="placeholder" aria-live="polite">Loading branch rules...</div>
+                                </div>
+                            </section>
+                            <section class="import-export-panel">
+                                <div class="import-export-buttons">
+                                    <button type="button" 
+                                            class="import-export-button" 
+                                            data-action="exportConfig" 
+                                            title="Export current configuration to a JSON file"
+                                            aria-label="Export Configuration">
+                                        📤 Export Config
+                                    </button>
+                                    <button type="button" 
+                                            class="import-export-button" 
+                                            data-action="importConfig" 
+                                            title="Import configuration from a JSON file"
+                                            aria-label="Import Configuration">
+                                        📥 Import Config
+                                    </button>
+                                </div>
+                            </section>
+                        </div>
                     </div>
+                    <section class="bottom-panel" aria-labelledby="other-settings-heading">
+                        <h2 id="other-settings-heading">Other Settings
+                            <button class="tooltip bottom-panel-tooltip help-icon" 
+                                    type="button"
+                                    aria-label="Help for Other Settings"
+                                    aria-describedby="other-settings-tooltip"
+                                    tabindex="0">ℹ️
+                                <span class="tooltiptext" 
+                                    id="other-settings-tooltip" 
+                                    role="tooltip" 
+                                    aria-hidden="true">
+                                    <strong>Other Settings</strong><br>
+                                    Configure other behavior and appearance options.<br><br>
+                                    <strong>* Simple Colors Only:</strong> Settings marked with an asterisk (*) only apply when using simple colors in your rules. When using Profiles, these color-related settings are controlled by the profile configuration.<br><br>
+                                    <strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br>
+                                    <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-179° to +179°)<br><br>
+                                    Toggle various UI elements that should be colored by the extension.
+                                </span>
+                            </button>
+                        </h2>
+                        <div class="section-help" aria-describedby="other-settings-heading">
+                            <strong>Note:</strong> Settings marked with an asterisk (*) only apply when using simple colors. When using Profiles, those color-related settings are controlled by the profile configuration.
+                        </div>
+                        <div id="otherSettingsContent" role="region" aria-label="Other settings controls">
+                            <div class="placeholder" aria-live="polite">Loading other settings...</div>
+                        </div>
+                    </section>
                 </div>
-                <section class="bottom-panel" aria-labelledby="other-settings-heading">
-                    <h2 id="other-settings-heading">Other Settings
-                        <button class="tooltip bottom-panel-tooltip help-icon" 
-                                type="button"
-                                aria-label="Help for Other Settings"
-                                aria-describedby="other-settings-tooltip"
-                                tabindex="0">ℹ️
-                            <span class="tooltiptext" 
-                                  id="other-settings-tooltip" 
-                                  role="tooltip" 
-                                  aria-hidden="true">
-                                <strong>Other Settings</strong><br>
-                                Configure other behavior and appearance options.<br><br>
-                                <strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br>
-                                <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-179° to +179°)<br><br>
-                                Toggle various UI elements that should be colored by the extension.
-                            </span>
-                        </button>
-                    </h2>
-                    <div class="section-help" aria-describedby="other-settings-heading">
-                        Configure other settings that control the extension UI and how colors are applied across VS Code.
-                    </div>
-                    <div id="otherSettingsContent" role="region" aria-label="Other settings controls">
-                        <div class="placeholder" aria-live="polite">Loading other settings...</div>
-                    </div>
-                </section>
+                
+                <div id="profiles-tab" role="tabpanel" aria-labelledby="tab-profiles" class="tab-content">
+                     <!-- Top section: Profiles List + Palette Editor side by side -->
+                     <div class="profiles-top-section">
+                        <section class="profiles-list-section">
+                           <div class="panel-header">
+                                <h2>Profiles
+                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Profiles Help">ℹ️
+                                        <span class="tooltiptext">
+                                            <strong>Profiles</strong><br>
+                                            Define reusable color schemes (profiles) that can be applied to repository rules.
+                                        </span>
+                                    </span>
+                                </h2>
+                                <button type="button" class="header-add-button" data-action="addProfile">+ Add</button>
+                           </div>
+                           <div id="profilesList" class="profiles-list"></div>
+                        </section>
+                        
+                        <div class="profile-editor-top" id="profileEditorTop">
+                            <div class="profile-header">
+                                <input type="text" id="profileNameInput" placeholder="Profile Name">
+                                <div class="profile-actions">
+                                   <!-- actions like clone, delete -->
+                                </div>
+                            </div>
+                            
+                            <div class="palette-editor-section">
+                                <h3>Reference Palette
+                                    <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help">ℹ️
+                                        <span class="tooltiptext">
+                                            <strong>Reference Palette (10 Slots)</strong><br>
+                                            Define 10 referenced colors that can be used in the mappings.<br><br>
+                                        </span>
+                                    </span>
+                                </h3>
+                                <div id="paletteEditor" class="palette-grid">
+                                    <!-- Grid of palette slots -->
+                                </div>
+                            </div>
+                        </div>
+                     </div>
+                     
+                     <!-- Bottom section: Mappings Editor full width -->
+                     <div class="profiles-bottom-section" id="profileEditorBottom">
+                        <div class="mappings-editor-section">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                <h3 style="margin: 0;">
+                                    Mappings
+                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Mappings Help">ℹ️
+                                        <span class="tooltiptext">
+                                            <strong>Section Mappings</strong><br>
+                                            Map UI elements (like Title Bar, Status Bar) to one of the 10 palette slots defined above.
+                                        </span>
+                                    </span>
+                                </h3>
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="syncFgBgCheckbox" checked style="cursor: pointer;">
+                                        <span>Synchronize fg/bg selections</span>
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Synchronize Help" style="margin-left: 0;">ℹ️
+                                            <span class="tooltiptext">
+                                                <strong>Synchronize Foreground/Background</strong><br>
+                                                When enabled, selecting a foreground color automatically sets the corresponding background color (and vice versa).<br><br>
+                                                For example, selecting "Primary Active Foreground" will automatically set "Primary Active Background" to its corresponding palette slot.
+                                            </span>
+                                        </span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="syncActiveInactiveCheckbox" checked style="cursor: pointer;">
+                                        <span>Synchronize active/inactive selections</span>
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Active/Inactive Sync Help" style="margin-left: 0;">ℹ️
+                                            <span class="tooltiptext">
+                                                <strong>Synchronize Active/Inactive</strong><br>
+                                                When enabled, selecting an active element automatically sets the corresponding inactive element (and vice versa).<br><br>
+                                                For example, selecting "Title Bar Active Foreground" will automatically set "Title Bar Inactive Foreground" to its corresponding palette slot.<br><br>
+                                                <strong>Combined Effect:</strong> When both sync options are enabled, changing one element can automatically configure up to 4 related elements (active/inactive × foreground/background).
+                                            </span>
+                                        </span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="limitOptionsCheckbox" style="cursor: pointer;">
+                                        <span>Limit options</span>
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Limit Options Help" style="margin-left: 0;">ℹ️
+                                            <span class="tooltiptext">
+                                                <strong>Limit Dropdown Options</strong><br>
+                                                When enabled, dropdown menus will only show palette slots that match the element's characteristics.<br><br>
+                                                <strong>Examples:</strong><br>
+                                                • Background elements only show background palette slots (e.g., Primary Active Bg, Secondary Inactive Bg)<br>
+                                                • Foreground elements only show foreground palette slots<br>
+                                                • Active elements prefer active palette slots<br>
+                                                • Inactive elements prefer inactive palette slots<br><br>
+                                                This helps avoid accidentally assigning mismatched color types and makes it easier to find the right palette slot.
+                                            </span>
+                                        </span>
+                                    </label>
+                                </div>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="mappingsEditor">
+                                <!-- Tabbed sections for mappings -->
+                            </div>
+                        </div>
+                     </div>
+                </div>
+
             </div>
             
             <script nonce="${nonce}">

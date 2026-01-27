@@ -16,23 +16,100 @@ type RepoConfig = {
     primaryColor: string;
     branchColor: string | undefined;
     profileName?: string;
+    branchProfileName?: string;
 };
 
+/**
+ * Extracts profile name from color string.
+ * Returns the profile name if:
+ * 1. It exists as a profile
+ * 2. It's NOT a valid HTML color name (HTML colors take precedence)
+ * Returns null otherwise
+ */
+function extractProfileName(colorString: string, advancedProfiles: { [key: string]: AdvancedProfile }): string | null {
+    if (!colorString) return null;
+
+    // Remove any trailing whitespace or artifacts
+    const cleaned = colorString.trim();
+
+    // Check if it exists as a profile
+    if (advancedProfiles[cleaned]) {
+        // It exists as a profile, but check if it's also an HTML color
+        try {
+            Color(cleaned);
+            // It's a valid color, so don't treat as profile (HTML color takes precedence)
+            return null;
+        } catch {
+            // Not a valid color, so it's a profile
+            return cleaned;
+        }
+    }
+
+    return null;
+}
+
 const managedColors = [
-    'activityBar.background',
-    'activityBar.foreground',
+    // Title Bar
     'titleBar.activeBackground',
     'titleBar.activeForeground',
     'titleBar.inactiveBackground',
     'titleBar.inactiveForeground',
-    'tab.inactiveBackground',
+    'titleBar.border',
+    // Activity Bar
+    'activityBar.background',
+    'activityBar.foreground',
+    'activityBar.inactiveForeground',
+    'activityBar.border',
+    // Status Bar
+    'statusBar.background',
+    'statusBar.foreground',
+    'statusBar.border',
+    // Tabs & Breadcrumbs
     'tab.activeBackground',
+    'tab.activeForeground',
+    'tab.inactiveBackground',
+    'tab.inactiveForeground',
     'tab.hoverBackground',
     'tab.unfocusedHoverBackground',
+    'tab.activeBorder',
     'editorGroupHeader.tabsBackground',
-    'titleBar.border',
+    'breadcrumb.background',
+    'breadcrumb.foreground',
+    // Command Center
+    'commandCenter.background',
+    'commandCenter.foreground',
+    'commandCenter.activeBackground',
+    'commandCenter.activeForeground',
+    // Terminal
+    'terminal.background',
+    'terminal.foreground',
+    // Lists & Panels
+    'panel.background',
+    'panel.border',
+    'panelTitle.activeForeground',
+    'panelTitle.inactiveForeground',
+    'panelTitle.activeBorder',
+    'list.activeSelectionBackground',
+    'list.activeSelectionForeground',
+    'list.inactiveSelectionBackground',
+    'list.inactiveSelectionForeground',
+    'list.focusOutline',
+    'list.hoverBackground',
+    'list.hoverForeground',
+    'badge.background',
+    'badge.foreground',
+    'panelTitleBadge.background',
+    'panelTitleBadge.foreground',
+    'input.background',
+    'input.foreground',
+    'input.border',
+    'input.placeholderForeground',
+    'focusBorder',
+    // Side Bar
+    'sideBar.background',
+    'sideBar.foreground',
+    'sideBar.border',
     'sideBarTitle.background',
-    'statusBar.background',
 ];
 
 const SEPARATOR = '|';
@@ -565,9 +642,11 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
         let bColor = undefined;
 
         let profileName: string | undefined = undefined;
+        // Check if rColor is a profile name
         if (advancedProfiles[rColor]) {
             profileName = rColor;
         } else if (parts.length > 2) {
+            // Check third part for profile name (format: repo:color:ProfileName)
             const p2 = parts[2].trim();
             if (advancedProfiles[p2]) {
                 profileName = p2;
@@ -586,22 +665,27 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
 
         // Test all the colors to ensure they are parseable
         let colorMessage = '';
-        if (!profileName || (profileName && profileName !== rColor)) {
+        // Only validate rColor as a color if it's not being used as a profile name
+        const rColorIsProfile = profileName === rColor;
+        if (!rColorIsProfile) {
             try {
                 Color(rColor);
             } catch (error) {
                 colorMessage = '`' + rColor + '` is not a known color';
             }
         }
-        try {
-            if (bColor !== undefined) {
+
+        // Check if bColor is a profile name
+        const bColorIsProfile = bColor ? extractProfileName(bColor, advancedProfiles) !== null : false;
+        if (bColor !== undefined && !bColorIsProfile) {
+            try {
                 Color(bColor);
+            } catch (error) {
+                if (colorMessage != '') {
+                    colorMessage += ' and ';
+                }
+                colorMessage += '`' + bColor + '` is not a known color';
             }
-        } catch (error) {
-            if (colorMessage != '') {
-                colorMessage += ' and ';
-            }
-            colorMessage += '`' + bColor + '` is not a known color';
         }
         if (validate && isActive && colorMessage != '') {
             const msg = 'Setting `' + setting + '`: ' + colorMessage;
@@ -648,11 +732,22 @@ function getBranchData(validate: boolean = false): Map<string, string> {
 
         // Test all the colors to ensure they are parseable
         let colorMessage = '';
-        try {
-            Color(branchColor);
-        } catch (error) {
-            colorMessage = '`' + branchColor + '` is not a known color';
+
+        // Get advanced profiles for validation
+        const advancedProfiles = workspace
+            .getConfiguration('windowColors')
+            .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+        const profileName = extractProfileName(branchColor, advancedProfiles);
+
+        // Only validate as a color if it's not a profile name
+        if (!profileName) {
+            try {
+                Color(branchColor);
+            } catch (error) {
+                colorMessage = '`' + branchColor + '` is not a known color';
+            }
         }
+
         if (validate && colorMessage != '') {
             const msg = 'Setting `' + setting + '`: ' + colorMessage;
             vscode.window.showErrorMessage(msg);
@@ -767,7 +862,23 @@ async function doit(reason: string) {
                 if (item.defaultBranch !== undefined) {
                     defBranch = item.defaultBranch;
                     if (item.branchColor) {
-                        branchColor = Color(item.branchColor);
+                        // Check if the branch color is actually a profile name
+                        const advancedProfiles = workspace
+                            .getConfiguration('windowColors')
+                            .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+                        const branchProfileName = extractProfileName(item.branchColor, advancedProfiles);
+
+                        if (branchProfileName) {
+                            // It's a profile - set it for later resolution
+                            outputChannel.appendLine(`  Per-repo branch color is Profile: ${branchProfileName}`);
+                            if (!matchedRepoConfig) {
+                                matchedRepoConfig = item;
+                            }
+                            matchedRepoConfig.branchProfileName = branchProfileName;
+                        } else {
+                            // It's a regular color
+                            branchColor = Color(item.branchColor);
+                        }
                     }
                 }
 
@@ -805,13 +916,37 @@ async function doit(reason: string) {
 
     // Now check the branch map to see if any apply
     let branchMatch = false;
-    for (const [branch, color] of branchMap) {
+    for (const [branch, colorOrProfile] of branchMap) {
         if (branch === '') {
             continue;
         }
         if (currentBranch?.match(branch)) {
-            branchColor = Color(color);
-            outputChannel.appendLine('  Branch rule matched: "' + branch + '" with color: ' + branchColor.hex());
+            // Check if this is a profile name
+            const advancedProfiles = workspace
+                .getConfiguration('windowColors')
+                .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+            const profileName = extractProfileName(colorOrProfile, advancedProfiles);
+
+            if (profileName) {
+                // It's a profile - resolve it
+                outputChannel.appendLine('  Branch rule matched: "' + branch + '" using Profile: ' + profileName);
+                // Set the branch profile name so it gets resolved later
+                if (!matchedRepoConfig) {
+                    matchedRepoConfig = {
+                        repoQualifier: '',
+                        defaultBranch: undefined,
+                        primaryColor: '',
+                        branchColor: undefined,
+                        branchProfileName: profileName,
+                    };
+                } else {
+                    matchedRepoConfig.branchProfileName = profileName;
+                }
+            } else {
+                // It's a color
+                branchColor = Color(colorOrProfile);
+                outputChannel.appendLine('  Branch rule matched: "' + branch + '" with color: ' + branchColor.hex());
+            }
             branchMatch = true;
             // if (repoColor === undefined) {
             //     outputChannel.appendLine('  No repo color specified, using branch color as repo color');
@@ -848,19 +983,36 @@ async function doit(reason: string) {
         (workspace.getConfiguration('windowColors').get('advancedProfiles') as { [key: string]: AdvancedProfile }) ||
         {};
 
-    if (matchedRepoConfig && matchedRepoConfig.profileName && advancedProfiles[matchedRepoConfig.profileName]) {
-        // Advanced Profile Mode
-        outputChannel.appendLine(`  Applying profile "${matchedRepoConfig.profileName}"`);
-        const profile = advancedProfiles[matchedRepoConfig.profileName];
-        newColors = resolveProfile(profile, repoColor || Color('#000000'), branchColor || Color('#000000'));
-    } else {
-        // Legacy Mode
-        if (!repoColor || !branchColor) return;
+    outputChannel.appendLine(`  Available profiles: ${Object.keys(advancedProfiles).join(', ')}`);
+
+    // Determine repo profile and branch profile separately
+    let repoProfileName: string | null = null;
+    let branchProfileName: string | null = null;
+
+    if (matchedRepoConfig) {
+        // Check for explicit profile name or profile from primaryColor
+        repoProfileName =
+            matchedRepoConfig.profileName || extractProfileName(matchedRepoConfig.primaryColor, advancedProfiles);
+        outputChannel.appendLine(`  Repo profile: ${repoProfileName || 'none'}`);
+
+        // Check for branch profile (from branch rule or branchColor)
+        branchProfileName =
+            matchedRepoConfig.branchProfileName ||
+            (matchedRepoConfig.branchColor
+                ? extractProfileName(matchedRepoConfig.branchColor, advancedProfiles)
+                : null);
+        outputChannel.appendLine(`  Branch profile: ${branchProfileName || 'none'}`);
+    }
+
+    // Apply profiles: repo profile first (if any), then branch profile overrides (if any)
+    // If there's no repo profile but there IS a repo color, apply legacy mode first
+    if (!repoProfileName && repoColor && branchColor) {
+        // Legacy Mode - apply base colors from repo/branch
+        outputChannel.appendLine(`  Applying legacy color mode for repo color: ${repoColor.hex()}`);
 
         let titleBarTextColor: Color = Color('#ffffff');
         let titleBarColor: Color = Color('#ffffff');
         let titleInactiveBarColor: Color = Color('#ffffff');
-        //let titleBarBorderColor: Color = Color("red");
         let activityBarColor: Color = Color('#ffffff');
         let inactiveTabColor: Color = Color('#ffffff');
         let activeTabColor: Color = Color('#ffffff');
@@ -877,7 +1029,7 @@ async function doit(reason: string) {
             }
             titleInactiveBarColor = titleBarColor.darken(0.5);
 
-            // Branch colors (which my be primary color too)
+            // Branch colors (which may be primary color too)
             activityBarColor = branchColor.lighten(activityBarColorKnob);
             inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.lighten(activityBarColorKnob);
             activeTabColor = inactiveTabColor.lighten(0.5);
@@ -891,14 +1043,13 @@ async function doit(reason: string) {
                 titleBarTextColor = getColorWithLuminosity(repoColor, 0, 0.01);
             }
 
-            // Branch colors (which my be primary color too)
+            // Branch colors (which may be primary color too)
             activityBarColor = branchColor.darken(activityBarColorKnob);
             inactiveTabColor = doApplyBranchColorExtra ? activityBarColor : titleBarColor.darken(activityBarColorKnob);
             activeTabColor = inactiveTabColor.darken(0.4);
         }
 
         newColors = {
-            //"titleBar.border": titleBarBorderColor.hex(),
             'activityBar.background': activityBarColor.hex(),
             'activityBar.foreground': titleBarTextColor.hex(),
             'titleBar.activeBackground': titleBarColor.hex(),
@@ -915,8 +1066,59 @@ async function doit(reason: string) {
             'statusBar.background': doColorStatusBar ? inactiveTabColor.hex() : undefined,
         };
 
+        outputChannel.appendLine(
+            `  Legacy mode applied ${Object.keys(newColors).filter((k) => newColors[k] !== undefined).length} color mappings`,
+        );
+    } else if (repoProfileName && advancedProfiles[repoProfileName]) {
+        // Apply repo profile
+        outputChannel.appendLine(`  Applying repo profile "${repoProfileName}"`);
+        const repoProfile = advancedProfiles[repoProfileName];
+        newColors = resolveProfile(repoProfile, repoColor || Color('#000000'), branchColor || Color('#000000'));
+        outputChannel.appendLine(`  Repo profile resolved ${Object.keys(newColors).length} color mappings`);
+    }
+
+    if (branchProfileName && advancedProfiles[branchProfileName]) {
+        // Apply branch profile (overrides repo profile)
+        outputChannel.appendLine(
+            `  Applying branch profile "${branchProfileName}" (will override repo profile colors)`,
+        );
+        const branchProfile = advancedProfiles[branchProfileName];
+        const branchColors = resolveProfile(
+            branchProfile,
+            repoColor || Color('#000000'),
+            branchColor || Color('#000000'),
+        );
+        outputChannel.appendLine(`  Branch profile resolved ${Object.keys(branchColors).length} color mappings`);
+
+        // Debug: show what the branch profile is providing
+        outputChannel.appendLine(`  Branch profile colors before merge:`);
+        Object.entries(branchColors).forEach(([key, value]) => {
+            outputChannel.appendLine(`    ${key} = ${value !== undefined ? value : 'undefined (will not override)'}`);
+        });
+
+        // Merge: branch profile colors override repo profile colors, but only for defined values
+        // Filter out undefined values so they don't override repo profile colors
+        Object.entries(branchColors).forEach(([key, value]) => {
+            if (value !== undefined) {
+                newColors[key] = value;
+            }
+        });
+        outputChannel.appendLine(`  After merge: ${Object.keys(newColors).length} total color mappings`);
+    }
+
+    // If we have any profile-based colors, show them
+    if (repoProfileName || branchProfileName) {
+        // Debug: Show what colors are being set
+        Object.entries(newColors).forEach(([key, value]) => {
+            if (value !== undefined) {
+                outputChannel.appendLine(`    ${key} = ${value}`);
+            }
+        });
+    }
+
+    // Show final result message for legacy mode (when no profiles at all)
+    if (!repoProfileName && !branchProfileName && repoColor && branchColor) {
         if (repoColor === branchColor) {
-            // If the repo color and branch color are the same, remove the branch color
             outputChannel.appendLine(`  Applying color for this repo: ${repoColor.hex()}`);
         } else {
             outputChannel.appendLine(
@@ -924,7 +1126,26 @@ async function doit(reason: string) {
             );
         }
     }
-    workspace.getConfiguration('workbench').update('colorCustomizations', { ...cc, ...newColors }, false);
+
+    // Remove all managed colors from existing customizations to start clean
+    const cleanedCC = { ...cc };
+    for (const key of managedColors) {
+        delete cleanedCC[key];
+    }
+
+    // Add newColors to the cleaned customizations
+    // Only add defined color values (skip undefined to avoid setting them explicitly)
+    const finalColors = { ...cleanedCC };
+    for (const [key, value] of Object.entries(newColors)) {
+        if (value !== undefined) {
+            finalColors[key] = value;
+        }
+    }
+
+    outputChannel.appendLine(
+        `  Setting ${Object.keys(newColors).filter((k) => newColors[k] !== undefined).length} color customizations`,
+    );
+    workspace.getConfiguration('workbench').update('colorCustomizations', finalColors, false);
 
     outputChannel.appendLine('\nLoving this extension? https://www.buymeacoffee.com/KevinMills');
     outputChannel.appendLine(
