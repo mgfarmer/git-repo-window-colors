@@ -272,6 +272,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             showBranchColumns: config.get<boolean>('showBranchColumns', true),
             showStatusIconWhenNoRuleMatches: config.get<boolean>('showStatusIconWhenNoRuleMatches', true),
             askToColorizeRepoWhenOpened: config.get<boolean>('askToColorizeRepoWhenOpened', true),
+            enableProfilesAdvanced: config.get<boolean>('enableProfilesAdvanced', false),
         };
     }
 
@@ -667,9 +668,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 </span>
                             </button>
                         </h2>
-                        <div class="section-help" aria-describedby="other-settings-heading">
-                            <strong>Note:</strong> Settings marked with an asterisk (*) only apply when using simple colors. When using Profiles, those color-related settings are controlled by the profile configuration.
-                        </div>
                         <div id="otherSettingsContent" role="region" aria-label="Other settings controls">
                             <div class="placeholder" aria-live="polite">Loading other settings...</div>
                         </div>

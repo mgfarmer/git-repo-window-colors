@@ -1259,6 +1259,7 @@ async function exportConfiguration(): Promise<void> {
             showBranchColumns: config.get('showBranchColumns'),
             showStatusIconWhenNoRuleMatches: config.get('showStatusIconWhenNoRuleMatches'),
             askToColorizeRepoWhenOpened: config.get('askToColorizeRepoWhenOpened'),
+            enableProfilesAdvanced: config.get('enableProfilesAdvanced'),
             exportedAt: new Date().toISOString(),
             version: '1.5.0',
         };

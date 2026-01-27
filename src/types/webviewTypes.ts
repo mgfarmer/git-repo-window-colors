@@ -24,6 +24,7 @@ export interface OtherSettings {
     showBranchColumns: boolean;
     showStatusIconWhenNoRuleMatches: boolean;
     askToColorizeRepoWhenOpened: boolean;
+    enableProfilesAdvanced: boolean;
 }
 
 export interface WebviewMessage {

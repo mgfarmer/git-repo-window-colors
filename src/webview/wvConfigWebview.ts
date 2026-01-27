@@ -579,6 +579,9 @@ function renderConfiguration(config: any) {
     renderProfiles(config.advancedProfiles);
     renderWorkspaceInfo(config.workspaceInfo);
 
+    // Update profiles tab visibility based on settings
+    updateProfilesTabVisibility();
+
     // Attach event listeners after DOM is updated
     attachEventListeners();
 }
@@ -1151,122 +1154,137 @@ function renderOtherSettings(settings: any) {
     if (!container) return;
 
     container.innerHTML = `
-        <div class="settings-grid">
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="color-status-bar"
-                           ${settings.colorStatusBar ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorStatusBar', this.checked)">
-                    Color Status Bar*
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply repository colors to the status bar at the bottom of the VS Code window. 
-                    This give the repository color more prominence.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="show-branch-columns"
-                           ${settings.showBranchColumns ? 'checked' : ''}
-                           data-action="updateOtherSetting('showBranchColumns', this.checked)"
-                           data-extra-action="updateBranchColumnVisibility">
-                    Show Branch Columns in Repository Rules
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Show or hide the Default Branch and Branch Color columns in the Repository Rules table. 
-                    Disable this to simplify the interface if you only use basic repository coloring, or want to
-                    use separate branch rules instead.
-                </span>
-            </div>
-            <div class="setting-item range-slider tooltip">
-                <label for="activity-bar-knob">Color Knob:*</label>
-                <div class="range-controls">
-                    <input type="range" 
-                           id="activity-bar-knob" 
-                           min="-10" 
-                           max="10" 
-                           value="${settings.activityBarColorKnob || 0}"
-                           data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
-                           aria-label="Color adjustment from -10 to +10">
-                    <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
+        <div class="settings-sections">
+            <div class="settings-section">
+                <h3>Color Options</h3>
+                <div class="section-help" style="margin-bottom: 10px;">
+                    <strong>Note:</strong> These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration.
                 </div>
-                <span class="tooltiptext" role="tooltip">
-                    Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
-                    Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
-                    Provided for fine-tuning the look and feel.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="color-editor-tabs"
-                           ${settings.colorEditorTabs ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorEditorTabs', this.checked)">
-                    Color Editor Tabs*
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply repository colors to editor tabs. This give the repository color more prominence.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="ask-to-colorize-repo-when-opened"
-                           ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
-                           data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
-                    Ask to colorize repo when opened
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
-                </span>
-            </div>
-            <div class="setting-item range-slider tooltip">
-                <label for="branch-hue-rotation">Branch Hue Rotation:*</label>
-                <div class="range-controls">
-                    <input type="range" 
-                           id="branch-hue-rotation" 
-                           min="-179" 
-                           max="179" 
-                           value="${settings.automaticBranchIndicatorColorKnob || 60}"
-                           data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
-                           aria-label="Branch hue rotation from -179 to +179 degrees">
-                    <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
+                <div class="settings-grid">
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="color-status-bar"
+                                   ${settings.colorStatusBar ? 'checked' : ''}
+                                   data-action="updateOtherSetting('colorStatusBar', this.checked)">
+                            Color Status Bar
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            Apply repository colors to the status bar at the bottom of the VS Code window. 
+                            This give the repository color more prominence.
+                        </span>
+                    </div>
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="color-editor-tabs"
+                                   ${settings.colorEditorTabs ? 'checked' : ''}
+                                   data-action="updateOtherSetting('colorEditorTabs', this.checked)">
+                            Color Editor Tabs
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            Apply repository colors to editor tabs. This give the repository color more prominence.
+                        </span>
+                    </div>
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="color-inactive-titlebar"
+                                   ${settings.colorInactiveTitlebar ? 'checked' : ''}
+                                   data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
+                            Color Inactive Title Bar
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            Apply colors to the title bar even when the VS Code window is not focused. 
+                            This maintains visual identification when switching between applications.
+                        </span>
+                    </div>
+                    <div class="setting-item range-slider tooltip">
+                        <label for="activity-bar-knob">Color Knob:</label>
+                        <div class="range-controls">
+                            <input type="range" 
+                                   id="activity-bar-knob" 
+                                   min="-10" 
+                                   max="10" 
+                                   value="${settings.activityBarColorKnob || 0}"
+                                   data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
+                                   aria-label="Color adjustment from -10 to +10">
+                            <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
+                        </div>
+                        <span class="tooltiptext" role="tooltip">
+                            Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
+                            Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
+                            Provided for fine-tuning the look and feel.
+                        </span>
+                    </div>
+                    <div class="setting-item range-slider tooltip">
+                        <label for="branch-hue-rotation">Branch Hue Rotation:</label>
+                        <div class="range-controls">
+                            <input type="range" 
+                                   id="branch-hue-rotation" 
+                                   min="-179" 
+                                   max="179" 
+                                   value="${settings.automaticBranchIndicatorColorKnob || 60}"
+                                   data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
+                                   aria-label="Branch hue rotation from -179 to +179 degrees">
+                            <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
+                        </div>
+                        <span class="tooltiptext" role="tooltip">
+                            Automatically shift the hue of branch indicator colors. This creates visual variation 
+                            for branch-specific coloring when a default branch is specified and no explicit branch color is defined. 
+                            A value of 180 means
+                            opposite colors, while 60 or -60 gives a nice complementary colors. Or use anything you like!
+                            Note: This setting does not apply to discrete branch rules. 
+                        </span>
+                    </div>
                 </div>
-                <span class="tooltiptext" role="tooltip">
-                    Automatically shift the hue of branch indicator colors. This creates visual variation 
-                    for branch-specific coloring when a default branch is specified and no explicit branch color is defined. 
-                    A value of 180 means
-                    opposite colors, while 60 or -60 gives a nice complementary colors. Or use anything you like!
-                    Note: This setting does not apply to discrete branch rules. 
-                </span>
             </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="color-inactive-titlebar"
-                           ${settings.colorInactiveTitlebar ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
-                    Color Inactive Title Bar*
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply colors to the title bar even when the VS Code window is not focused. 
-                    This maintains visual identification when switching between applications.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="show-status-icon-when-no-rule-matches"
-                           ${settings.showStatusIconWhenNoRuleMatches ? 'checked' : ''}
-                           data-action="updateOtherSetting('showStatusIconWhenNoRuleMatches', this.checked)">
-                    Show Status Icon Only When No Rule Matches
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    When enabled, the status bar icon will only appear when no repository rule matches the current workspace. 
-                    When disabled, the status bar icon is always visible for Git repositories.
-                </span>
+            
+            <div class="settings-section">
+                <h3>Other Options</h3>
+                <div class="settings-grid">
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="show-branch-columns"
+                                   ${settings.showBranchColumns ? 'checked' : ''}
+                                   data-action="updateOtherSetting('showBranchColumns', this.checked)"
+                                   data-extra-action="updateBranchColumnVisibility">
+                            Show Branch Columns in Repository Rules
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            Show or hide the Default Branch and Branch Color columns in the Repository Rules table. 
+                            Disable this to simplify the interface if you only use basic repository coloring, or want to
+                            use separate branch rules instead.
+                        </span>
+                    </div>
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="ask-to-colorize-repo-when-opened"
+                                   ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
+                                   data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
+                            Ask to colorize repo when opened
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
+                        </span>
+                    </div>
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="enable-profiles-advanced"
+                                   ${settings.enableProfilesAdvanced ? 'checked' : ''}
+                                   data-action="updateOtherSetting('enableProfilesAdvanced', this.checked)"
+                                   data-extra-action="updateProfilesTabVisibility">
+                            Enable Profiles (Advanced)
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            Enable the advanced Profiles feature, which allows you to define reusable color palettes and map them to specific UI elements. 
+                            When enabled, the Profiles tab will appear in the main navigation.
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -1306,6 +1324,23 @@ function updateBranchColumnVisibility() {
     branchColumns.forEach((column) => {
         (column as HTMLElement).style.display = showBranchColumns ? '' : 'none';
     });
+}
+
+function updateProfilesTabVisibility() {
+    const enableProfiles = (document.getElementById('enable-profiles-advanced') as HTMLInputElement)?.checked ?? false;
+    const profilesTab = document.getElementById('tab-profiles');
+    const profilesTabContent = document.getElementById('profiles-tab');
+
+    if (profilesTab) {
+        profilesTab.style.display = enableProfiles ? '' : 'none';
+    }
+    if (profilesTabContent && !enableProfiles && profilesTabContent.classList.contains('active')) {
+        // If profiles tab is currently active and we're hiding it, switch to rules tab
+        const rulesTab = document.getElementById('tab-rules');
+        if (rulesTab) {
+            (rulesTab as HTMLElement).click();
+        }
+    }
 }
 
 // Rule management functions
@@ -2060,8 +2095,11 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
     // Check if this is a palette slot input (should not show profiles)
     const isPaletteSlot = input.hasAttribute('data-palette-slot');
 
-    // 1. Add matching profile names first (only for non-palette inputs)
-    if (!isPaletteSlot && currentConfig?.advancedProfiles) {
+    // Check if profiles are enabled
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+
+    // 1. Add matching profile names first (only for non-palette inputs and when profiles are enabled)
+    if (!isPaletteSlot && profilesEnabled && currentConfig?.advancedProfiles) {
         const profileNames = Object.keys(currentConfig.advancedProfiles);
         profileNames.forEach((name) => {
             if (name.toLowerCase().includes(value)) {

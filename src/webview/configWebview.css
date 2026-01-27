@@ -446,17 +446,37 @@ h2 {
     margin-bottom: 0;
 }
 
+.settings-sections {
+    display: flex;
+    gap: 30px;
+    margin-top: 10px;
+}
+
+.settings-section {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-section h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding-bottom: 5px;
+}
+
 .settings-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 8px;
-    margin-top: 10px;
 }
 
 /* Responsive design for smaller screens */
 @media (max-width: 800px) {
-    .settings-grid {
-        grid-template-columns: 1fr 1fr;
+    .settings-sections {
+        flex-direction: column;
+        gap: 20px;
     }
 }
 

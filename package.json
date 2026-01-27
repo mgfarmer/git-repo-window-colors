@@ -178,6 +178,13 @@
                         "description": "When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules.",
                         "scope": "application"
                     },
+                    "windowColors.enableProfilesAdvanced": {
+                        "order": 28,
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Enable the advanced Profiles feature. When enabled, the Profiles tab will be visible in the configuration interface, allowing you to define reusable color palettes and map them to specific UI elements.",
+                        "scope": "application"
+                    },
                     "windowColors.lastExportPath": {
                         "order": 28,
                         "type": "string",
