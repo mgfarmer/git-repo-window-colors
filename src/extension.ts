@@ -17,6 +17,7 @@ type RepoConfig = {
     branchColor: string | undefined;
     profileName?: string;
     branchProfileName?: string;
+    enabled?: boolean;
 };
 
 /**

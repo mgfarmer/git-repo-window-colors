@@ -153,6 +153,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const advancedProfiles = this._getAdvancedProfiles();
         const workspaceInfo = this._getWorkspaceInfo();
 
+        // Get currently applied color customizations
+        const colorCustomizations = vscode.workspace.getConfiguration('workbench').get('colorCustomizations', {});
+
         // Calculate matching rule indexes using the same logic as the extension
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
         const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(branchRules, workspaceInfo.currentBranch);
@@ -172,6 +175,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const msgData = {
             ...this.currentConfig,
             workspaceInfo,
+            colorCustomizations,
             matchingIndexes: {
                 repoRule: matchingRepoRuleIndex,
                 branchRule: matchingBranchRuleIndex,
@@ -589,6 +593,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
                 <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles (Advanced)</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
             </div>
             
             <div class="config-container" role="main" aria-label="Git Repository Window Colors Configuration">
@@ -821,9 +826,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                         </span>
                                     </label>
                                 </div>
-                                        </span>
-                                    </label>
-                                </div>
                             </div>
                             <div id="mappingsEditor">
                                 <!-- Tabbed sections for mappings -->
@@ -831,7 +833,29 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         </div>
                      </div>
                 </div>
-
+                
+                <div id="report-tab" role="tabpanel" aria-labelledby="tab-report" class="tab-content">
+                    <section class="report-panel">
+                        <div class="panel-header">
+                            <h2>Color Report
+                                <button class="tooltip panel-tooltip help-icon" 
+                                        type="button"
+                                        aria-label="Help for Color Report"
+                                        tabindex="0">ℹ️
+                                    <span class="tooltiptext" role="tooltip">
+                                        <strong>Color Report</strong><br>
+                                        Detailed report showing all theme elements that are currently being colored,
+                                        the applied colors, and which rules or profiles are applying them.
+                                    </span>
+                                </button>
+                            </h2>
+                        </div>
+                        <div id="reportContent" role="region" aria-label="Color report table">
+                            <div class="placeholder">Loading color report...</div>
+                        </div>
+                    </section>
+                </div>
+            
             </div>
             
             <script nonce="${nonce}">

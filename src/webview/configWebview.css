@@ -1212,6 +1212,150 @@ button:focus {
     color: var(--vscode-button-foreground);
 }
 
+/* Color Report Styles */
+.report-panel {
+    padding: 20px;
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.report-table th {
+    text-align: left;
+    padding: 10px;
+    background-color: var(--vscode-editor-background);
+    border-bottom: 2px solid var(--vscode-panel-border);
+    font-weight: 600;
+}
+
+.report-table td {
+    padding: 10px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.report-table tbody tr:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.theme-key code {
+    background-color: var(--vscode-textCodeBlock-background);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.color-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.report-swatch {
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 3px;
+}
+
+.color-text {
+    font-family: var(--vscode-editor-font-family);
+    font-size: 13px;
+}
+
+.source-rule {
+    color: var(--vscode-descriptionForeground);
+    font-size: 13px;
+}
+
+.report-footer {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: var(--vscode-textBlockQuote-background);
+    border-left: 4px solid var(--vscode-textBlockQuote-border);
+    border-radius: 4px;
+}
+
+.report-footer p {
+    margin: 0;
+    color: var(--vscode-foreground);
+    font-size: 13px;
+}
+
+/* Go To button in Color Report */
+.goto-col {
+    width: 60px;
+    text-align: center;
+}
+
+.goto-cell {
+    text-align: center;
+    padding: 4px !important;
+}
+
+.goto-btn {
+    background: transparent;
+    border: 1px solid var(--vscode-button-border, transparent);
+    color: var(--vscode-button-foreground);
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 16px;
+    transition: all 0.15s ease;
+}
+
+.goto-btn:hover {
+    background-color: var(--vscode-button-hoverBackground);
+    border-color: var(--vscode-button-hoverBackground);
+}
+
+.goto-btn:active {
+    background-color: var(--vscode-button-background);
+}
+
+/* Goto link in Applied By column */
+.goto-link {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.goto-link:hover {
+    color: var(--vscode-textLink-activeForeground);
+}
+
+.goto-link:active {
+    color: var(--vscode-textLink-activeForeground);
+}
+
+/* Highlight fade-out animation */
+@keyframes highlight-fade {
+    0% {
+        background-color: rgba(255, 200, 0, 0.4);
+        border-left: 4px solid rgba(255, 200, 0, 1);
+        box-shadow: 0 0 20px rgba(255, 200, 0, 0.6);
+    }
+    50% {
+        background-color: rgba(255, 200, 0, 0.2);
+        border-left: 4px solid rgba(255, 200, 0, 0.7);
+        box-shadow: 0 0 15px rgba(255, 200, 0, 0.4);
+    }
+    100% {
+        background-color: transparent;
+        border-left: 4px solid transparent;
+        box-shadow: none;
+    }
+}
+
+.highlight-fadeout {
+    animation: highlight-fade 2.5s ease-in-out;
+    border-left: 4px solid transparent;
+}
+
 .mapping-tab-badge {
     display: inline-flex;
     align-items: center;

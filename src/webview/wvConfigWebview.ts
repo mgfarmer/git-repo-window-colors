@@ -578,6 +578,7 @@ function renderConfiguration(config: any) {
     renderOtherSettings(config.otherSettings);
     renderProfiles(config.advancedProfiles);
     renderWorkspaceInfo(config.workspaceInfo);
+    renderColorReport(config);
 
     // Update profiles tab visibility based on settings
     updateProfilesTabVisibility();
@@ -726,6 +727,15 @@ function handleDocumentClick(event: Event) {
     if (moveMatch) {
         const [, index, ruleType, direction] = moveMatch;
         moveRule(parseInt(index), ruleType, parseInt(direction));
+        return;
+    }
+
+    // Handle goto buttons in Color Report
+    if (target.classList.contains('goto-btn') || target.classList.contains('goto-link')) {
+        const gotoData = target.getAttribute('data-goto');
+        if (gotoData) {
+            handleGotoSource(gotoData);
+        }
         return;
     }
 }
@@ -1346,6 +1356,161 @@ function renderWorkspaceInfo(workspaceInfo: any) {
     // For now, it's handled by the extension itself
 }
 
+function renderColorReport(config: any) {
+    const container = document.getElementById('reportContent');
+    if (!container) {
+        console.log('[DEBUG] reportContent container not found');
+        return;
+    }
+
+    console.log('[DEBUG] renderColorReport called with config:', config);
+    console.log('[DEBUG] colorCustomizations:', config.colorCustomizations);
+
+    const colorCustomizations = config.colorCustomizations || {};
+    const managedColors = [
+        'titleBar.activeBackground',
+        'titleBar.activeForeground',
+        'titleBar.inactiveBackground',
+        'titleBar.inactiveForeground',
+        'activityBar.background',
+        'activityBar.foreground',
+        'activityBar.inactiveForeground',
+        'activityBar.activeBorder',
+        'tab.activeBackground',
+        'tab.activeForeground',
+        'tab.inactiveBackground',
+        'tab.inactiveForeground',
+        'tab.activeBorder',
+        'statusBar.background',
+        'statusBar.foreground',
+    ];
+
+    // Get matching rules
+    const matchedRepoRule =
+        config.matchingIndexes?.repoRule >= 0 ? config.repoRules?.[config.matchingIndexes.repoRule] : null;
+    const matchedBranchRule =
+        config.matchingIndexes?.branchRule >= 0 ? config.branchRules?.[config.matchingIndexes.branchRule] : null;
+
+    // Helper function to determine source for each theme key
+    const getSourceForKey = (key: string): { description: string; gotoData: string } => {
+        // Activity bar colors typically come from branch rules when a branch rule is matched
+        // Otherwise they come from repo rules
+        const isActivityBarKey = key.startsWith('activityBar.');
+
+        if (isActivityBarKey && matchedBranchRule) {
+            const pattern = escapeHtml(matchedBranchRule.pattern);
+            const gotoData = `branch:${config.matchingIndexes.branchRule}`;
+            return {
+                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>"`,
+                gotoData: gotoData,
+            };
+        }
+
+        if (matchedRepoRule) {
+            const qualifier = escapeHtml(matchedRepoRule.repoQualifier);
+            const gotoData = `repo:${config.matchingIndexes.repoRule}`;
+            // For repo rules, check if using a profile
+            if (matchedRepoRule.profileName) {
+                const profileName = escapeHtml(matchedRepoRule.profileName);
+                const profileGotoData = `profile:${profileName}:${escapeHtml(key)}`;
+                return {
+                    description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (Profile: "<span class="goto-link" data-goto="${profileGotoData}">${profileName}</span>")`,
+                    gotoData: profileGotoData,
+                };
+            }
+            return {
+                description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>"`,
+                gotoData: gotoData,
+            };
+        }
+
+        if (matchedBranchRule) {
+            const pattern = escapeHtml(matchedBranchRule.pattern);
+            const gotoData = `branch:${config.matchingIndexes.branchRule}`;
+            return {
+                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>"`,
+                gotoData: gotoData,
+            };
+        }
+
+        return { description: 'None', gotoData: '' };
+    };
+
+    const rows: string[] = [];
+
+    managedColors.forEach((key) => {
+        const color = colorCustomizations[key];
+        if (color) {
+            const sourceInfo = getSourceForKey(key);
+            const isActivityBarKey = key.startsWith('activityBar.');
+
+            // Determine goto target
+            let gotoTarget = '';
+            if (isActivityBarKey && matchedBranchRule) {
+                gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+            } else if (matchedRepoRule) {
+                if (matchedRepoRule.profileName) {
+                    gotoTarget = `data-goto="profile:${escapeHtml(matchedRepoRule.profileName)}:${escapeHtml(key)}"`;
+                } else {
+                    gotoTarget = `data-goto="repo:${config.matchingIndexes.repoRule}"`;
+                }
+            } else if (matchedBranchRule) {
+                gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+            }
+
+            rows.push(`
+                <tr>
+                    <td class="goto-cell">
+                        <button class="goto-btn" ${gotoTarget} title="Go to source" aria-label="Go to source rule">
+                            ➜
+                        </button>
+                    </td>
+                    <td class="theme-key"><code>${escapeHtml(key)}</code></td>
+                    <td class="color-value">
+                        <div class="color-display">
+                            <span class="report-swatch" style="background-color: ${escapeHtml(color)};"></span>
+                            <span class="color-text">${escapeHtml(color)}</span>
+                        </div>
+                    </td>
+                    <td class="source-rule">${sourceInfo.description}</td>
+                </tr>
+            `);
+        }
+    });
+
+    console.log('[DEBUG] Generated rows:', rows.length);
+
+    if (rows.length === 0) {
+        container.innerHTML =
+            '<div class="no-rules">No colors are currently applied. Create and apply a repository or branch rule to see the color report.</div>';
+        return;
+    }
+
+    const tableHTML = `
+        <table class="report-table" role="table" aria-label="Applied colors report">
+            <thead>
+                <tr>
+                    <th scope="col" class="goto-col">Go To</th>
+                    <th scope="col">Theme Key</th>
+                    <th scope="col">Applied Color</th>
+                    <th scope="col">Applied By</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows.join('')}
+            </tbody>
+        </table>
+        <div class="report-footer">
+            <p><strong>Note:</strong> This report shows colors managed by Git Repo Window Colors. Other color customizations from your VS Code settings or theme are not shown.</p>
+        </div>
+    `;
+
+    console.log('[DEBUG] About to set innerHTML, container:', container);
+    console.log('[DEBUG] Table HTML length:', tableHTML.length);
+    container.innerHTML = tableHTML;
+    console.log('[DEBUG] innerHTML set, container.children.length:', container.children.length);
+}
+
 function updateBranchColumnVisibility() {
     const showBranchColumns = (document.getElementById('show-branch-columns') as HTMLInputElement)?.checked ?? true;
     const branchColumns = document.querySelectorAll('.branch-column');
@@ -1602,6 +1767,78 @@ function toggleRule(index: number, ruleType: string) {
 
     // Send updated configuration
     sendConfiguration();
+}
+
+function handleGotoSource(gotoData: string) {
+    const parts = gotoData.split(':');
+    const type = parts[0];
+
+    if (type === 'repo' || type === 'branch') {
+        // Navigate to Rules tab
+        const rulesTab = document.getElementById('tab-rules') as HTMLElement;
+        if (rulesTab) {
+            rulesTab.click();
+        }
+
+        // Find and highlight the rule
+        setTimeout(() => {
+            const index = parseInt(parts[1]);
+            const container =
+                type === 'repo'
+                    ? document.getElementById('repoRulesContent')
+                    : document.getElementById('branchRulesContent');
+            if (container) {
+                const rows = container.querySelectorAll('.rule-row');
+                if (rows[index]) {
+                    const targetRow = rows[index] as HTMLElement;
+                    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    targetRow.classList.add('highlight-fadeout');
+                    setTimeout(() => {
+                        targetRow.classList.remove('highlight-fadeout');
+                    }, 2000);
+                }
+            }
+        }, 100);
+    } else if (type === 'profile') {
+        // Navigate to Profiles tab
+        const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+        if (profilesTab) {
+            profilesTab.click();
+        }
+
+        // Highlight the profile and mapping
+        setTimeout(() => {
+            const profileName = parts[1];
+            const themeKey = parts[2];
+
+            // Select the profile in the list
+            const profileItems = document.querySelectorAll('.profile-item');
+            profileItems.forEach((item) => {
+                if ((item as HTMLElement).dataset.profileName === profileName) {
+                    (item as HTMLElement).click();
+                    (item as HTMLElement).classList.add('highlight-fadeout');
+                    setTimeout(() => {
+                        (item as HTMLElement).classList.remove('highlight-fadeout');
+                    }, 2000);
+                }
+            });
+
+            // Highlight the mapping row for this theme key
+            setTimeout(() => {
+                const mappingRows = document.querySelectorAll('.mapping-row');
+                mappingRows.forEach((row) => {
+                    const label = row.querySelector('.mapping-label');
+                    if (label && label.textContent?.includes(themeKey)) {
+                        (row as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        (row as HTMLElement).classList.add('highlight-fadeout');
+                        setTimeout(() => {
+                            (row as HTMLElement).classList.remove('highlight-fadeout');
+                        }, 2000);
+                    }
+                });
+            }, 200);
+        }, 100);
+    }
 }
 
 function updateOtherSetting(setting: string, value: any) {
