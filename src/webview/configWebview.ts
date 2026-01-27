@@ -195,6 +195,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _parseRepoRule(ruleString: string): RepoRule | null {
         try {
+            // Try parsing as JSON first (new format with enabled field)
+            if (ruleString.trim().startsWith('{')) {
+                const obj = JSON.parse(ruleString);
+                return {
+                    repoQualifier: obj.repoQualifier || '',
+                    defaultBranch: obj.defaultBranch,
+                    primaryColor: obj.primaryColor || '',
+                    branchColor: obj.branchColor,
+                    enabled: obj.enabled,
+                } as any;
+            }
+
+            // Otherwise parse legacy string format
             // Format: <repo-qualifier>[|<default-branch>]:<primary-color>[|<branch-color>]
             // Example: "myrepo|main:blue|green" or "myrepo:blue"
             const colonIndex = ruleString.indexOf(':');
@@ -242,6 +255,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _parseBranchRule(ruleString: string): BranchRule | null {
         try {
+            // Try parsing as JSON first (new format with enabled field)
+            if (ruleString.trim().startsWith('{')) {
+                const obj = JSON.parse(ruleString);
+                return {
+                    pattern: obj.pattern || '',
+                    color: obj.color || '',
+                    enabled: obj.enabled,
+                } as any;
+            }
+
+            // Otherwise parse legacy string format
             const parts = ruleString.split(':');
             if (parts.length < 2) {
                 return null;
@@ -296,6 +320,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // });
 
         for (let i = 0; i < repoRules.length; i++) {
+            // Skip disabled rules
+            if ((repoRules[i] as any).enabled === false) continue;
+
             // console.log(`[DEBUG] Testing repo rule ${i}: "${repoRules[i].repoQualifier}" against "${repositoryUrl}"`);
             if (repositoryUrl.includes(repoRules[i].repoQualifier)) {
                 // console.log(`[DEBUG] Repo rule ${i} matched! Returning index ${i}`);
@@ -318,6 +345,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // });
 
         for (let i = 0; i < branchRules.length; i++) {
+            // Skip disabled rules
+            if ((branchRules[i] as any).enabled === false) continue;
+
             // outputChannel.appendLine(
             //     `[DEBUG] Testing branch rule ${i}: "${branchRules[i].pattern}" against "${currentBranch}"`,
             // );
@@ -366,8 +396,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // Update branch rules
             if (data.branchRules) {
                 // console.log('[DEBUG] Updating branch rules:', data.branchRules);
-                const branchRulesArray = data.branchRules.map((rule: BranchRule) => {
+                const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
                     // console.log('[DEBUG]   branch rule:', rule);
+                    // If enabled field is explicitly false, store as JSON object
+                    if (rule.enabled === false) {
+                        return JSON.stringify({
+                            pattern: rule.pattern,
+                            color: rule.color,
+                            enabled: false,
+                        });
+                    }
+                    // Otherwise use legacy string format
                     return `${rule.pattern}:${rule.color}`;
                 });
                 updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
@@ -396,7 +435,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private _formatRepoRule(rule: RepoRule): string {
+    private _formatRepoRule(rule: RepoRule | any): string {
+        // If enabled field is explicitly false, store as JSON object
+        if (rule.enabled === false) {
+            return JSON.stringify({
+                repoQualifier: rule.repoQualifier,
+                defaultBranch: rule.defaultBranch,
+                primaryColor: rule.primaryColor,
+                branchColor: rule.branchColor,
+                enabled: false,
+            });
+        }
+
+        // Otherwise use legacy string format for backward compatibility
         let result = rule.repoQualifier;
         if (rule.defaultBranch) {
             result += `|${rule.defaultBranch}`;

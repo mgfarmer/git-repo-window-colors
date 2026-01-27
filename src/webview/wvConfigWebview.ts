@@ -666,6 +666,17 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle eye button (toggle enabled/disabled)
+    if (target.classList.contains('eye-btn')) {
+        const action = target.getAttribute('data-action');
+        const match = action?.match(/toggleRule\((\d+), '(\w+)'\)/);
+        if (match) {
+            const [, index, ruleType] = match;
+            toggleRule(parseInt(index), ruleType);
+        }
+        return;
+    }
+
     // Handle color swatches
     if (target.classList.contains('color-swatch')) {
         const action = target.getAttribute('data-action');
@@ -961,6 +972,11 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
             row.classList.add('matched-rule');
         }
 
+        // Add disabled class if rule is disabled
+        if (rule.enabled === false) {
+            row.classList.add('disabled-rule');
+        }
+
         row.innerHTML = createRepoRuleRowHTML(rule, index, rules.length);
         setupRepoRuleRowEvents(row, index);
     });
@@ -975,7 +991,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
 function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): string {
     return `
         <td class="reorder-controls">
-            ${createReorderControlsHTML(index, 'repo', totalCount)}
+            ${createReorderControlsHTML(index, 'repo', totalCount, rule)}
         </td>
         <td class="repo-rule-cell">
             <input type="text" 
@@ -1039,6 +1055,11 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
             row.classList.add('matched-rule');
         }
 
+        // Add disabled class if rule is disabled
+        if (rule.enabled === false) {
+            row.classList.add('disabled-rule');
+        }
+
         row.innerHTML = createBranchRuleRowHTML(rule, index, rules.length);
         setupBranchRuleRowEvents(row, index);
     });
@@ -1050,7 +1071,7 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
 function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): string {
     return `
         <td class="reorder-controls">
-            ${createReorderControlsHTML(index, 'branch', totalCount)}
+            ${createReorderControlsHTML(index, 'branch', totalCount, rule)}
         </td>
         <td>
             <input type="text" 
@@ -1116,7 +1137,11 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     }
 }
 
-function createReorderControlsHTML(index: number, ruleType: string, totalCount: number): string {
+function createReorderControlsHTML(index: number, ruleType: string, totalCount: number, rule: any): string {
+    const isEnabled = rule.enabled !== false;
+    const eyeIcon = isEnabled ? '👁️' : '⊗';
+    const eyeTitle = isEnabled ? 'Disable this rule' : 'Enable this rule';
+
     return `
         <div class="reorder-buttons">
             <div class="drag-handle tooltip right-tooltip" 
@@ -1141,6 +1166,10 @@ function createReorderControlsHTML(index: number, ruleType: string, totalCount: 
                     title="Move down"
                     aria-label="Move rule ${index + 1} down"
                     ${index === totalCount - 1 ? 'disabled' : ''}>▼</button>
+            <button class="eye-btn" 
+                    data-action="toggleRule(${index}, '${ruleType}')"
+                    title="${eyeTitle}"
+                    aria-label="Toggle ${ruleType} rule ${index + 1}">${eyeIcon}</button>
             <button class="delete-btn" 
                     data-action="delete${ruleType.charAt(0).toUpperCase() + ruleType.slice(1)}Rule(${index})"
                     title="Delete this rule"
@@ -1559,6 +1588,19 @@ function moveRule(index: number, ruleType: string, direction: number) {
 
     // Send updated configuration - backend will recalculate matching indexes and send back proper update
     // This will trigger a complete table refresh with correct highlighting
+    sendConfiguration();
+}
+
+function toggleRule(index: number, ruleType: string) {
+    if (!currentConfig) return;
+
+    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
+    if (!rules || !rules[index]) return;
+
+    // Toggle the enabled state (default to true if not set)
+    rules[index].enabled = rules[index].enabled === false ? true : false;
+
+    // Send updated configuration
     sendConfiguration();
 }
 

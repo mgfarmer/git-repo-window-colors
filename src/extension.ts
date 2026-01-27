@@ -181,6 +181,9 @@ function shouldShowStatusBarItem(): boolean {
 
     // Check if any rule matches current repo
     for (const rule of repoConfigList) {
+        // Skip disabled rules
+        if (rule.enabled === false) continue;
+
         if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
             return false; // Rule matches, so don't show
         }
@@ -212,6 +215,9 @@ function getCurrentMatchingRule(): RepoConfig | undefined {
     if (!repoConfigList) return undefined;
 
     for (const rule of repoConfigList) {
+        // Skip disabled rules
+        if (rule.enabled === false) continue;
+
         if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
             return rule;
         }
@@ -780,6 +786,9 @@ async function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined
     let repoConfig: RepoConfig | undefined = undefined;
     let item: RepoConfig;
     for (item of repoConfigList) {
+        // Skip disabled rules
+        if (item.enabled === false) continue;
+
         if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
             repoConfig = item;
             break;

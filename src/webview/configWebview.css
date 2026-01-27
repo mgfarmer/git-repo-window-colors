@@ -350,6 +350,32 @@ h2 {
 .rule-row.drag-over-bottom {
     border-bottom: 2px solid var(--vscode-focusBorder);
 }
+.rule-row.disabled-rule {
+    opacity: 0.4;
+}
+.rule-row.disabled-rule input,
+.rule-row.disabled-rule .color-input-wrapper {
+    opacity: 0.6;
+    pointer-events: none;
+}
+.eye-btn {
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    border: 1px solid var(--vscode-panel-border);
+    width: 15px;
+    height: 15px;
+    font-size: 10px;
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 3px;
+    margin-top: 0;
+}
+.eye-btn:hover {
+    background: var(--vscode-input-background);
+}
 .delete-btn {
     background: var(--vscode-editor-background);
     color: var(--vscode-foreground);
