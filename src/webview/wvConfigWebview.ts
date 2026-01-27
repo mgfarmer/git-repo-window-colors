@@ -45,6 +45,7 @@ interface Palette {
 interface MappingValue {
     slot: string;
     opacity?: number;
+    fixedColor?: string; // For when slot is '__fixed__'
 }
 
 interface SectionMappings {
@@ -3046,17 +3047,28 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 const mappingValue = profile.mappings[key];
                 let currentSlot: string;
                 let currentOpacity: number | undefined;
+                let currentFixedColor: string | undefined;
 
                 if (typeof mappingValue === 'string') {
                     currentSlot = mappingValue || 'none';
                     currentOpacity = undefined;
+                    currentFixedColor = undefined;
                 } else if (mappingValue) {
                     currentSlot = mappingValue.slot || 'none';
                     currentOpacity = mappingValue.opacity;
+                    currentFixedColor = mappingValue.fixedColor;
                 } else {
                     currentSlot = 'none';
                     currentOpacity = undefined;
+                    currentFixedColor = undefined;
                 }
+
+                // Container for dropdown (and potentially fixed color picker)
+                const dropdownContainer = document.createElement('div');
+                dropdownContainer.style.flex = '1';
+                dropdownContainer.style.display = 'flex';
+                dropdownContainer.style.gap = '8px';
+                dropdownContainer.style.alignItems = 'center';
 
                 const select = document.createElement('select');
                 select.title = `Select palette color for ${key}`;
@@ -3067,17 +3079,79 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 select.style.padding = '4px';
                 select.style.fontSize = '12px';
 
-                // Options: Palette keys + 'none', filtered based on element characteristics
-                const allOptions = ['none', ...Object.keys(profile.palette)];
-                const options = getFilteredPaletteOptions(key, allOptions);
-                options.forEach((opt) => {
+                // Add 'none' option
+                const noneOption = document.createElement('option');
+                noneOption.value = 'none';
+                noneOption.textContent = 'None';
+                if (currentSlot === 'none') noneOption.selected = true;
+                select.appendChild(noneOption);
+
+                // Add 'Fixed Color' option (always included)
+                const fixedOption = document.createElement('option');
+                fixedOption.value = '__fixed__';
+                fixedOption.textContent = 'Fixed Color';
+                if (currentSlot === '__fixed__') fixedOption.selected = true;
+                select.appendChild(fixedOption);
+
+                // Add palette slot options (filtered)
+                const allPaletteOptions = Object.keys(profile.palette);
+                const filteredPaletteOptions = getFilteredPaletteOptions(key, allPaletteOptions);
+                filteredPaletteOptions.forEach((opt) => {
                     const option = document.createElement('option');
                     option.value = opt;
-                    // Use friendly name for palette slots
                     option.textContent = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
                     if (opt === currentSlot) option.selected = true;
                     select.appendChild(option);
                 });
+
+                // Create fixed color picker (hidden by default)
+                const fixedColorPicker = document.createElement('div');
+                fixedColorPicker.style.display = currentSlot === '__fixed__' ? 'flex' : 'none';
+                fixedColorPicker.style.alignItems = 'center';
+                fixedColorPicker.style.gap = '5px';
+                fixedColorPicker.style.flex = '1';
+
+                const colorInput = document.createElement('input');
+                colorInput.type = 'color';
+                colorInput.className = 'native-color-input';
+                colorInput.value = convertColorToHex(currentFixedColor || '#4A90E2');
+                colorInput.title = 'Select color';
+
+                const randomBtn = document.createElement('button');
+                randomBtn.className = 'random-color-btn';
+                randomBtn.textContent = '🎲';
+                randomBtn.title = 'Generate random color';
+                randomBtn.style.flexShrink = '0';
+
+                const textInput = document.createElement('input');
+                textInput.type = 'text';
+                textInput.className = 'color-input text-input';
+                textInput.value = currentFixedColor || '#4A90E2';
+                textInput.placeholder = 'e.g., blue, #4A90E2';
+                textInput.style.flex = '1';
+                textInput.style.minWidth = '50px';
+                textInput.style.maxWidth = '90px';
+
+                fixedColorPicker.appendChild(randomBtn);
+                fixedColorPicker.appendChild(colorInput);
+                fixedColorPicker.appendChild(textInput);
+
+                // Update select width when fixed color is shown/hidden
+                const updateSelectWidth = () => {
+                    if (select.value === '__fixed__') {
+                        select.style.flex = '0 0 95px';
+                        select.style.width = '95px';
+                        fixedColorPicker.style.display = 'flex';
+                    } else {
+                        select.style.flex = '1';
+                        select.style.minWidth = 'auto';
+                        fixedColorPicker.style.display = 'none';
+                    }
+                };
+                updateSelectWidth();
+
+                dropdownContainer.appendChild(select);
+                dropdownContainer.appendChild(fixedColorPicker);
 
                 // Opacity control
                 const opacityContainer = document.createElement('div');
@@ -3121,7 +3195,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         opacityValue.style.opacity = '1';
                         opacityLabel.style.opacity = '1';
 
-                        if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        if (slotName === '__fixed__') {
+                            // Use the fixed color
+                            const color = convertColorToHex(textInput.value);
+                            opacitySlider.style.setProperty('--slider-color', color);
+                        } else if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
                             const profile = currentConfig.advancedProfiles[selectedProfileName];
                             const slotDef = profile.palette[slotName];
                             if (slotDef && slotDef.value) {
@@ -3158,6 +3236,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     const slotName = select.value;
                     if (slotName === 'none') {
                         colorSwatch.style.background = 'transparent';
+                    } else if (slotName === '__fixed__') {
+                        const color = convertColorToHex(textInput.value);
+                        const opacity = parseInt(opacitySlider.value) / 100;
+                        const rgbaColor = hexToRgba(color, opacity);
+                        colorSwatch.style.background = rgbaColor;
                     } else if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
                         const profile = currentConfig.advancedProfiles[selectedProfileName];
                         const slotDef = profile.palette[slotName];
@@ -3183,6 +3266,16 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                         if (newSlot === 'none') {
                             delete currentConfig.advancedProfiles[selectedProfileName].mappings[key];
+                        } else if (newSlot === '__fixed__') {
+                            // Store fixed color
+                            const mappingData: MappingValue = {
+                                slot: '__fixed__',
+                                fixedColor: textInput.value,
+                            };
+                            if (newOpacity < 1 && newOpacity >= 0) {
+                                mappingData.opacity = newOpacity;
+                            }
+                            currentConfig.advancedProfiles[selectedProfileName].mappings[key] = mappingData;
                         } else {
                             // Only store opacity if it's not 1.0 (default)
                             if (newOpacity < 1 && newOpacity >= 0) {
@@ -3205,7 +3298,38 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     updateSwatchColor();
                 };
 
+                // Fixed color picker event handlers
+                colorInput.onchange = () => {
+                    textInput.value = colorInput.value;
+                    updateMapping();
+                    updateSliderGradient();
+                    updateSwatchColor();
+                };
+
+                randomBtn.onclick = () => {
+                    const randomColor = getThemeAppropriateColor();
+                    textInput.value = randomColor;
+                    colorInput.value = convertColorToHex(randomColor);
+                    updateMapping();
+                    updateSliderGradient();
+                    updateSwatchColor();
+                };
+
+                textInput.oninput = () => {
+                    const hexColor = convertColorToHex(textInput.value);
+                    if (hexColor) {
+                        colorInput.value = hexColor;
+                    }
+                };
+
+                textInput.onchange = () => {
+                    updateMapping();
+                    updateSliderGradient();
+                    updateSwatchColor();
+                };
+
                 select.onchange = () => {
+                    updateSelectWidth();
                     updateMapping();
                     updateSliderGradient();
                     updateSwatchColor();
@@ -3287,7 +3411,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 opacitySlider.onchange = updateMapping;
 
                 row.appendChild(label);
-                row.appendChild(select);
+                row.appendChild(dropdownContainer);
                 row.appendChild(colorSwatch);
                 row.appendChild(opacityContainer);
                 grid.appendChild(row);
