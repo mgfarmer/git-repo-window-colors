@@ -1366,6 +1366,7 @@ async function exportConfiguration(): Promise<void> {
             showStatusIconWhenNoRuleMatches: config.get('showStatusIconWhenNoRuleMatches'),
             askToColorizeRepoWhenOpened: config.get('askToColorizeRepoWhenOpened'),
             enableProfilesAdvanced: config.get('enableProfilesAdvanced'),
+            advancedProfiles: config.get('advancedProfiles'),
             exportedAt: new Date().toISOString(),
             version: '1.5.0',
         };
@@ -1607,6 +1608,20 @@ async function importConfiguration(): Promise<void> {
                     importData.askToColorizeRepoWhenOpened,
                     vscode.ConfigurationTarget.Global,
                 ),
+            );
+        }
+        if (importData.enableProfilesAdvanced !== undefined) {
+            configUpdates.push(
+                config.update(
+                    'enableProfilesAdvanced',
+                    importData.enableProfilesAdvanced,
+                    vscode.ConfigurationTarget.Global,
+                ),
+            );
+        }
+        if (importData.advancedProfiles !== undefined) {
+            configUpdates.push(
+                config.update('advancedProfiles', importData.advancedProfiles, vscode.ConfigurationTarget.Global),
             );
         }
 
