@@ -114,30 +114,14 @@
         </p>
         <ul>
             <li><strong>Primary:</strong> Active Bg/Fg, Inactive Bg/Fg - Main UI colors (4 slots)</li>
-            <li><strong>Secondary:</strong> Active Bg/Fg, Inactive Bg/Fg - Accent colors (4 slots)</li>
-            <li><strong>Tertiary:</strong> Terminal Bg/Fg - Terminal-specific colors (2 slots)</li>
-            <li><strong>Quaternary:</strong> Bg/Fg - Additional utility colors (2 slots)</li>
-        </ul>
-
-        <h3>Palette Slot Configuration</h3>
-        <p>Each palette slot can be configured with:</p>
-        <ul>
-            <li><strong>Source:</strong>
-                <ul>
-                    <li><code>Repository Color</code> - Uses the matched repository color</li>
-                    <li><code>Branch Color</code> - Uses the matched branch color</li>
-                    <li><code>Fixed Color</code> - A specific color you define</li>
-                    <li><code>Transparent</code> - No color (transparent)</li>
-                </ul>
-            </li>
-            <li><strong>Opacity:</strong> Adjust transparency (0-100%)</li>
-            <li><strong>Lighten/Darken:</strong> Adjust brightness (-100 to +100)</li>
-            <li><strong>High Contrast:</strong> Generate maximum contrast against repo/branch color</li>
+            <li><strong>Secondary:</strong> Active Bg/Fg, Inactive Bg/Fg - Primary Accent colors (4 slots)</li>
+            <li><strong>Tertiary:</strong> Bg/Fg - Accent colors (2 slots)</li>
+            <li><strong>Quaternary:</strong> Bg/Fg - Additional accent colors (2 slots)</li>
         </ul>
 
         <div class="note">
             <strong>Reference Colors:</strong> The 12 palette slots are "reference colors" - they're defined once in the palette 
-            and then referenced by multiple theme keys. This makes it easy to maintain consistent coloring across your UI.
+            and then referenced by one or more theme keys. This makes it easy to maintain consistent coloring across your UI.
         </div>
 </invoke>
 
@@ -159,7 +143,7 @@
         <h3>Mapping Options</h3>
         <p>For each theme key, you can choose:</p>
         <ul>
-            <li><strong>None:</strong> Don't set this theme key</li>
+            <li><strong>None:</strong> Don't set this theme key.  Your VS Code theme's default will be used.</li>
             <li><strong>Fixed Color:</strong> Assign a specific color (not from the palette)</li>
             <li><strong>Palette Slot:</strong> Reference one of your 12 palette slots</li>
         </ul>
@@ -181,8 +165,8 @@
         </p>
         <ol>
             <li>Go to the <strong>Rules</strong> tab</li>
-            <li>In a repository or branch rule, find the <strong>Profile</strong> dropdown</li>
-            <li>Select your profile instead of (or in addition to) a simple color</li>
+            <li>In a repository or branch rule, Click in the "Color or Profile" field.</li>
+            <li>Start typing the name of your profile and select it from the dropdown</li>
         </ol>
 
         <div class="note">
@@ -199,24 +183,14 @@
             You have two ways to assign colors to theme keys:
         </p>
         <ul>
-            <li><strong>Fixed Color:</strong> A specific color set directly on the theme key. Use this for elements that should always have the same color regardless of the palette.</li>
+            <li><strong>Fixed Color:</strong> A specific color set directly on the theme key. Use this for elements that should always have the same color regardless of the palette.  Select 'Fixed Color' from the drop down.  A new color specifier will appear for you to enter the color. </li>
             <li><strong>Reference Color (Palette Slot):</strong> A reference to a palette slot that derives its color from the repository/branch. Use this for elements that should adapt based on the active repository/branch.</li>
         </ul>
-
-        <div class="example">
-            <strong>Example Workflow:</strong><br>
-            1. Create a profile named "Dark Theme Custom"<br>
-            2. Set Primary Active Bg to "Repository Color" (100% opacity, -20 darken)<br>
-            3. Set Primary Active Fg to "Fixed Color" #FFFFFF with "High Contrast"<br>
-            4. Map <code>titleBar.activeBackground</code> → Primary Active Bg<br>
-            5. Map <code>titleBar.activeForeground</code> → Primary Active Fg<br>
-            6. Apply this profile to your repository rule
-        </div>
 
         <h2>Best Practices</h2>
         <ul>
             <li>Start with a simple profile and gradually add mappings</li>
-            <li>Use Primary slots for most important UI elements (title bar, activity bar)</li>
+            <li>Use Primary slots for most prominent UI elements (title bar, activity bar)</li>
             <li>Use Secondary slots for less prominent elements (status bar)</li>
             <li>Test your profile with different repository/branch colors</li>
             <li>Create multiple profiles for different use cases (light themes, dark themes, etc.)</li>

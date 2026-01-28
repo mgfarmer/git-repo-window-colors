@@ -531,7 +531,7 @@ h2 {
 }
 
 .setting-item.range-slider label {
-    flex: 1;
+    flex: none;
     color: var(--vscode-foreground);
 }
 
@@ -960,6 +960,27 @@ button:focus {
 
 .color-autocomplete-item:last-child {
     border-bottom: none;
+}
+
+.color-autocomplete-separator {
+    padding: 6px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--vscode-descriptionForeground);
+    background: var(--vscode-editor-background);
+    border-top: 1px solid var(--vscode-panel-border);
+    border-bottom: 1px solid var(--vscode-panel-border);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.color-autocomplete-placeholder {
+    padding: 4px 8px;
+    font-size: 12px;
+    font-style: italic;
+    color: var(--vscode-disabledForeground);
+    text-align: center;
+    pointer-events: none;
 }
 
 .color-autocomplete-item:hover,

@@ -229,6 +229,19 @@ function getCurrentMatchingRule(): RepoConfig | undefined {
 export async function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
 
+    // Test newly added contributions...
+    try {
+        workspace.getConfiguration('windowColors').get('advancedProfiles') as {
+            [key: string]: AdvancedProfile;
+        };
+    } catch (error) {
+        const msg =
+            'Please restart VS Code to enable new Git Repo Window Colors features.  The extension will not work until you do.  If you are using Settings Sync, please make sure all your VS Code installations are using the same version of this extension.';
+        vscode.window.showInformationMessage(msg);
+        outputChannel.appendLine(msg);
+        return;
+    }
+
     // Create status bar item
     createStatusBarItem(context);
 
@@ -622,7 +635,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
 
     // NEW LOGIC: Check for Profiles (get once before loop)
     const advancedProfiles =
-        (workspace.getConfiguration('windowColors').get('advancedProfiles') as { [key: string]: any }) || {};
+        (workspace.getConfiguration('windowColors').get('advancedProfiles', {}) as { [key: string]: any }) || {};
 
     for (const item in json) {
         let error = false;
@@ -1035,8 +1048,9 @@ async function doit(reason: string) {
 
     let newColors: any = {};
     const advancedProfiles =
-        (workspace.getConfiguration('windowColors').get('advancedProfiles') as { [key: string]: AdvancedProfile }) ||
-        {};
+        (workspace.getConfiguration('windowColors').get('advancedProfiles', {}) as {
+            [key: string]: AdvancedProfile;
+        }) || {};
 
     outputChannel.appendLine(`  Available profiles: ${Object.keys(advancedProfiles).join(', ')}`);
 
@@ -1222,6 +1236,15 @@ async function doit(reason: string) {
     for (const [key, value] of Object.entries(newColors)) {
         if (value !== undefined) {
             finalColors[key] = value;
+        }
+    }
+
+    // Ensure any managed colors that should be "None" (not in newColors or undefined) are removed
+    // This guarantees that profile settings with "None" don't leave stale colors in settings.json
+    for (const key of managedColors) {
+        if (newColors[key] === undefined && finalColors[key] !== undefined) {
+            delete finalColors[key];
+            outputChannel.appendLine(`  Removed stale color: ${key}`);
         }
     }
 

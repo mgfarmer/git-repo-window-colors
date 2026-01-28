@@ -1028,6 +1028,11 @@ function handleDocumentFocusIn(event: FocusEvent) {
             originalInputValues.set(target, target.value);
         }
     }
+
+    // Show autocomplete dropdown immediately when focusing color input
+    if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
+        handleColorInputAutoComplete(target);
+    }
 }
 
 function handleDocumentFocusOut(event: FocusEvent) {
@@ -1122,12 +1127,14 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     // Create header
     const thead = table.createTHead();
     const headerRow = thead.insertRow();
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+    const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
-        <th scope="col">Primary Color</th>
+        <th scope="col">Primary Color${colorSuffix}</th>
         <th scope="col" class="branch-column">Default Branch</th>
-        <th scope="col" class="branch-column">Branch Color</th>
+        <th scope="col" class="branch-column">Branch Color${colorSuffix}</th>
     `;
 
     // Create body
@@ -1208,10 +1215,12 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
     // Create header
     const thead = table.createTHead();
     const headerRow = thead.insertRow();
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+    const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
         <th scope="col">Actions</th>
         <th scope="col">Branch Pattern</th>
-        <th scope="col">Color</th>
+        <th scope="col">Color${colorSuffix}</th>
     `;
 
     // Create body
@@ -1260,6 +1269,8 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
 
 function createColorInputHTML(color: string, ruleType: string, index: number, field: string): string {
     const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+    const placeholder = profilesEnabled ? 'e.g., blue, #4A90E2, MyProfile' : 'e.g., blue, #4A90E2';
 
     if (USE_NATIVE_COLOR_PICKER) {
         const hexColor = convertColorToHex(color);
@@ -1278,7 +1289,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                 <input type="text" 
                        class="color-input text-input" 
                        value="${color || ''}" 
-                       placeholder="e.g., blue, #4A90E2"
+                       placeholder="${placeholder}"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        data-input-action="syncColorInputs('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color text for ${ruleType} rule ${index + 1} ${field}">
@@ -1299,7 +1310,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                        class="color-input" 
                        id="${ruleType}-${field}-${index}"
                        value="${color || ''}" 
-                       placeholder="e.g., blue, #4A90E2"
+                       placeholder="${placeholder}"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
             </div>
@@ -2721,12 +2732,9 @@ function clearRegexValidationError() {
 function handleColorInputAutoComplete(input: HTMLInputElement) {
     const value = input.value.toLowerCase().trim();
 
-    if (value.length === 0) {
-        hideAutoCompleteDropdown();
-        return;
-    }
-
     const matches: string[] = [];
+    const profileMatches: string[] = [];
+    const colorMatches: string[] = [];
 
     // Check if this is a palette slot input (should not show profiles)
     const isPaletteSlot = input.hasAttribute('data-palette-slot');
@@ -2734,26 +2742,54 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
     // Check if profiles are enabled
     const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
 
-    // 1. Add matching profile names first (only for non-palette inputs and when profiles are enabled)
-    if (!isPaletteSlot && profilesEnabled && currentConfig?.advancedProfiles) {
-        const profileNames = Object.keys(currentConfig.advancedProfiles);
-        profileNames.forEach((name) => {
-            if (name.toLowerCase().includes(value)) {
-                matches.push(name);
+    // 1. Add profile section (only for non-palette inputs and when profiles are enabled)
+    if (!isPaletteSlot && profilesEnabled) {
+        matches.push('__PROFILES_HEADER__'); // Special marker for "Profiles" header
+
+        if (currentConfig?.advancedProfiles) {
+            const profileNames = Object.keys(currentConfig.advancedProfiles);
+            profileNames.forEach((name) => {
+                if (value.length === 0 || name.toLowerCase().includes(value)) {
+                    profileMatches.push(name);
+                }
+            });
+
+            if (profileMatches.length > 0) {
+                matches.push(...profileMatches);
+            } else if (profileNames.length === 0 && value.length === 0) {
+                // No profiles defined at all and filter is empty
+                matches.push('__NO_PROFILES__'); // Special marker for "none defined"
+            } else if (value.length > 0) {
+                // Profiles exist but none match the filter
+                matches.push('__NO_MATCHES__'); // Special marker for "no matches"
             }
-        });
+        } else if (value.length === 0) {
+            // Profiles are enabled but none are defined and filter is empty
+            matches.push('__NO_PROFILES__'); // Special marker for "none defined"
+        }
     }
 
     // 2. Add matching color names
-    const colorMatches = HTML_COLOR_NAMES.filter((colorName) => colorName.toLowerCase().includes(value));
+    if (value.length === 0) {
+        // Show all color names when field is empty
+        colorMatches.push(...HTML_COLOR_NAMES);
+    } else {
+        // Filter color names based on input
+        colorMatches.push(...HTML_COLOR_NAMES.filter((colorName) => colorName.toLowerCase().includes(value)));
+    }
+
+    // Add color separator and colors
+    if (matches.length > 0 && colorMatches.length > 0) {
+        matches.push('__COLORS_SEPARATOR__'); // Special marker for "Colors" separator
+    }
     matches.push(...colorMatches);
 
-    if (matches.length === 0) {
+    if (matches.length === 0 || (matches.length === 1 && matches[0] === '__SEPARATOR__')) {
         hideAutoCompleteDropdown();
         return;
     }
 
-    showAutoCompleteDropdown(input, matches.slice(0, 20)); // Show max 20 suggestions
+    showAutoCompleteDropdown(input, matches.slice(0, 50)); // Show max 50 suggestions (more room with all profiles)
 }
 
 function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]) {
@@ -2764,12 +2800,49 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
     dropdown.setAttribute('role', 'listbox');
     dropdown.setAttribute('aria-label', 'Color name suggestions');
 
+    let selectableIndex = 0; // Track actual selectable items (excluding separator)
     suggestions.forEach((suggestion, index) => {
+        // Handle Profiles header
+        if (suggestion === '__PROFILES_HEADER__') {
+            const header = document.createElement('div');
+            header.className = 'color-autocomplete-separator';
+            header.textContent = 'Profiles';
+            dropdown.appendChild(header);
+            return; // Don't increment selectableIndex
+        }
+
+        // Handle "no profiles defined" placeholder
+        if (suggestion === '__NO_PROFILES__') {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'color-autocomplete-placeholder';
+            placeholder.textContent = 'none defined';
+            dropdown.appendChild(placeholder);
+            return; // Don't increment selectableIndex
+        }
+
+        // Handle "no matches" placeholder
+        if (suggestion === '__NO_MATCHES__') {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'color-autocomplete-placeholder';
+            placeholder.textContent = 'no matches';
+            dropdown.appendChild(placeholder);
+            return; // Don't increment selectableIndex
+        }
+
+        // Handle Colors separator
+        if (suggestion === '__COLORS_SEPARATOR__') {
+            const separator = document.createElement('div');
+            separator.className = 'color-autocomplete-separator';
+            separator.textContent = 'Colors';
+            dropdown.appendChild(separator);
+            return; // Don't increment selectableIndex
+        }
+
         const item = document.createElement('div');
         item.className = 'color-autocomplete-item';
         item.setAttribute('role', 'option');
         item.textContent = suggestion;
-        item.dataset.index = index.toString();
+        item.dataset.index = selectableIndex.toString();
         item.dataset.value = suggestion; // Store original value
 
         // Add color preview (only for actual color names, not profile references)
@@ -2794,11 +2867,12 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
         });
 
         item.addEventListener('mouseenter', () => {
-            selectedSuggestionIndex = index;
+            selectedSuggestionIndex = selectableIndex;
             updateAutoCompleteSelection();
         });
 
         dropdown.appendChild(item);
+        selectableIndex++;
     });
 
     // Position dropdown below input
@@ -4286,7 +4360,7 @@ function createPaletteSlotElement(
     textInput.type = 'text';
     textInput.className = 'color-input text-input';
     textInput.value = def.value || '#000000';
-    textInput.placeholder = 'e.g., blue, #4A90E2';
+    textInput.placeholder = 'e.g., blue, #4A90E2'; // No profile example here - palette slots are color definitions
     textInput.style.maxWidth = '90px';
     textInput.setAttribute('data-palette-slot', 'true'); // Mark as palette slot input
 
