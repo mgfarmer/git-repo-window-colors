@@ -1,79 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <style>
-        body {
-            font-family: var(--vscode-font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
-            color: var(--vscode-foreground, #cccccc);
-            background: var(--vscode-editor-background, #1e1e1e);
-            padding: 20px;
-            margin: 0;
-            line-height: 1.6;
-        }
-        h1 {
-            color: var(--vscode-foreground, #cccccc);
-            border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
-            padding-bottom: 10px;
-            margin-top: 0;
-        }
-        h2 {
-            color: var(--vscode-foreground, #cccccc);
-            margin-top: 24px;
-            margin-bottom: 12px;
-        }
-        h3 {
-            color: var(--vscode-foreground, #cccccc);
-            margin-top: 20px;
-            margin-bottom: 10px;
-        }
-        p {
-            margin: 10px 0;
-        }
-        code {
-            background: var(--vscode-textCodeBlock-background, #2d2d2d);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: var(--vscode-editor-font-family, 'Courier New', monospace);
-            font-size: 0.9em;
-        }
-        ul {
-            margin: 10px 0;
-            padding-left: 25px;
-        }
-        li {
-            margin: 8px 0;
-        }
-        strong {
-            color: var(--vscode-foreground, #cccccc);
-        }
-        .note {
-            background: var(--vscode-textBlockQuote-background, #2d2d2d);
-            border-left: 4px solid var(--vscode-textLink-foreground, #3794ff);
-            padding: 12px 16px;
-            margin: 16px 0;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 16px 0;
-        }
-        th, td {
-            border: 1px solid var(--vscode-panel-border, #3c3c3c);
-            padding: 8px 12px;
-            text-align: left;
-        }
-        th {
-            background: var(--vscode-editor-background, #1e1e1e);
-            font-weight: bold;
-        }
-        .link-example {
-            color: var(--vscode-textLink-foreground, #3794ff);
-            text-decoration: underline;
-            cursor: pointer;
-        }
-    </style>
+    <link rel="stylesheet" href="help.css">
 </head>
 <body>
+    <div class="help-content">
+    <div class="help-toc">
+        <h3>Help Topics</h3>
+        <ul>
+            <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+            <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+            <li><a class="current">Color Report Guide</a> (current)</li>
+        </ul>
+    </div>
     <h1>Color Report Help</h1>
     
     <p>The Color Report shows all VS Code theme keys currently being colored by this extension, along with their applied colors and the source rule or profile applying them.</p>
@@ -187,5 +126,15 @@
         <li>Modify the color, palette slot, or mapping as needed</li>
         <li>Return to the Color Report to verify your changes</li>
     </ol>
+    <script>
+        // Add click handlers to TOC links
+        document.querySelectorAll('[data-switch-help]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = link.getAttribute('data-switch-help');
+                window.parent.postMessage({command: 'switchHelp', target: target}, '*');
+            });
+        });
+    </script>
 </body>
 </html>

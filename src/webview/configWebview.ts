@@ -546,8 +546,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'profile-help.html');
+            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
+
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            const contentString = Buffer.from(helpContent).toString('utf8');
+            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
+
+            let contentString = Buffer.from(helpContent).toString('utf8');
+            const cssString = Buffer.from(cssContent).toString('utf8');
+
+            // Replace the external CSS link with inline styles
+            contentString = contentString.replace(
+                '<link rel="stylesheet" href="help.css">',
+                `<style>${cssString}</style>`,
+            );
 
             this._panel.webview.postMessage({
                 command: 'profileHelpContent',
@@ -566,8 +577,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'rules-help.html');
+            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
+
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            const contentString = Buffer.from(helpContent).toString('utf8');
+            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
+
+            let contentString = Buffer.from(helpContent).toString('utf8');
+            const cssString = Buffer.from(cssContent).toString('utf8');
+
+            // Replace the external CSS link with inline styles
+            contentString = contentString.replace(
+                '<link rel="stylesheet" href="help.css">',
+                `<style>${cssString}</style>`,
+            );
 
             this._panel.webview.postMessage({
                 command: 'rulesHelpContent',
@@ -586,8 +608,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'report-help.html');
+            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
+
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            const contentString = Buffer.from(helpContent).toString('utf8');
+            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
+
+            let contentString = Buffer.from(helpContent).toString('utf8');
+            const cssString = Buffer.from(cssContent).toString('utf8');
+
+            // Replace the external CSS link with inline styles
+            contentString = contentString.replace(
+                '<link rel="stylesheet" href="help.css">',
+                `<style>${cssString}</style>`,
+            );
 
             this._panel.webview.postMessage({
                 command: 'reportHelpContent',
@@ -680,7 +713,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 font-src ${webview.cspSource}; 
                 img-src ${webview.cspSource}; 
                 style-src 'unsafe-inline' ${webview.cspSource}; 
-                script-src 'nonce-${nonce}';">
+                script-src 'nonce-${nonce}' 'unsafe-hashes' 'sha256-gSUJDFO6dVVSzJBjt/ad5vjTT30fEl6Qp8+pOF+VYRs=';
+                frame-src 'self' data:;">
             
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Git Repo Window Colors Configuration</title>
@@ -958,39 +992,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             
             </div>
             
-            <!-- Help Panels -->
-            <!-- Profile Help Panel -->
-            <div class="help-panel-overlay" id="profileHelpPanelOverlay" data-action="closeProfileHelp"></div>
-            <div class="help-panel" id="profileHelpPanel">
+            <!-- Help Panel (Unified) -->
+            <div class="help-panel-overlay" id="helpPanelOverlay" data-action="closeHelp"></div>
+            <div class="help-panel" id="helpPanel">
                 <div class="help-panel-header">
-                    <h2 class="help-panel-title">Profile Help</h2>
-                    <button type="button" class="help-panel-close" data-action="closeProfileHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
+                    <h2 class="help-panel-title" id="helpPanelTitle">Help</h2>
+                    <button type="button" class="help-panel-close" data-action="closeHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
                 </div>
-                <div class="help-panel-content" id="profileHelpPanelContent">
-                    <!-- Help content will be loaded here -->
-                </div>
-            </div>
-            
-            <!-- Rules Help Panel -->
-            <div class="help-panel-overlay" id="rulesHelpPanelOverlay" data-action="closeRulesHelp"></div>
-            <div class="help-panel" id="rulesHelpPanel">
-                <div class="help-panel-header">
-                    <h2 class="help-panel-title">Rules Help</h2>
-                    <button type="button" class="help-panel-close" data-action="closeRulesHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
-                </div>
-                <div class="help-panel-content" id="rulesHelpPanelContent">
-                    <!-- Help content will be loaded here -->
-                </div>
-            </div>
-            
-            <!-- Report Help Panel -->
-            <div class="help-panel-overlay" id="reportHelpPanelOverlay" data-action="closeReportHelp"></div>
-            <div class="help-panel" id="reportHelpPanel">
-                <div class="help-panel-header">
-                    <h2 class="help-panel-title">Color Report Help</h2>
-                    <button type="button" class="help-panel-close" data-action="closeReportHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
-                </div>
-                <div class="help-panel-content" id="reportHelpPanelContent">
+                <div class="help-panel-content" id="helpPanelContent">
                     <!-- Help content will be loaded here -->
                 </div>
             </div>

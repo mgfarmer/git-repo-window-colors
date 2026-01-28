@@ -494,6 +494,7 @@ function getSmartBranchDefaults(): string {
 // Message handler for extension communication
 window.addEventListener('message', (event) => {
     const message = event.data;
+    console.log('[Message Listener] Received message:', message.command);
 
     switch (message.command) {
         case 'configData':
@@ -522,6 +523,15 @@ window.addEventListener('message', (event) => {
                 confirmDeleteProfile(message.data.profileName);
             }
             break;
+    }
+});
+
+// Listen for messages from help iframe content
+window.addEventListener('message', (event) => {
+    // Check if the message is from our iframe (help content)
+    if (event.data && event.data.command === 'switchHelp') {
+        console.log('[TOC Navigation] Received switchHelp message from iframe:', event.data.target);
+        handleSwitchHelp(event.data.target);
     }
 });
 
@@ -584,114 +594,141 @@ function handleDeleteConfirmed(data: any) {
     }
 }
 
+function injectThemeVariables(htmlContent: string): string {
+    // Get all CSS variables from the document root
+    const styles = getComputedStyle(document.documentElement);
+    const cssVars: string[] = [];
+
+    // Collect all --vscode-* variables
+    for (let i = 0; i < styles.length; i++) {
+        const prop = styles[i];
+        if (prop.startsWith('--vscode-')) {
+            const value = styles.getPropertyValue(prop);
+            if (value) {
+                cssVars.push(`${prop}: ${value};`);
+            }
+        }
+    }
+
+    // Inject the variables into the HTML
+    const styleBlock = `<style>:root { ${cssVars.join(' ')} }</style>`;
+    return htmlContent.replace('</head>', `${styleBlock}</head>`);
+}
+
 function handleProfileHelpContent(data: { content: string }) {
-    const contentDiv = document.getElementById('profileHelpPanelContent');
+    console.log('[TOC Navigation] handleProfileHelpContent called, content length:', data.content?.length);
+    const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         // Create an iframe to display the HTML content
         const iframe = document.createElement('iframe');
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.style.border = 'none';
-        iframe.srcdoc = data.content;
+        iframe.srcdoc = injectThemeVariables(data.content);
         contentDiv.innerHTML = '';
         contentDiv.appendChild(iframe);
+        console.log('[TOC Navigation] Profile help content loaded into iframe');
     }
 }
 
 function handleRulesHelpContent(data: { content: string }) {
-    const contentDiv = document.getElementById('rulesHelpPanelContent');
+    console.log('[TOC Navigation] handleRulesHelpContent called, content length:', data.content?.length);
+    const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         // Create an iframe to display the HTML content
         const iframe = document.createElement('iframe');
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.style.border = 'none';
-        iframe.srcdoc = data.content;
+        iframe.srcdoc = injectThemeVariables(data.content);
         contentDiv.innerHTML = '';
         contentDiv.appendChild(iframe);
-    }
-}
-
-function openProfileHelp() {
-    // Request help content from backend
-    vscode.postMessage({
-        command: 'requestProfileHelp',
-    });
-
-    // Show the help panel
-    const overlay = document.getElementById('profileHelpPanelOverlay');
-    const panel = document.getElementById('profileHelpPanel');
-    if (overlay && panel) {
-        overlay.classList.add('active');
-        panel.classList.add('active');
-    }
-}
-
-function closeProfileHelp() {
-    const overlay = document.getElementById('profileHelpPanelOverlay');
-    const panel = document.getElementById('profileHelpPanel');
-    if (overlay && panel) {
-        overlay.classList.remove('active');
-        panel.classList.remove('active');
-    }
-}
-
-function openRulesHelp() {
-    // Request help content from backend
-    vscode.postMessage({
-        command: 'requestRulesHelp',
-    });
-
-    // Show the help panel
-    const overlay = document.getElementById('rulesHelpPanelOverlay');
-    const panel = document.getElementById('rulesHelpPanel');
-    if (overlay && panel) {
-        overlay.classList.add('active');
-        panel.classList.add('active');
-    }
-}
-
-function closeRulesHelp() {
-    const overlay = document.getElementById('rulesHelpPanelOverlay');
-    const panel = document.getElementById('rulesHelpPanel');
-    if (overlay && panel) {
-        overlay.classList.remove('active');
-        panel.classList.remove('active');
-    }
-}
-
-function openReportHelp() {
-    vscode.postMessage({ command: 'requestReportHelp' });
-
-    // Show the help panel
-    const overlay = document.getElementById('reportHelpPanelOverlay');
-    const panel = document.getElementById('reportHelpPanel');
-    if (overlay && panel) {
-        overlay.classList.add('active');
-        panel.classList.add('active');
-    }
-}
-
-function closeReportHelp() {
-    const overlay = document.getElementById('reportHelpPanelOverlay');
-    const panel = document.getElementById('reportHelpPanel');
-    if (overlay && panel) {
-        overlay.classList.remove('active');
-        panel.classList.remove('active');
+        console.log('[TOC Navigation] Rules help content loaded into iframe');
     }
 }
 
 function handleReportHelpContent(data: any) {
-    const contentDiv = document.getElementById('reportHelpPanelContent');
+    console.log('[TOC Navigation] handleReportHelpContent called, content length:', data.content?.length);
+    const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         // Create an iframe to display the HTML content
         const iframe = document.createElement('iframe');
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.style.border = 'none';
-        iframe.srcdoc = data.content;
+        iframe.srcdoc = injectThemeVariables(data.content);
         contentDiv.innerHTML = '';
         contentDiv.appendChild(iframe);
+        console.log('[TOC Navigation] Report help content loaded into iframe');
+    }
+}
+
+function handleSwitchHelp(target: string) {
+    console.log('[TOC Navigation] handleSwitchHelp called with target:', target);
+
+    // Set the panel title
+    const titleElement = document.getElementById('helpPanelTitle');
+    if (titleElement) {
+        if (target === 'profile') {
+            titleElement.textContent = 'Profiles Guide';
+        } else if (target === 'rules') {
+            titleElement.textContent = 'Rules Guide';
+        } else if (target === 'report') {
+            titleElement.textContent = 'Color Report Guide';
+        }
+        console.log('[TOC Navigation] Updated panel title to:', titleElement.textContent);
+    }
+
+    // Request the new content
+    if (target === 'profile') {
+        console.log('[TOC Navigation] Requesting profile help from extension');
+        vscode.postMessage({ command: 'requestProfileHelp' });
+    } else if (target === 'rules') {
+        console.log('[TOC Navigation] Requesting rules help from extension');
+        vscode.postMessage({ command: 'requestRulesHelp' });
+    } else if (target === 'report') {
+        console.log('[TOC Navigation] Requesting report help from extension');
+        vscode.postMessage({ command: 'requestReportHelp' });
+    }
+}
+
+function openHelp(helpType: string) {
+    // Set the panel title
+    const titleElement = document.getElementById('helpPanelTitle');
+    if (titleElement) {
+        if (helpType === 'profile') {
+            titleElement.textContent = 'Profiles Guide';
+        } else if (helpType === 'rules') {
+            titleElement.textContent = 'Rules Guide';
+        } else if (helpType === 'report') {
+            titleElement.textContent = 'Color Report Guide';
+        }
+    }
+
+    // Request help content from backend
+    if (helpType === 'profile') {
+        vscode.postMessage({ command: 'requestProfileHelp' });
+    } else if (helpType === 'rules') {
+        vscode.postMessage({ command: 'requestRulesHelp' });
+    } else if (helpType === 'report') {
+        vscode.postMessage({ command: 'requestReportHelp' });
+    }
+
+    // Show the help panel
+    const overlay = document.getElementById('helpPanelOverlay');
+    const panel = document.getElementById('helpPanel');
+    if (overlay && panel) {
+        overlay.classList.add('active');
+        panel.classList.add('active');
+    }
+}
+
+function closeHelp() {
+    const overlay = document.getElementById('helpPanelOverlay');
+    const panel = document.getElementById('helpPanel');
+    if (overlay && panel) {
+        overlay.classList.remove('active');
+        panel.classList.remove('active');
     }
 }
 
@@ -844,43 +881,18 @@ function handleDocumentClick(event: Event) {
     if (target.closest('[data-action="openContextualHelp"]')) {
         const activeTab = document.querySelector('.tab-content.active');
         if (activeTab?.id === 'rules-tab') {
-            openRulesHelp();
+            openHelp('rules');
         } else if (activeTab?.id === 'profiles-tab') {
-            openProfileHelp();
+            openHelp('profile');
         } else if (activeTab?.id === 'report-tab') {
-            openReportHelp();
+            openHelp('report');
         }
         return;
     }
 
-    // Handle help panel buttons
-    if (target.closest('[data-action="openProfileHelp"]')) {
-        openProfileHelp();
-        return;
-    }
-
-    if (target.closest('[data-action="closeProfileHelp"]')) {
-        closeProfileHelp();
-        return;
-    }
-
-    if (target.closest('[data-action="openRulesHelp"]')) {
-        openRulesHelp();
-        return;
-    }
-
-    if (target.closest('[data-action="closeRulesHelp"]')) {
-        closeRulesHelp();
-        return;
-    }
-
-    if (target.closest('[data-action="openReportHelp"]')) {
-        openReportHelp();
-        return;
-    }
-
-    if (target.closest('[data-action="closeReportHelp"]')) {
-        closeReportHelp();
+    // Handle help panel close buttons
+    if (target.closest('[data-action="closeHelp"]')) {
+        closeHelp();
         return;
     }
 

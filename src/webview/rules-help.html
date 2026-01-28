@@ -4,117 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rules Help</title>
-    <style>
-        body {
-            font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif);
-            font-size: var(--vscode-font-size, 13px);
-            color: var(--vscode-foreground, #cccccc);
-            background-color: var(--vscode-editor-background, #1e1e1e);
-            line-height: 1.6;
-            margin: 0;
-            padding: 0;
-        }
-        .help-content {
-            padding: 20px;
-            max-width: 800px;
-            color: var(--vscode-foreground, #cccccc);
-        }
-        h1 {
-            font-size: 1.5em;
-            margin-top: 0;
-            margin-bottom: 1em;
-            color: var(--vscode-foreground, #cccccc);
-            border-bottom: 1px solid var(--vscode-panel-border, #454545);
-            padding-bottom: 0.5em;
-        }
-        h2 {
-            font-size: 1.2em;
-            margin-top: 1.5em;
-            margin-bottom: 0.8em;
-            color: var(--vscode-foreground, #cccccc);
-        }
-        h3 {
-            font-size: 1.05em;
-            margin-top: 1.2em;
-            margin-bottom: 0.6em;
-            color: var(--vscode-foreground, #cccccc);
-        }
-        p {
-            margin-bottom: 1em;
-            color: var(--vscode-foreground, #cccccc);
-        }
-        ul, ol {
-            margin-bottom: 1em;
-            padding-left: 2em;
-            color: var(--vscode-foreground, #cccccc);
-        }
-        li {
-            margin-bottom: 0.5em;
-            color: var(--vscode-foreground, #cccccc);
-        }
-        code {
-            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
-            color: var(--vscode-textPreformat-foreground, #d7ba7d);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
-            font-size: 0.9em;
-        }
-        .note {
-            background-color: var(--vscode-inputValidation-infoBackground, rgba(75, 166, 251, 0.2));
-            border-left: 4px solid var(--vscode-inputValidation-infoBorder, #4ba6fb);
-            color: var(--vscode-foreground, #cccccc);
-            padding: 12px;
-            margin: 1em 0;
-            border-radius: 3px;
-        }
-        .tip {
-            background-color: var(--vscode-inputValidation-warningBackground, rgba(206, 145, 76, 0.2));
-            border-left: 4px solid var(--vscode-inputValidation-warningBorder, #ce914c);
-            color: var(--vscode-foreground, #cccccc);
-            padding: 12px;
-            margin: 1em 0;
-            border-radius: 3px;
-        }
-        .warning {
-            background-color: var(--vscode-inputValidation-errorBackground, rgba(244, 71, 71, 0.2));
-            border-left: 4px solid var(--vscode-inputValidation-errorBorder, #f44747);
-            color: var(--vscode-foreground, #cccccc);
-            padding: 12px;
-            margin: 1em 0;
-            border-radius: 3px;
-        }
-        .example {
-            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
-            color: var(--vscode-foreground, #cccccc);
-            padding: 12px;
-            margin: 1em 0;
-            border-radius: 3px;
-            border: 1px solid var(--vscode-panel-border, #454545);
-        }
-        strong {
-            color: var(--vscode-foreground, #cccccc);
-            font-weight: 600;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1em 0;
-        }
-        th, td {
-            padding: 8px 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--vscode-panel-border, #454545);
-            color: var(--vscode-foreground, #cccccc);
-        }
-        th {
-            background-color: var(--vscode-textCodeBlock-background, #2a2a2a);
-            font-weight: 600;
-        }
-    </style>
+    <link rel="stylesheet" href="help.css">
 </head>
 <body>
     <div class="help-content">
+        <div class="help-toc">
+            <h3>Help Topics</h3>
+            <ul>
+                <li><a class="current">Rules Guide</a> (current)</li>
+                <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
+            </ul>
+        </div>
         <h1>Rules Guide</h1>
         
         <h2>What are Rules?</h2>
@@ -398,5 +299,15 @@
             and which theme keys are being colored. This is invaluable for debugging rule matching issues.
         </div>
     </div>
+    <script>
+        // Add click handlers to TOC links
+        document.querySelectorAll('[data-switch-help]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = link.getAttribute('data-switch-help');
+                window.parent.postMessage({command: 'switchHelp', target: target}, '*');
+            });
+        });
+    </script>
 </body>
 </html>
