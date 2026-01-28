@@ -3258,6 +3258,40 @@ function isNeutralElement(key: string): boolean {
 }
 
 /**
+ * Check if a palette slot is congruous with a theme key for Fg/Bg
+ * Returns true if the slot type matches the key type (both Fg or both Bg)
+ */
+function isSlotCongruousFgBg(key: string, slot: string): boolean {
+    if (slot === 'none' || slot === '__fixed__') return true; // Special cases are always congruous
+
+    const keyIsBg = isBackgroundElement(key);
+    const keyIsFg = isForegroundElement(key);
+    const slotIsBg = slot.endsWith('Bg');
+    const slotIsFg = slot.endsWith('Fg');
+
+    // Congruous if both are Bg or both are Fg
+    return (keyIsBg && slotIsBg) || (keyIsFg && slotIsFg);
+}
+
+/**
+ * Check if a palette slot is congruous with a theme key for Active/Inactive
+ * Returns true if the slot state matches the key state (both Active, both Inactive, or both Neutral)
+ */
+function isSlotCongruousActiveInactive(key: string, slot: string): boolean {
+    if (slot === 'none' || slot === '__fixed__') return true; // Special cases are always congruous
+
+    const keyIsActive = isActiveElement(key);
+    const keyIsInactive = isInactiveElement(key);
+    const keyIsNeutral = isNeutralElement(key);
+    const slotIsActive = slot.includes('Active') && !slot.includes('Inactive');
+    const slotIsInactive = slot.includes('Inactive');
+    const slotIsNeutral = !slot.includes('Active') && !slot.includes('Inactive');
+
+    // Congruous if states match
+    return (keyIsActive && slotIsActive) || (keyIsInactive && slotIsInactive) || (keyIsNeutral && slotIsNeutral);
+}
+
+/**
  * Filter palette slots to only show related options based on element characteristics
  */
 function getFilteredPaletteOptions(elementKey: string, allSlots: string[], currentSlot?: string): string[] {
@@ -4052,19 +4086,24 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     const newSlot = select.value;
                     const keysToSync: string[] = [];
 
-                    // Collect all keys to sync based on enabled options
-                    if (syncFgBgEnabled) {
+                    // Only sync if the selected slot is congruous with the current key
+                    // This prevents syncing when user intentionally selects incongruous mappings
+                    const isFgBgCongruous = isSlotCongruousFgBg(key, newSlot);
+                    const isActiveInactiveCongruous = isSlotCongruousActiveInactive(key, newSlot);
+
+                    // Collect all keys to sync based on enabled options and congruity
+                    if (syncFgBgEnabled && isFgBgCongruous) {
                         const fgBgKey = findCorrespondingFgBg(key);
                         if (fgBgKey) keysToSync.push(fgBgKey);
                     }
 
-                    if (syncActiveInactiveEnabled) {
+                    if (syncActiveInactiveEnabled && isActiveInactiveCongruous) {
                         const activeInactiveKey = findCorrespondingActiveInactive(key);
                         if (activeInactiveKey) keysToSync.push(activeInactiveKey);
                     }
 
-                    // If both syncs are enabled, also sync the diagonal (e.g., activeFg -> inactiveBg)
-                    if (syncFgBgEnabled && syncActiveInactiveEnabled) {
+                    // If both syncs are enabled and slot is congruous for both, also sync the diagonal (e.g., activeFg -> inactiveBg)
+                    if (syncFgBgEnabled && syncActiveInactiveEnabled && isFgBgCongruous && isActiveInactiveCongruous) {
                         const fgBgKey = findCorrespondingFgBg(key);
                         if (fgBgKey) {
                             const diagonalKey = findCorrespondingActiveInactive(fgBgKey);
@@ -4079,28 +4118,20 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         let correspondingSlot = newSlot;
 
                         // Map the slot appropriately based on the transformation
-                        if (correspondingSlot !== 'none') {
-                            // Apply fg/bg transformation if needed
-                            if (
-                                findCorrespondingFgBg(key) === correspondingKey ||
-                                (syncFgBgEnabled &&
-                                    syncActiveInactiveEnabled &&
-                                    correspondingKey.includes(
-                                        findCorrespondingFgBg(key)?.split('.')[1]?.substring(0, 6) || '',
-                                    ))
-                            ) {
+                        if (correspondingSlot !== 'none' && correspondingSlot !== '__fixed__') {
+                            // Determine what transformation(s) are needed
+                            const isFgBgPair = findCorrespondingFgBg(key) === correspondingKey;
+                            const isActiveInactivePair = findCorrespondingActiveInactive(key) === correspondingKey;
+                            const isDiagonal = !isFgBgPair && !isActiveInactivePair; // The diagonal needs BOTH transformations
+
+                            // Apply fg/bg transformation if this is an fg/bg pair OR part of diagonal
+                            if (isFgBgPair || isDiagonal) {
                                 const fgBgSlot = getCorrespondingPaletteSlot(correspondingSlot);
                                 if (fgBgSlot) correspondingSlot = fgBgSlot;
                             }
 
-                            // Apply active/inactive transformation if needed
-                            if (
-                                findCorrespondingActiveInactive(key) === correspondingKey ||
-                                (syncFgBgEnabled &&
-                                    syncActiveInactiveEnabled &&
-                                    key !== correspondingKey &&
-                                    findCorrespondingFgBg(key) !== correspondingKey)
-                            ) {
+                            // Apply active/inactive transformation if this is an active/inactive pair OR part of diagonal
+                            if (isActiveInactivePair || isDiagonal) {
                                 const activeInactiveSlot = getCorrespondingActiveInactiveSlot(correspondingSlot);
                                 if (activeInactiveSlot) correspondingSlot = activeInactiveSlot;
                             }
