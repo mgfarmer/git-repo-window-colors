@@ -509,6 +509,9 @@ window.addEventListener('message', (event) => {
         case 'deleteConfirmed':
             handleDeleteConfirmed(message.data);
             break;
+        case 'gettingStartedHelpContent':
+            handleGettingStartedHelpContent(message.data);
+            break;
         case 'profileHelpContent':
             handleProfileHelpContent(message.data);
             break;
@@ -615,6 +618,22 @@ function injectThemeVariables(htmlContent: string): string {
     return htmlContent.replace('</head>', `${styleBlock}</head>`);
 }
 
+function handleGettingStartedHelpContent(data: { content: string }) {
+    console.log('[TOC Navigation] handleGettingStartedHelpContent called, content length:', data.content?.length);
+    const contentDiv = document.getElementById('helpPanelContent');
+    if (contentDiv && data.content) {
+        // Create an iframe to display the HTML content
+        const iframe = document.createElement('iframe');
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.srcdoc = injectThemeVariables(data.content);
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(iframe);
+        console.log('[TOC Navigation] Getting started help content loaded into iframe');
+    }
+}
+
 function handleProfileHelpContent(data: { content: string }) {
     console.log('[TOC Navigation] handleProfileHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
@@ -669,7 +688,9 @@ function handleSwitchHelp(target: string) {
     // Set the panel title
     const titleElement = document.getElementById('helpPanelTitle');
     if (titleElement) {
-        if (target === 'profile') {
+        if (target === 'getting-started') {
+            titleElement.textContent = 'Getting Started';
+        } else if (target === 'profile') {
             titleElement.textContent = 'Profiles Guide';
         } else if (target === 'rules') {
             titleElement.textContent = 'Rules Guide';
@@ -680,8 +701,10 @@ function handleSwitchHelp(target: string) {
     }
 
     // Request the new content
-    if (target === 'profile') {
-        console.log('[TOC Navigation] Requesting profile help from extension');
+    if (target === 'getting-started') {
+        console.log('[TOC Navigation] Requesting getting started help from extension');
+        vscode.postMessage({ command: 'requestGettingStartedHelp' });
+    } else if (target === 'profile') {
         vscode.postMessage({ command: 'requestProfileHelp' });
     } else if (target === 'rules') {
         console.log('[TOC Navigation] Requesting rules help from extension');
@@ -696,7 +719,9 @@ function openHelp(helpType: string) {
     // Set the panel title
     const titleElement = document.getElementById('helpPanelTitle');
     if (titleElement) {
-        if (helpType === 'profile') {
+        if (helpType === 'getting-started') {
+            titleElement.textContent = 'Getting Started';
+        } else if (helpType === 'profile') {
             titleElement.textContent = 'Profiles Guide';
         } else if (helpType === 'rules') {
             titleElement.textContent = 'Rules Guide';
@@ -706,7 +731,9 @@ function openHelp(helpType: string) {
     }
 
     // Request help content from backend
-    if (helpType === 'profile') {
+    if (helpType === 'getting-started') {
+        vscode.postMessage({ command: 'requestGettingStartedHelp' });
+    } else if (helpType === 'profile') {
         vscode.postMessage({ command: 'requestProfileHelp' });
     } else if (helpType === 'rules') {
         vscode.postMessage({ command: 'requestRulesHelp' });

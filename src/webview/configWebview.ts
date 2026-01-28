@@ -143,6 +143,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'updateAdvancedProfiles':
                 await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
                 break;
+            case 'requestGettingStartedHelp':
+                await this._sendGettingStartedHelpContent();
+                break;
             case 'requestProfileHelp':
                 await this._sendProfileHelpContent();
                 break;
@@ -536,6 +539,37 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     data: { profileName },
                 });
             }
+        }
+    }
+
+    private async _sendGettingStartedHelpContent(): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'getting-started-help.html');
+            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
+
+            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
+            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
+
+            let contentString = Buffer.from(helpContent).toString('utf8');
+            const cssString = Buffer.from(cssContent).toString('utf8');
+
+            // Replace the external CSS link with inline styles
+            contentString = contentString.replace(
+                '<link rel="stylesheet" href="help.css">',
+                `<style>${cssString}</style>`,
+            );
+
+            this._panel.webview.postMessage({
+                command: 'gettingStartedHelpContent',
+                data: { content: contentString },
+            });
+        } catch (error) {
+            console.error('Failed to load getting started help content:', error);
+            vscode.window.showErrorMessage('Failed to load help content');
         }
     }
 

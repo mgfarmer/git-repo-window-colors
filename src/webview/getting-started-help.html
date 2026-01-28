@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Started</title>
+    <link rel="stylesheet" href="help.css">
+</head>
+<body>
+    <div class="help-content">
+        <div class="help-toc">
+            <h3>Help Topics</h3>
+            <ul>
+                <li><a class="current">Getting Started</a> (current)</li>
+                <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+                <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
+            </ul>
+        </div>
+        <h1>Getting Started with Git Repo Window Colors</h1>
+        
+        <p>
+            Git Repo Window Colors helps you visually distinguish different Git repositories and branches by 
+            applying custom colors to your VS Code window. This is especially useful when working with multiple 
+            projects or switching between different branches frequently.
+        </p>
+
+        <h2>Quick Start: Simple Mode</h2>
+        
+        <p>
+            We recommend starting with <strong>Simple Mode</strong> to get familiar with the extension's core features. 
+            Simple mode lets you define color rules for repositories and branches using straightforward color specifications.
+        </p>
+
+        <h3>Creating Your First Rules</h3>
+        
+        <ol>
+            <li>Open the <strong>Rules</strong> tab in the configuration panel</li>
+            <li>Click <strong>"+ Add Repo Rule"</strong> to create a repository-based rule</li>
+            <li>Enter a repository identifier (name, URL pattern, or path fragment)</li>
+            <li>Choose colors for your window elements (titlebar, activitybar, statusbar)</li>
+            <li>Click <strong>"+ Add Branch Rule"</strong> to add branch-specific coloring</li>
+        </ol>
+
+        <div class="example">
+            <strong>Example Repository Rule:</strong><br>
+            <code>my-project : #2E7D32</code><br>
+            <em>This applies green tones when the repository name contains "my-project"</em>
+        </div>
+
+        <div class="example">
+            <strong>Example Branch Rule:</strong><br>
+            <code>bugfix : blue</code><br>
+            <em>This applies blue tones when on the bugfix branch. All other branches remain unchanged.  This rule accepts regular expressions so you can match multiple branch names if needed. You can also use multiple branch rules to match different branch naming conventions.</em>
+        </div>
+
+        <div class="tip">
+            <strong>Pro Tip:</strong> Configure your colors with the target repository open in your workspace! 
+            This allows you to see real-time changes to the full VS Code UI as you adjust colors. You'll 
+            immediately see how titlebar, activitybar, statusbar, and editor tabs look with your chosen colors, 
+            making it much easier to fine-tune your color scheme.
+        </div>
+
+        <h2>Understanding the Configuration Panel</h2>
+
+        <p>The configuration panel has three main tabs:</p>
+
+        <ul>
+            <li><strong>Rules:</strong> Create and manage repository and branch color rules</li>
+            <li><strong>Profiles:</strong> Define reusable color palettes with advanced mapping options (Advanced Mode)</li>
+            <li><strong>Color Report:</strong> View exactly which colors are currently applied and why</li>
+        </ul>
+
+        <h3>Key Settings</h3>
+
+        <p>Under "Other Settings" you'll find options to control which UI elements get colored:</p>
+
+        <ul>
+            <li><strong>Color Status Bar:</strong> Apply colors to the bottom status bar</li>
+            <li><strong>Color Editor Tabs:</strong> Colorize the background of editor tabs</li>
+            <li><strong>Color Inactive Titlebar:</strong> Color the titlebar even when VS Code is not focused</li>
+            <li><strong>Activity Bar Color:</strong> Choose intensity of activitybar coloring (None/Subtle/Medium/Strong)</li>
+        </ul>
+
+        <h2>Testing Your Configuration</h2>
+
+        <ol>
+            <li>Create a rule matching your current repository or branch</li>
+            <li>Observe the color changes in real-time as you edit</li>
+            <li>Use the <strong>Color Report</strong> tab to see which theme keys are being colored</li>
+            <li>Adjust colors until you're satisfied with the result</li>
+        </ol>
+
+        <div class="note">
+            <strong>Helpful Debugging:</strong> If colors aren't appearing as expected, check the Color Report 
+            to see which rules are matching and what colors are being applied. This is invaluable for 
+            troubleshooting rule patterns.
+        </div>
+
+        <h2>Advanced Mode: Profiles</h2>
+
+        <p>
+            Once you're comfortable with Simple Mode, you can enable <strong>Advanced Mode</strong> to unlock 
+            the powerful Profiles feature. Profiles allow you to create reusable color palettes with sophisticated 
+            mapping options.
+        </p>
+
+        <h3>Why Use Profiles?</h3>
+
+        <p>Profiles offer several advantages over simple color rules:</p>
+
+        <ul>
+            <li><strong>Reusability:</strong> Define a color palette once and reference it from multiple rules</li>
+            <li><strong>Consistency:</strong> Maintain coordinated color schemes across repositories</li>
+            <li><strong>Advanced Mappings:</strong> Map individual UI elements to specific palette slots with opacity and adjustments</li>
+            <li><strong>Flexibility:</strong> Change an entire theme by updating a single palette definition</li>
+        </ul>
+
+        <h3>The Trade-off: Power vs. Complexity</h3>
+
+        <p>
+            Profiles are more complex to configure than simple color rules. Instead of specifying colors directly, 
+            you create a named palette and then map theme keys to palette slots. This indirection adds flexibility 
+            but requires more planning and configuration work.
+        </p>
+
+        <div class="warning">
+            <strong>Start Simple:</strong> We strongly recommend becoming proficient with Simple Mode before 
+            diving into Profiles. Many users find Simple Mode sufficient for their needs. Only enable Profiles 
+            if you need advanced features like palette reuse or per-element color mappings.
+        </div>
+
+        <h3>Enabling Profiles</h3>
+
+        <p>To enable Profile mode:</p>
+
+        <ol>
+            <li>Check the <strong>"Enable Profiles (Advanced Mode)"</strong> option under Other Settings</li>
+            <li>The <strong>Profiles</strong> tab will become active</li>
+            <li>You can now create profiles and reference them in your rules</li>
+        </ol>
+
+        <p>
+            For detailed information about creating and using profiles, see the 
+            <a href="#" data-switch-help="profile">Profiles Guide</a>.
+        </p>
+
+        <h2>Import & Export</h2>
+
+        <p>
+            You can export your entire configuration (rules, profiles, and settings) to a JSON file and import 
+            it on another machine or share it with teammates. Use the <strong>Export Config</strong> and 
+            <strong>Import Config</strong> buttons at the bottom of the Rules tab.
+        </p>
+
+        <h2>Next Steps</h2>
+
+        <ul>
+            <li>Read the <a href="#" data-switch-help="rules">Rules Guide</a> for detailed information about creating rules</li>
+            <li>Explore the <a href="#" data-switch-help="report">Color Report Guide</a> to understand how to debug your configuration</li>
+            <li>When you're ready for advanced features, check out the <a href="#" data-switch-help="profile">Profiles Guide</a></li>
+        </ul>
+
+        <div class="tip">
+            <strong>Remember:</strong> The best way to configure your colors is with the target workspace open, 
+            so you can see changes in real-time!
+        </div>
+    </div>
+    <script>
+        // Add click handlers to TOC links
+        document.querySelectorAll('[data-switch-help]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = link.getAttribute('data-switch-help');
+                window.parent.postMessage({command: 'switchHelp', target: target}, '*');
+            });
+        });
+    </script>
+</body>
+</html>

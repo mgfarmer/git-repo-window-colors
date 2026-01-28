@@ -37,6 +37,7 @@ export interface WebviewMessage {
         | 'exportConfig'
         | 'importConfig'
         | 'updateAdvancedProfiles'
+        | 'requestGettingStartedHelp'
         | 'requestProfileHelp'
         | 'requestRulesHelp'
         | 'requestReportHelp';
