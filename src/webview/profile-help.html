@@ -130,15 +130,5 @@
             <li><strong>Too complex:</strong> Start simple - you don't need to map every theme key</li>
         </ul>
     </div>
-    <script>
-        // Add click handlers to TOC links
-        document.querySelectorAll('[data-switch-help]').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const target = link.getAttribute('data-switch-help');
-                window.parent.postMessage({command: 'switchHelp', target: target}, '*');
-            });
-        });
-    </script>
 </body>
 </html>

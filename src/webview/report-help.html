@@ -127,15 +127,5 @@
         <li>Modify the color, palette slot, or mapping as needed</li>
         <li>Return to the Color Report to verify your changes</li>
     </ol>
-    <script>
-        // Add click handlers to TOC links
-        document.querySelectorAll('[data-switch-help]').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const target = link.getAttribute('data-switch-help');
-                window.parent.postMessage({command: 'switchHelp', target: target}, '*');
-            });
-        });
-    </script>
 </body>
 </html>

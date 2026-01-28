@@ -509,6 +509,10 @@ window.addEventListener('message', (event) => {
         case 'deleteConfirmed':
             handleDeleteConfirmed(message.data);
             break;
+        case 'openGettingStartedHelp':
+            // Auto-open Getting Started help on first webview launch
+            openHelp('getting-started');
+            break;
         case 'gettingStartedHelpContent':
             handleGettingStartedHelpContent(message.data);
             break;
@@ -526,15 +530,6 @@ window.addEventListener('message', (event) => {
                 confirmDeleteProfile(message.data.profileName);
             }
             break;
-    }
-});
-
-// Listen for messages from help iframe content
-window.addEventListener('message', (event) => {
-    // Check if the message is from our iframe (help content)
-    if (event.data && event.data.command === 'switchHelp') {
-        console.log('[TOC Navigation] Received switchHelp message from iframe:', event.data.target);
-        handleSwitchHelp(event.data.target);
     }
 });
 
@@ -597,40 +592,12 @@ function handleDeleteConfirmed(data: any) {
     }
 }
 
-function injectThemeVariables(htmlContent: string): string {
-    // Get all CSS variables from the document root
-    const styles = getComputedStyle(document.documentElement);
-    const cssVars: string[] = [];
-
-    // Collect all --vscode-* variables
-    for (let i = 0; i < styles.length; i++) {
-        const prop = styles[i];
-        if (prop.startsWith('--vscode-')) {
-            const value = styles.getPropertyValue(prop);
-            if (value) {
-                cssVars.push(`${prop}: ${value};`);
-            }
-        }
-    }
-
-    // Inject the variables into the HTML
-    const styleBlock = `<style>:root { ${cssVars.join(' ')} }</style>`;
-    return htmlContent.replace('</head>', `${styleBlock}</head>`);
-}
-
 function handleGettingStartedHelpContent(data: { content: string }) {
     console.log('[TOC Navigation] handleGettingStartedHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
-        // Create an iframe to display the HTML content
-        const iframe = document.createElement('iframe');
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        iframe.srcdoc = injectThemeVariables(data.content);
-        contentDiv.innerHTML = '';
-        contentDiv.appendChild(iframe);
-        console.log('[TOC Navigation] Getting started help content loaded into iframe');
+        contentDiv.innerHTML = data.content;
+        console.log('[TOC Navigation] Getting started help content loaded');
     }
 }
 
@@ -638,15 +605,8 @@ function handleProfileHelpContent(data: { content: string }) {
     console.log('[TOC Navigation] handleProfileHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
-        // Create an iframe to display the HTML content
-        const iframe = document.createElement('iframe');
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        iframe.srcdoc = injectThemeVariables(data.content);
-        contentDiv.innerHTML = '';
-        contentDiv.appendChild(iframe);
-        console.log('[TOC Navigation] Profile help content loaded into iframe');
+        contentDiv.innerHTML = data.content;
+        console.log('[TOC Navigation] Profile help content loaded');
     }
 }
 
@@ -654,15 +614,8 @@ function handleRulesHelpContent(data: { content: string }) {
     console.log('[TOC Navigation] handleRulesHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
-        // Create an iframe to display the HTML content
-        const iframe = document.createElement('iframe');
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        iframe.srcdoc = injectThemeVariables(data.content);
-        contentDiv.innerHTML = '';
-        contentDiv.appendChild(iframe);
-        console.log('[TOC Navigation] Rules help content loaded into iframe');
+        contentDiv.innerHTML = data.content;
+        console.log('[TOC Navigation] Rules help content loaded');
     }
 }
 
@@ -670,15 +623,8 @@ function handleReportHelpContent(data: any) {
     console.log('[TOC Navigation] handleReportHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
-        // Create an iframe to display the HTML content
-        const iframe = document.createElement('iframe');
-        iframe.style.width = '100%';
-        iframe.style.height = '100%';
-        iframe.style.border = 'none';
-        iframe.srcdoc = injectThemeVariables(data.content);
-        contentDiv.innerHTML = '';
-        contentDiv.appendChild(iframe);
-        console.log('[TOC Navigation] Report help content loaded into iframe');
+        contentDiv.innerHTML = data.content;
+        console.log('[TOC Navigation] Report help content loaded');
     }
 }
 
@@ -800,6 +746,19 @@ function attachEventListeners() {
     document.addEventListener('dragstart', handleDocumentDragStart);
     document.addEventListener('dragover', handleDocumentDragOver);
     document.addEventListener('drop', handleDocumentDrop);
+
+    // Add event delegation for help panel TOC links
+    document.addEventListener('click', (event) => {
+        const target = event.target as HTMLElement;
+        const link = target.closest('[data-switch-help]');
+        if (link) {
+            event.preventDefault();
+            const helpTarget = link.getAttribute('data-switch-help');
+            if (helpTarget) {
+                handleSwitchHelp(helpTarget);
+            }
+        }
+    });
 }
 
 function handleDocumentClick(event: Event) {

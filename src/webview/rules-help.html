@@ -300,15 +300,5 @@
             and which theme keys are being colored. This is invaluable for debugging rule matching issues.
         </div>
     </div>
-    <script>
-        // Add click handlers to TOC links
-        document.querySelectorAll('[data-switch-help]').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const target = link.getAttribute('data-switch-help');
-                window.parent.postMessage({command: 'switchHelp', target: target}, '*');
-            });
-        });
-    </script>
 </body>
 </html>

@@ -57,6 +57,11 @@
                 "category": "GRWC"
             },
             {
+                "command": "windowColors.clearFirstTimeFlag",
+                "title": "Clear First Time Flag (Debug)",
+                "category": "GRWC"
+            },
+            {
                 "command": "windowColors.exportConfig",
                 "title": "Export Configuration",
                 "category": "GRWC"

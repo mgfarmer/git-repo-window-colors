@@ -17,6 +17,14 @@
                 <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
             </ul>
         </div>
+
+        <div class="note">
+            <strong>Note:</strong> This Getting Started guide is shown automatically the first time you open 
+            the configuration panel after installing the extension. You can always access it again by clicking 
+            the help button (<span class="codicon codicon-question"></span>) and selecting "Getting Started" 
+            from the table of contents.
+        </div>
+
         <h1>Getting Started with Git Repo Window Colors</h1>
         
         <p>
@@ -166,15 +174,5 @@
             so you can see changes in real-time!
         </div>
     </div>
-    <script>
-        // Add click handlers to TOC links
-        document.querySelectorAll('[data-switch-help]').forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const target = link.getAttribute('data-switch-help');
-                window.parent.postMessage({command: 'switchHelp', target: target}, '*');
-            });
-        });
-    </script>
 </body>
 </html>

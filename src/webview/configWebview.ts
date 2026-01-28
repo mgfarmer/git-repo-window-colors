@@ -31,13 +31,15 @@ function getNonce(): string {
 export class ConfigWebviewProvider implements vscode.Disposable {
     private _panel: vscode.WebviewPanel | undefined;
     private readonly _extensionUri: vscode.Uri;
+    private readonly _context: vscode.ExtensionContext;
     private _disposables: vscode.Disposable[] = [];
     private _workspaceInfo: { repositoryUrl: string; currentBranch: string } = { repositoryUrl: '', currentBranch: '' };
     private currentConfig: any = null;
     private _configurationListener: vscode.Disposable | undefined;
 
-    constructor(extensionUri: vscode.Uri) {
+    constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
+        this._context = context;
 
         // Set up configuration listener once
         this._configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
@@ -114,6 +116,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Send initial configuration to webview
         this._sendConfigurationToWebview();
+
+        // Check if this is the first time showing the webview
+        this._checkAndShowGettingStarted();
     }
 
     private async _handleMessage(message: WebviewMessage): Promise<void> {
@@ -549,19 +554,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'getting-started-help.html');
-            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
-
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
-
             let contentString = Buffer.from(helpContent).toString('utf8');
-            const cssString = Buffer.from(cssContent).toString('utf8');
 
-            // Replace the external CSS link with inline styles
-            contentString = contentString.replace(
-                '<link rel="stylesheet" href="help.css">',
-                `<style>${cssString}</style>`,
-            );
+            // Extract only the body content
+            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch) {
+                contentString = bodyMatch[1];
+            }
 
             this._panel.webview.postMessage({
                 command: 'gettingStartedHelpContent',
@@ -580,19 +580,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'profile-help.html');
-            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
-
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
-
             let contentString = Buffer.from(helpContent).toString('utf8');
-            const cssString = Buffer.from(cssContent).toString('utf8');
 
-            // Replace the external CSS link with inline styles
-            contentString = contentString.replace(
-                '<link rel="stylesheet" href="help.css">',
-                `<style>${cssString}</style>`,
-            );
+            // Extract only the body content
+            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch) {
+                contentString = bodyMatch[1];
+            }
 
             this._panel.webview.postMessage({
                 command: 'profileHelpContent',
@@ -611,19 +606,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'rules-help.html');
-            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
-
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
-
             let contentString = Buffer.from(helpContent).toString('utf8');
-            const cssString = Buffer.from(cssContent).toString('utf8');
 
-            // Replace the external CSS link with inline styles
-            contentString = contentString.replace(
-                '<link rel="stylesheet" href="help.css">',
-                `<style>${cssString}</style>`,
-            );
+            // Extract only the body content
+            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch) {
+                contentString = bodyMatch[1];
+            }
 
             this._panel.webview.postMessage({
                 command: 'rulesHelpContent',
@@ -642,19 +632,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'report-help.html');
-            const helpCssPath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css');
-
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            const cssContent = await vscode.workspace.fs.readFile(helpCssPath);
-
             let contentString = Buffer.from(helpContent).toString('utf8');
-            const cssString = Buffer.from(cssContent).toString('utf8');
 
-            // Replace the external CSS link with inline styles
-            contentString = contentString.replace(
-                '<link rel="stylesheet" href="help.css">',
-                `<style>${cssString}</style>`,
-            );
+            // Extract only the body content
+            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch) {
+                contentString = bodyMatch[1];
+            }
 
             this._panel.webview.postMessage({
                 command: 'reportHelpContent',
@@ -720,6 +705,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'configWebview.css'),
         );
 
+        // Get the help CSS file URI
+        const helpCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css'));
+
         // Get the JavaScript file URI
         const jsUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'wvConfigWebview.js'),
@@ -747,13 +735,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 font-src ${webview.cspSource}; 
                 img-src ${webview.cspSource}; 
                 style-src 'unsafe-inline' ${webview.cspSource}; 
-                script-src 'nonce-${nonce}' 'unsafe-hashes' 'sha256-gSUJDFO6dVVSzJBjt/ad5vjTT30fEl6Qp8+pOF+VYRs=';
-                frame-src 'self' data:;">
+                script-src 'nonce-${nonce}';">
             
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Git Repo Window Colors Configuration</title>
             <link href="${codiconUri}" rel="stylesheet">
             <link href="${cssUri}" rel="stylesheet">
+            <link href="${helpCssUri}" rel="stylesheet">
         </head>
         <body>
             <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
@@ -1045,6 +1033,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <script nonce="${nonce}" src="${jsUri}"></script>
         </body>
         </html>`;
+    }
+
+    private async _checkAndShowGettingStarted(): Promise<void> {
+        const hasShownGettingStarted = this._context.globalState.get<boolean>('grwc.hasShownGettingStarted', false);
+
+        if (!hasShownGettingStarted) {
+            // Mark as shown
+            await this._context.globalState.update('grwc.hasShownGettingStarted', true);
+
+            // Wait a bit for the webview to be fully loaded
+            setTimeout(async () => {
+                await this._sendGettingStartedHelpContent();
+
+                // Send a message to open the help panel
+                if (this._panel) {
+                    this._panel.webview.postMessage({
+                        command: 'openGettingStartedHelp',
+                    });
+                }
+            }, 500);
+        }
     }
 
     private _onPanelDisposed(): void {

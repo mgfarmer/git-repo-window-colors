@@ -359,12 +359,20 @@ export async function activate(context: ExtensionContext) {
     );
 
     // Register the configuration webview command
-    configProvider = new ConfigWebviewProvider(context.extensionUri);
+    configProvider = new ConfigWebviewProvider(context.extensionUri, context);
     context.subscriptions.push(configProvider);
 
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.openConfig', () => {
             configProvider.show(context.extensionUri);
+        }),
+    );
+
+    // Register debug command to clear first-time flag
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.clearFirstTimeFlag', async () => {
+            await context.globalState.update('grwc.hasShownGettingStarted', undefined);
+            vscode.window.showInformationMessage('First-time flag cleared. Close and reopen the config panel to test.');
         }),
     );
 
