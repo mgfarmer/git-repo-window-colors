@@ -2,6 +2,9 @@
 .vscode-test/**
 out/test/**
 out/**/*.map
+!out/webview/*.css
+!out/webview/*.html
+!out/webview/*.ttf
 src/**
 .gitignore
 tsconfig.json
