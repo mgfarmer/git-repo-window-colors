@@ -658,6 +658,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'wvConfigWebview.js'),
         );
 
+        // Get the Codicon font URI (copied by webpack to out/webview)
+        const codiconUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'codicon.css'),
+        );
+
         // Generate nonce for CSP
         const nonce = getNonce();
 
@@ -679,6 +684,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Git Repo Window Colors Configuration</title>
+            <link href="${codiconUri}" rel="stylesheet">
             <link href="${cssUri}" rel="stylesheet">
         </head>
         <body>

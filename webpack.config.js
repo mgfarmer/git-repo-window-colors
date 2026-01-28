@@ -65,6 +65,14 @@ const extensionConfig = {
                     from: 'src/webview/*.html',
                     to: 'webview/[name][ext]',
                 },
+                {
+                    from: 'node_modules/@vscode/codicons/dist/codicon.css',
+                    to: 'webview/codicon.css',
+                },
+                {
+                    from: 'node_modules/@vscode/codicons/dist/codicon.ttf',
+                    to: 'webview/codicon.ttf',
+                },
             ],
         }),
     ],

@@ -3462,6 +3462,34 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             editorBottom.style.opacity = '0';
         }
     } else {
+        // Get currently applied profiles from matching rules
+        const matchedRepoRule =
+            currentConfig?.matchingIndexes?.repoRule >= 0
+                ? currentConfig.repoRules?.[currentConfig.matchingIndexes.repoRule]
+                : null;
+        const matchedBranchRule =
+            currentConfig?.matchingIndexes?.branchRule >= 0
+                ? currentConfig.branchRules?.[currentConfig.matchingIndexes.branchRule]
+                : null;
+
+        // Extract profile names from matched rules
+        const repoProfileName =
+            matchedRepoRule?.profileName ||
+            (matchedRepoRule?.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
+                ? matchedRepoRule.primaryColor
+                : null);
+        const branchProfileName =
+            matchedBranchRule?.profileName ||
+            (matchedBranchRule?.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
+                ? matchedBranchRule.color
+                : null);
+
+        console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
+        console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);
+        console.log('[Profile Indicators] matchedBranchRule:', matchedBranchRule);
+        console.log('[Profile Indicators] repoProfileName:', repoProfileName);
+        console.log('[Profile Indicators] branchProfileName:', branchProfileName);
+
         Object.keys(profiles).forEach((name) => {
             const el = document.createElement('div');
             el.className = 'profile-item';
@@ -3472,9 +3500,44 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             const nameContainer = document.createElement('div');
             nameContainer.className = 'profile-name-container';
 
+            // Add indicators for currently applied profiles (on the left)
+            const isRepoProfile = name === repoProfileName;
+            const isBranchProfile = name === branchProfileName;
+
+            console.log(
+                `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
+            );
+
+            // Create indicator container (even if empty, to maintain alignment)
+            const indicatorContainer = document.createElement('span');
+            indicatorContainer.className = 'profile-indicators';
+
+            if (isRepoProfile || isBranchProfile) {
+                console.log(`[Profile Indicators] Adding indicators for "${name}"`);
+
+                if (isRepoProfile) {
+                    const repoIcon = document.createElement('span');
+                    repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
+                    repoIcon.title = 'Applied to repository rule for this workspace';
+                    indicatorContainer.appendChild(repoIcon);
+                    console.log(`[Profile Indicators] Added repo icon for "${name}"`);
+                }
+
+                if (isBranchProfile) {
+                    const branchIcon = document.createElement('span');
+                    branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
+                    branchIcon.title = 'Applied to branch rule for this workspace';
+                    indicatorContainer.appendChild(branchIcon);
+                    console.log(`[Profile Indicators] Added branch icon for "${name}"`);
+                }
+            }
+
+            nameContainer.appendChild(indicatorContainer);
+
             const nameSpan = document.createElement('span');
             nameSpan.className = 'profile-name';
             nameSpan.textContent = name;
+            nameContainer.appendChild(nameSpan);
 
             // Count total active mappings for badge
             const profile = profiles[name];
@@ -3484,8 +3547,6 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             badge.className = 'profile-count-badge';
             badge.textContent = totalActive.toString();
             badge.title = `${totalActive} elements being colored`;
-
-            nameContainer.appendChild(nameSpan);
             nameContainer.appendChild(badge);
 
             // Create color swatch

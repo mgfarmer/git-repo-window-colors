@@ -229,6 +229,11 @@
   resolved "https://registry.npmjs.org/@types/vscode/-/vscode-1.95.0.tgz"
   integrity sha512-0LBD8TEiNbet3NvWsmn59zLzOFu/txSlGxnv5yAFHCrhG9WvAnR3IvfHzMOs2aeWqgvNjq9pO99IUw8d3n+unw==
 
+"@vscode/codicons@^0.0.44":
+  version "0.0.44"
+  resolved "https://registry.npmjs.org/@vscode/codicons/-/codicons-0.0.44.tgz"
+  integrity sha512-F7qPRumUK3EHjNdopfICLGRf3iNPoZQt+McTHAn4AlOWPB3W2kL4H0S7uqEqbyZ6rCxaeDjpAn3MCUnwTu/VJQ==
+
 "@vscode/vsce-sign-linux-x64@2.0.2":
   version "2.0.2"
 
