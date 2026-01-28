@@ -743,9 +743,10 @@ function handleDocumentClick(event: Event) {
     if (!target) return;
 
     // Handle delete buttons
-    if (target.classList.contains('delete-btn')) {
-        const repoMatch = target.getAttribute('data-action')?.match(/deleteRepoRule\((\d+)\)/);
-        const branchMatch = target.getAttribute('data-action')?.match(/deleteBranchRule\((\d+)\)/);
+    const deleteBtn = target.closest('.delete-btn') as HTMLElement;
+    if (deleteBtn) {
+        const repoMatch = deleteBtn.getAttribute('data-action')?.match(/deleteRepoRule\((\d+)\)/);
+        const branchMatch = deleteBtn.getAttribute('data-action')?.match(/deleteBranchRule\((\d+)\)/);
 
         if (repoMatch) {
             const index = parseInt(repoMatch[1]);
@@ -795,8 +796,9 @@ function handleDocumentClick(event: Event) {
     }
 
     // Handle eye button (toggle enabled/disabled)
-    if (target.classList.contains('eye-btn')) {
-        const action = target.getAttribute('data-action');
+    const eyeBtn = target.closest('.eye-btn') as HTMLElement;
+    if (eyeBtn) {
+        const action = eyeBtn.getAttribute('data-action');
         const match = action?.match(/toggleRule\((\d+), '(\w+)'\)/);
         if (match) {
             const [, index, ruleType] = match;
@@ -838,33 +840,46 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle contextual help button (opens help based on active tab)
+    if (target.closest('[data-action="openContextualHelp"]')) {
+        const activeTab = document.querySelector('.tab-content.active');
+        if (activeTab?.id === 'rules-tab') {
+            openRulesHelp();
+        } else if (activeTab?.id === 'profiles-tab') {
+            openProfileHelp();
+        } else if (activeTab?.id === 'report-tab') {
+            openReportHelp();
+        }
+        return;
+    }
+
     // Handle help panel buttons
-    if (target.getAttribute('data-action') === 'openProfileHelp') {
+    if (target.closest('[data-action="openProfileHelp"]')) {
         openProfileHelp();
         return;
     }
 
-    if (target.getAttribute('data-action') === 'closeProfileHelp') {
+    if (target.closest('[data-action="closeProfileHelp"]')) {
         closeProfileHelp();
         return;
     }
 
-    if (target.getAttribute('data-action') === 'openRulesHelp') {
+    if (target.closest('[data-action="openRulesHelp"]')) {
         openRulesHelp();
         return;
     }
 
-    if (target.getAttribute('data-action') === 'closeRulesHelp') {
+    if (target.closest('[data-action="closeRulesHelp"]')) {
         closeRulesHelp();
         return;
     }
 
-    if (target.getAttribute('data-action') === 'openReportHelp') {
+    if (target.closest('[data-action="openReportHelp"]')) {
         openReportHelp();
         return;
     }
 
-    if (target.getAttribute('data-action') === 'closeReportHelp') {
+    if (target.closest('[data-action="closeReportHelp"]')) {
         closeReportHelp();
         return;
     }
@@ -1320,7 +1335,9 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
 
 function createReorderControlsHTML(index: number, ruleType: string, totalCount: number, rule: any): string {
     const isEnabled = rule.enabled !== false;
-    const eyeIcon = isEnabled ? '👁️' : '⊗';
+    const eyeIcon = isEnabled
+        ? '<span class="codicon codicon-eye"></span>'
+        : '<span class="codicon codicon-eye-closed"></span>';
     const eyeTitle = isEnabled ? 'Disable this rule' : 'Enable this rule';
 
     return `
@@ -1332,7 +1349,7 @@ function createReorderControlsHTML(index: number, ruleType: string, totalCount: 
                  title="Drag to reorder"
                  tabindex="0"
                  role="button"
-                 aria-label="Drag handle for rule ${index + 1}">⋮⋮
+                 aria-label="Drag handle for rule ${index + 1}"><span class="codicon codicon-grabber"></span>
                 <span class="tooltiptext" role="tooltip">
                     Drag this handle to reorder rules. Rules are processed from top to bottom.
                 </span>
@@ -1354,7 +1371,7 @@ function createReorderControlsHTML(index: number, ruleType: string, totalCount: 
             <button class="delete-btn" 
                     data-action="delete${ruleType.charAt(0).toUpperCase() + ruleType.slice(1)}Rule(${index})"
                     title="Delete this rule"
-                    aria-label="Delete ${ruleType} rule ${index + 1}"><span class="codicon codicon-close"></span></button>
+                    aria-label="Delete ${ruleType} rule ${index + 1}"><span class="codicon codicon-trash"></span></button>
         </div>
     `;
 }

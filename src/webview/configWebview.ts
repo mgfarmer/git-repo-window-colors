@@ -692,12 +692,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles (Advanced)</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
+                <button type="button" class="help-button-global" data-action="openContextualHelp" title="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
             </div>
             
             <div class="config-container" role="main" aria-label="Git Repository Window Colors Configuration">
                 
                 <div id="rules-tab" role="tabpanel" aria-labelledby="tab-rules" class="tab-content active">
-                    <button type="button" class="help-button" data-action="openRulesHelp" title="Open Rules Help"><span class="codicon codicon-question"></span></button>
                     <div class="top-panels">
                         <section class="repo-panel" aria-labelledby="repo-rules-heading">
                             <div class="panel-header">
@@ -830,7 +830,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 </div>
                 
                 <div id="profiles-tab" role="tabpanel" aria-labelledby="tab-profiles" class="tab-content">
-                     <button type="button" class="help-button" data-action="openProfileHelp" title="Help" aria-label="Open Profile Help">?</button>
                      <!-- Top section: Profiles List + Palette Editor side by side -->
                      <div class="profiles-top-section">
                         <section class="profiles-list-section">
@@ -936,7 +935,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 </div>
                 
                 <div id="report-tab" role="tabpanel" aria-labelledby="tab-report" class="tab-content">
-                    <button type="button" class="help-button" data-action="openReportHelp" title="Open Report Help">?</button>
                     <section class="report-panel">
                         <div class="panel-header">
                             <h2>Color Report
