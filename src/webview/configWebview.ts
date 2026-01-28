@@ -697,7 +697,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <div class="config-container" role="main" aria-label="Git Repository Window Colors Configuration">
                 
                 <div id="rules-tab" role="tabpanel" aria-labelledby="tab-rules" class="tab-content active">
-                    <button type="button" class="help-button" data-action="openRulesHelp" title="Open Rules Help">?</button>
+                    <button type="button" class="help-button" data-action="openRulesHelp" title="Open Rules Help"><span class="codicon codicon-question"></span></button>
                     <div class="top-panels">
                         <section class="repo-panel" aria-labelledby="repo-rules-heading">
                             <div class="panel-header">
@@ -706,7 +706,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                             type="button"
                                             aria-label="Help for Repository Rules"
                                             aria-describedby="repo-rules-tooltip"
-                                            tabindex="0">ℹ️
+                                            tabindex="0"><span class="codicon codicon-info"></span>
                                         <span class="tooltiptext" 
                                             id="repo-rules-tooltip" 
                                             role="tooltip" 
@@ -748,7 +748,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                                 type="button"
                                                 aria-label="Help for Branch Rules"
                                                 aria-describedby="branch-rules-tooltip"
-                                                tabindex="0">ℹ️
+                                                tabindex="0"><span class="codicon codicon-info"></span>
                                             <span class="tooltiptext" 
                                                 id="branch-rules-tooltip" 
                                                 role="tooltip" 
@@ -809,7 +809,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     type="button"
                                     aria-label="Help for Other Settings"
                                     aria-describedby="other-settings-tooltip"
-                                    tabindex="0">ℹ️
+                                    tabindex="0"><span class="codicon codicon-info"></span>
                                 <span class="tooltiptext" 
                                     id="other-settings-tooltip" 
                                     role="tooltip" 
@@ -836,7 +836,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         <section class="profiles-list-section">
                            <div class="panel-header">
                                 <h2>Profiles
-                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Profiles Help">ℹ️
+                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Profiles Help"><span class="codicon codicon-info"></span>
                                         <span class="tooltiptext">
                                             <strong>Profiles</strong><br>
                                             Define reusable color schemes (profiles) that can be applied to repository rules.
@@ -852,14 +852,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             <div class="profile-header">
                                 <input type="text" id="profileNameInput" placeholder="Profile Name">
                                 <div class="profile-actions">
-                                   <button type="button" class="profile-action-btn" data-action="duplicateProfile" title="Duplicate Profile" aria-label="Duplicate Profile">📋</button>
-                                   <button type="button" class="profile-action-btn" data-action="deleteProfile" title="Delete Profile" aria-label="Delete Profile">🗑️</button>
+                                   <button type="button" class="profile-action-btn" data-action="duplicateProfile" title="Duplicate Profile" aria-label="Duplicate Profile"><span class="codicon codicon-copy"></span></button>
+                                   <button type="button" class="profile-action-btn" data-action="deleteProfile" title="Delete Profile" aria-label="Delete Profile"><span class="codicon codicon-trash"></span></button>
                                 </div>
                             </div>
                             
                             <div class="palette-editor-section">
                                 <h3>Reference Palette
-                                    <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help">ℹ️
+                                    <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help"><span class="codicon codicon-info"></span>
                                         <span class="tooltiptext">
                                             <strong>Reference Palette (10 Slots)</strong><br>
                                             Define 10 referenced colors that can be used in the mappings.<br><br>
@@ -879,7 +879,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                                 <h3 style="margin: 0;">
                                     Mappings
-                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Mappings Help">ℹ️
+                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Mappings Help"><span class="codicon codicon-info"></span>
                                         <span class="tooltiptext">
                                             <strong>Section Mappings</strong><br>
                                             Map UI elements (like Title Bar, Status Bar) to one of the 10 palette slots defined above.
@@ -890,7 +890,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="checkbox" id="syncFgBgCheckbox" checked style="cursor: pointer;">
                                         <span>Synchronize fg/bg selections</span>
-                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Synchronize Help" style="margin-left: 0;">ℹ️
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Synchronize Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
                                             <span class="tooltiptext">
                                                 <strong>Synchronize Foreground/Background</strong><br>
                                                 When enabled, selecting a foreground color automatically sets the corresponding background color (and vice versa).<br><br>
@@ -901,7 +901,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="checkbox" id="syncActiveInactiveCheckbox" checked style="cursor: pointer;">
                                         <span>Synchronize active/inactive selections</span>
-                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Active/Inactive Sync Help" style="margin-left: 0;">ℹ️
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Active/Inactive Sync Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
                                             <span class="tooltiptext">
                                                 <strong>Synchronize Active/Inactive</strong><br>
                                                 When enabled, selecting an active element automatically sets the corresponding inactive element (and vice versa).<br><br>
@@ -913,7 +913,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="checkbox" id="limitOptionsCheckbox" style="cursor: pointer;">
                                         <span>Limit options</span>
-                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Limit Options Help" style="margin-left: 0;">ℹ️
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Limit Options Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
                                             <span class="tooltiptext">
                                                 <strong>Limit Dropdown Options</strong><br>
                                                 When enabled, dropdown menus will only show palette slots that match the element's characteristics.<br><br>
@@ -966,7 +966,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <div class="help-panel" id="profileHelpPanel">
                 <div class="help-panel-header">
                     <h2 class="help-panel-title">Profile Help</h2>
-                    <button type="button" class="help-panel-close" data-action="closeProfileHelp" aria-label="Close help panel">×</button>
+                    <button type="button" class="help-panel-close" data-action="closeProfileHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
                 </div>
                 <div class="help-panel-content" id="profileHelpPanelContent">
                     <!-- Help content will be loaded here -->
@@ -978,7 +978,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <div class="help-panel" id="rulesHelpPanel">
                 <div class="help-panel-header">
                     <h2 class="help-panel-title">Rules Help</h2>
-                    <button type="button" class="help-panel-close" data-action="closeRulesHelp" aria-label="Close help panel">×</button>
+                    <button type="button" class="help-panel-close" data-action="closeRulesHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
                 </div>
                 <div class="help-panel-content" id="rulesHelpPanelContent">
                     <!-- Help content will be loaded here -->
@@ -990,7 +990,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <div class="help-panel" id="reportHelpPanel">
                 <div class="help-panel-header">
                     <h2 class="help-panel-title">Color Report Help</h2>
-                    <button type="button" class="help-panel-close" data-action="closeReportHelp" aria-label="Close help panel">×</button>
+                    <button type="button" class="help-panel-close" data-action="closeReportHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
                 </div>
                 <div class="help-panel-content" id="reportHelpPanelContent">
                     <!-- Help content will be loaded here -->

@@ -1354,7 +1354,7 @@ function createReorderControlsHTML(index: number, ruleType: string, totalCount: 
             <button class="delete-btn" 
                     data-action="delete${ruleType.charAt(0).toUpperCase() + ruleType.slice(1)}Rule(${index})"
                     title="Delete this rule"
-                    aria-label="Delete ${ruleType} rule ${index + 1}">🗙</button>
+                    aria-label="Delete ${ruleType} rule ${index + 1}"><span class="codicon codicon-close"></span></button>
         </div>
     `;
 }
