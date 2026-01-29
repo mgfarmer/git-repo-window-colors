@@ -1,5 +1,7 @@
 /* Common Help File Styling */
-body {
+.help-content {
+    padding: 20px;
+    max-width: 900px;
     font-family: var(
         --vscode-font-family,
         -apple-system,
@@ -13,18 +15,10 @@ body {
     );
     font-size: var(--vscode-font-size, 13px);
     color: var(--vscode-editor-foreground);
-    background-color: var(--vscode-editor-background);
     line-height: 1.6;
-    margin: 0;
-    padding: 0;
 }
 
-.help-content {
-    padding: 20px;
-    max-width: 900px;
-}
-
-h1 {
+.help-content h1 {
     font-size: 1.75em;
     font-weight: 600;
     margin-top: 0;
@@ -34,7 +28,7 @@ h1 {
     padding-bottom: 0.5em;
 }
 
-h2 {
+.help-content h2 {
     font-size: 1.35em;
     font-weight: 600;
     margin-top: 1.75em;
@@ -42,7 +36,7 @@ h2 {
     color: var(--vscode-editor-foreground);
 }
 
-h3 {
+.help-content h3 {
     font-size: 1.15em;
     font-weight: 600;
     margin-top: 1.5em;
@@ -50,24 +44,24 @@ h3 {
     color: var(--vscode-editor-foreground);
 }
 
-p {
+.help-content p {
     margin-bottom: 1em;
     color: var(--vscode-editor-foreground);
 }
 
-ul,
-ol {
+.help-content ul,
+.help-content ol {
     margin-bottom: 1em;
     padding-left: 2em;
     color: var(--vscode-editor-foreground);
 }
 
-li {
+.help-content li {
     margin-bottom: 0.5em;
     color: var(--vscode-editor-foreground);
 }
 
-code {
+.help-content code {
     background-color: var(--vscode-textCodeBlock-background);
     color: var(--vscode-textPreformat-foreground);
     padding: 3px 6px;
@@ -76,39 +70,39 @@ code {
     font-size: 0.95em;
 }
 
-strong {
+.help-content strong {
     color: var(--vscode-editor-foreground);
     font-weight: 600;
 }
 
 /* Table styles */
-table {
+.help-content table {
     width: 100%;
     border-collapse: collapse;
     margin: 1.25em 0;
     border: 1px solid var(--vscode-editorWidget-border);
 }
 
-th,
-td {
+.help-content th,
+.help-content td {
     padding: 10px 12px;
     text-align: left;
     border-bottom: 1px solid var(--vscode-editorWidget-border);
     color: var(--vscode-editor-foreground);
 }
 
-th {
+.help-content th {
     background-color: var(--vscode-editorWidget-background);
     font-weight: 600;
     border-bottom: 2px solid var(--vscode-editorWidget-border);
 }
 
-td {
+.help-content td {
     background-color: var(--vscode-editor-background);
 }
 
 /* Callout boxes */
-.note {
+.help-content .note {
     background-color: var(--vscode-textBlockQuote-background);
     border-left: 4px solid var(--vscode-textLink-foreground);
     color: var(--vscode-editor-foreground);
@@ -117,7 +111,7 @@ td {
     border-radius: 4px;
 }
 
-.tip {
+.help-content .tip {
     background-color: var(--vscode-inputValidation-warningBackground);
     border-left: 4px solid var(--vscode-inputValidation-warningBorder);
     color: var(--vscode-editor-foreground);
@@ -126,7 +120,7 @@ td {
     border-radius: 4px;
 }
 
-.warning {
+.help-content .warning {
     background-color: var(--vscode-inputValidation-errorBackground);
     border-left: 4px solid var(--vscode-inputValidation-errorBorder);
     color: var(--vscode-editor-foreground);
@@ -135,7 +129,7 @@ td {
     border-radius: 4px;
 }
 
-.example {
+.help-content .example {
     background-color: var(--vscode-textCodeBlock-background);
     color: var(--vscode-editor-foreground);
     padding: 14px 16px;
@@ -190,7 +184,7 @@ td {
 }
 
 /* Link example styling (for Color Report help) */
-.link-example {
+.help-content .link-example {
     color: var(--vscode-textLink-foreground);
     text-decoration: underline;
     cursor: pointer;

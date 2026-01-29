@@ -148,17 +148,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'updateAdvancedProfiles':
                 await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
                 break;
-            case 'requestGettingStartedHelp':
-                await this._sendGettingStartedHelpContent();
-                break;
-            case 'requestProfileHelp':
-                await this._sendProfileHelpContent();
-                break;
-            case 'requestRulesHelp':
-                await this._sendRulesHelpContent();
-                break;
-            case 'requestReportHelp':
-                await this._sendReportHelpContent();
+            case 'requestHelp':
+                await this._sendHelpContent(message.data.helpType || 'getting-started');
                 break;
         }
     }
@@ -200,6 +191,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             matchingIndexes: {
                 repoRule: matchingRepoRuleIndex,
                 branchRule: matchingBranchRuleIndex,
+                repoIndexForBranchRule: this._getRepoIndexForBranchRule(
+                    repoRules,
+                    matchingRepoRuleIndex,
+                    matchingBranchRuleIndex,
+                    workspaceInfo.currentBranch,
+                ),
             },
         };
 
@@ -214,8 +211,32 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _getRepoRules(): RepoRule[] {
         const config = vscode.workspace.getConfiguration('windowColors');
         const repoConfigList = config.get<string[]>('repoConfigurationList', []);
+        const advancedProfiles = this._getAdvancedProfiles();
 
-        return repoConfigList.map((rule) => this._parseRepoRule(rule)).filter((rule) => rule !== null) as RepoRule[];
+        const rules = repoConfigList
+            .map((rule) => this._parseRepoRule(rule))
+            .filter((rule) => rule !== null) as RepoRule[];
+
+        // Migrate old configs: if primaryColor/branchColor matches a profile but profileName is not set, set it
+        for (const rule of rules) {
+            if (rule.primaryColor && !rule.profileName && advancedProfiles[rule.primaryColor]) {
+                rule.profileName = rule.primaryColor;
+            }
+            if (rule.branchColor && !rule.branchProfileName && advancedProfiles[rule.branchColor]) {
+                rule.branchProfileName = rule.branchColor;
+            }
+
+            // Migrate branch rules
+            if (rule.branchRules) {
+                for (const branchRule of rule.branchRules) {
+                    if (branchRule.color && !branchRule.profileName && advancedProfiles[branchRule.color]) {
+                        branchRule.profileName = branchRule.color;
+                    }
+                }
+            }
+        }
+
+        return rules;
     }
 
     private _parseRepoRule(rule: string | any): RepoRule | null {
@@ -229,6 +250,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     branchColor: rule.branchColor,
                     profileName: rule.profileName,
                     enabled: rule.enabled !== undefined ? rule.enabled : true,
+                    branchRules: rule.branchRules || undefined,
+                    useGlobalBranchRules: rule.useGlobalBranchRules !== undefined ? rule.useGlobalBranchRules : true,
                 } as any;
             }
 
@@ -249,6 +272,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     branchColor: obj.branchColor,
                     profileName: obj.profileName,
                     enabled: obj.enabled !== undefined ? obj.enabled : true,
+                    branchRules: obj.branchRules || undefined,
+                    useGlobalBranchRules: obj.useGlobalBranchRules !== undefined ? obj.useGlobalBranchRules : true,
                 } as any;
             }
 
@@ -283,6 +308,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 primaryColor: primaryColor.trim(),
                 branchColor: branchColor ? branchColor.trim() : undefined,
                 enabled: true,
+                useGlobalBranchRules: true,
             };
         } catch (error) {
             console.warn('Failed to parse repo rule:', rule, error);
@@ -293,10 +319,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _getBranchRules(): BranchRule[] {
         const config = vscode.workspace.getConfiguration('windowColors');
         const branchConfigList = config.get<string[]>('branchConfigurationList', []);
+        const advancedProfiles = this._getAdvancedProfiles();
 
-        return branchConfigList
+        const rules = branchConfigList
             .map((rule) => this._parseBranchRule(rule))
             .filter((rule) => rule !== null) as BranchRule[];
+
+        // Migrate old configs: if color matches a profile but profileName is not set, set it
+        for (const rule of rules) {
+            if (rule.color && !rule.profileName && advancedProfiles[rule.color]) {
+                rule.profileName = rule.color;
+            }
+        }
+
+        return rules;
     }
 
     private _parseBranchRule(rule: string | any): BranchRule | null {
@@ -394,6 +430,37 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         // console.log('[DEBUG] No repo rule matched, returning -1');
+        return -1;
+    }
+
+    private _getRepoIndexForBranchRule(
+        repoRules: RepoRule[],
+        matchingRepoRuleIndex: number,
+        matchingBranchRuleIndex: number,
+        currentBranch: string,
+    ): number {
+        // Check if the matched repo rule has local branch rules enabled
+        if (matchingRepoRuleIndex >= 0 && matchingRepoRuleIndex < repoRules.length) {
+            const repoRule = repoRules[matchingRepoRuleIndex];
+            if (repoRule.useGlobalBranchRules === false && repoRule.branchRules && repoRule.branchRules.length > 0) {
+                // Check if any local branch rule matches the current branch
+                for (const rule of repoRule.branchRules) {
+                    if ((rule as any).enabled === false) continue;
+                    if (rule.pattern === '') continue;
+
+                    try {
+                        const regex = new RegExp(rule.pattern);
+                        if (regex.test(currentBranch)) {
+                            // A local branch rule matched, so return the repo index
+                            return matchingRepoRuleIndex;
+                        }
+                    } catch (error) {
+                        // Invalid regex, skip
+                    }
+                }
+            }
+        }
+        // No local branch rule matched, return -1 to indicate it's a global rule
         return -1;
     }
 
@@ -500,6 +567,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             repoQualifier: rule.repoQualifier,
             primaryColor: rule.primaryColor,
             enabled: rule.enabled !== undefined ? rule.enabled : true,
+            useGlobalBranchRules: rule.useGlobalBranchRules !== undefined ? rule.useGlobalBranchRules : true,
         };
 
         if (rule.defaultBranch) {
@@ -511,6 +579,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         if (rule.profileName) {
             result.profileName = rule.profileName;
         }
+        if (rule.branchRules && rule.branchRules.length > 0) {
+            result.branchRules = rule.branchRules;
+        }
 
         return result;
     }
@@ -519,8 +590,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         ruleType: 'repo' | 'branch';
         index: number;
         ruleDescription: string;
+        repoIndex?: number;
     }): Promise<void> {
-        const { ruleType, index, ruleDescription } = deleteData;
+        const { ruleType, index, ruleDescription, repoIndex } = deleteData;
 
         const result = await vscode.window.showWarningMessage(
             `Are you sure you want to delete the ${ruleType} rule ${ruleDescription}?`,
@@ -536,9 +608,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             if (ruleType === 'repo' && repoRules[index]) {
                 repoRules.splice(index, 1);
                 await this._updateConfiguration({ repoRules });
-            } else if (ruleType === 'branch' && branchRules[index]) {
-                branchRules.splice(index, 1);
-                await this._updateConfiguration({ branchRules });
+            } else if (ruleType === 'branch') {
+                // Check if this is a local branch rule (repoIndex is defined)
+                if (repoIndex !== undefined && repoRules[repoIndex]) {
+                    // Delete from local branch rules
+                    if (repoRules[repoIndex].branchRules && repoRules[repoIndex].branchRules![index]) {
+                        repoRules[repoIndex].branchRules!.splice(index, 1);
+                        await this._updateConfiguration({ repoRules });
+                    }
+                } else if (branchRules[index]) {
+                    // Delete from global branch rules
+                    branchRules.splice(index, 1);
+                    await this._updateConfiguration({ branchRules });
+                }
             }
 
             // Send confirmation back to webview
@@ -603,13 +685,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private async _sendProfileHelpContent(): Promise<void> {
+    private async _sendHelpContent(helpType: string): Promise<void> {
         if (!this._panel) {
             return;
         }
 
         try {
-            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'profile-help.html');
+            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', `${helpType}-help.html`);
             const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
             let contentString = Buffer.from(helpContent).toString('utf8');
 
@@ -620,63 +702,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             }
 
             this._panel.webview.postMessage({
-                command: 'profileHelpContent',
-                data: { content: contentString },
+                command: 'helpContent',
+                data: { helpType, content: contentString },
             });
         } catch (error) {
-            console.error('Failed to load profile help content:', error);
-            vscode.window.showErrorMessage('Failed to load help content');
-        }
-    }
-
-    private async _sendRulesHelpContent(): Promise<void> {
-        if (!this._panel) {
-            return;
-        }
-
-        try {
-            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'rules-help.html');
-            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            let contentString = Buffer.from(helpContent).toString('utf8');
-
-            // Extract only the body content
-            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-            if (bodyMatch) {
-                contentString = bodyMatch[1];
-            }
-
-            this._panel.webview.postMessage({
-                command: 'rulesHelpContent',
-                data: { content: contentString },
-            });
-        } catch (error) {
-            console.error('Failed to load rules help content:', error);
-            vscode.window.showErrorMessage('Failed to load help content');
-        }
-    }
-
-    private async _sendReportHelpContent(): Promise<void> {
-        if (!this._panel) {
-            return;
-        }
-
-        try {
-            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'report-help.html');
-            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
-            let contentString = Buffer.from(helpContent).toString('utf8');
-
-            // Extract only the body content
-            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-            if (bodyMatch) {
-                contentString = bodyMatch[1];
-            }
-
-            this._panel.webview.postMessage({
-                command: 'reportHelpContent',
-                data: { content: contentString },
-            });
-        } catch (error) {
-            console.error('Failed to load report help content:', error);
+            console.error(`Failed to load ${helpType} help content:`, error);
             vscode.window.showErrorMessage('Failed to load help content');
         }
     }

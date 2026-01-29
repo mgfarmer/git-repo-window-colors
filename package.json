@@ -114,6 +114,11 @@
                                             "type": "boolean",
                                             "default": true,
                                             "description": "Whether this rule is enabled"
+                                        },
+                                        "useGlobalBranchRules": {
+                                            "type": "boolean",
+                                            "default": true,
+                                            "description": "Whether this rule use the global branch rules table or has its own branch rules"
                                         }
                                     },
                                     "required": [

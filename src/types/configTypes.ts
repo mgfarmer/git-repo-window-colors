@@ -18,6 +18,10 @@ export interface RepoConfigRule {
     profileName?: string;
     /** Whether this rule is enabled (default: true) */
     enabled?: boolean;
+    /** Local branch rules for this repository */
+    branchRules?: BranchConfigRule[];
+    /** Whether to use global branch rules (default: true) */
+    useGlobalBranchRules?: boolean;
 }
 
 /**

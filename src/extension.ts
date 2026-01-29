@@ -18,6 +18,8 @@ type RepoConfig = {
     profileName?: string;
     branchProfileName?: string;
     enabled?: boolean;
+    branchRules?: Array<{ pattern: string; color: string; enabled?: boolean }>;
+    useGlobalBranchRules?: boolean;
 };
 
 /**
@@ -443,9 +445,8 @@ export async function activate(context: ExtensionContext) {
                 configList = new Array<RepoConfig>();
             }
 
-            let repoConfig = await getMatchingRepoRule(configList);
-
-            if (repoConfig !== undefined) {
+            // Check if any rule (enabled or disabled) exists for this repo
+            if (hasAnyMatchingRepoRule(configList)) {
                 // Rule already exists, just open the configuration editor
                 configProvider.show(context.extensionUri);
                 return;
@@ -561,9 +562,8 @@ export async function activate(context: ExtensionContext) {
                 configList = new Array<RepoConfig>();
             }
 
-            let repoConfig = await getMatchingRepoRule(configList);
-
-            if (repoConfig !== undefined) {
+            // Check if any rule (enabled or disabled) exists for this repo
+            if (hasAnyMatchingRepoRule(configList)) {
                 // Rule already exists, just open the configuration editor
                 configProvider.show(context.extensionUri);
                 return;
@@ -816,6 +816,8 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                 branchColor: setting.branchColor,
                 profileName: setting.profileName,
                 enabled: setting.enabled !== undefined ? setting.enabled : true,
+                branchRules: setting.branchRules,
+                useGlobalBranchRules: setting.useGlobalBranchRules,
             };
 
             // Validate if needed
@@ -872,6 +874,8 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                         branchColor: obj.branchColor,
                         profileName: obj.profileName,
                         enabled: obj.enabled !== undefined ? obj.enabled : true,
+                        branchRules: obj.branchRules,
+                        useGlobalBranchRules: obj.useGlobalBranchRules,
                     };
                     result.push(repoConfig);
                     continue;
@@ -1110,6 +1114,21 @@ async function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined
     return repoConfig;
 }
 
+function hasAnyMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): boolean {
+    if (repoConfigList === undefined) {
+        return false;
+    }
+
+    for (const item of repoConfigList) {
+        // Check for matching rule regardless of enabled state
+        if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function undoColors() {
     outputChannel.appendLine('Removing managed color for this workspace.');
     const settings = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
@@ -1161,11 +1180,26 @@ async function doit(reason: string) {
     if (repoConfigList !== undefined) {
         let item: RepoConfig;
         for (item of repoConfigList) {
+            // Skip disabled rules
+            if (item.enabled === false) {
+                continue;
+            }
+
             if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
                 matchedRepoConfig = item;
-                const isProfileOnly = item.profileName && item.profileName === item.primaryColor;
+                outputChannel.appendLine('  [DEBUG] Matched repo rule:');
+                outputChannel.appendLine('    repoQualifier: ' + item.repoQualifier);
+                outputChannel.appendLine('    profileName: ' + (item.profileName || 'undefined'));
+                outputChannel.appendLine('    primaryColor: ' + (item.primaryColor || 'undefined'));
+                outputChannel.appendLine('    branchColor: ' + (item.branchColor || 'undefined'));
 
-                if (!isProfileOnly) {
+                // If profileName is explicitly set, use it and don't try to parse primaryColor as a color
+                if (item.profileName) {
+                    outputChannel.appendLine(
+                        '  Repo rule matched: "' + item.repoQualifier + '", using Profile ' + item.profileName,
+                    );
+                } else if (item.primaryColor) {
+                    // No explicit profile, try to parse primaryColor as a color
                     try {
                         repoColor = Color(item.primaryColor);
                         outputChannel.appendLine(
@@ -1174,10 +1208,6 @@ async function doit(reason: string) {
                     } catch (e) {
                         outputChannel.appendLine('  Error parsing primary color: ' + item.primaryColor);
                     }
-                } else {
-                    outputChannel.appendLine(
-                        '  Repo rule matched: "' + item.repoQualifier + '", using Profile ' + item.profileName,
-                    );
                 }
 
                 if (item.defaultBranch !== undefined) {
@@ -1235,47 +1265,106 @@ async function doit(reason: string) {
         }
     }
 
-    // Now check the branch map to see if any apply
+    // Now check branch rules - first check local repo rules, then global
     let branchMatch = false;
-    for (const [branch, colorOrProfile] of branchMap) {
-        if (branch === '') {
-            continue;
-        }
-        if (currentBranch?.match(branch)) {
-            // Check if this is a profile name
-            const advancedProfiles = workspace
-                .getConfiguration('windowColors')
-                .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
-            const profileName = extractProfileName(colorOrProfile, advancedProfiles);
+    let hasLocalBranchRulesConfigured = false;
 
-            if (profileName) {
-                // It's a profile - resolve it
-                outputChannel.appendLine('  Branch rule matched: "' + branch + '" using Profile: ' + profileName);
-                // Set the branch profile name so it gets resolved later
-                if (!matchedRepoConfig) {
-                    matchedRepoConfig = {
-                        repoQualifier: '',
-                        defaultBranch: undefined,
-                        primaryColor: '',
-                        branchColor: undefined,
-                        branchProfileName: profileName,
-                    };
-                } else {
-                    matchedRepoConfig.branchProfileName = profileName;
-                }
-            } else {
-                // It's a color
-                branchColor = Color(colorOrProfile);
-                outputChannel.appendLine('  Branch rule matched: "' + branch + '" with color: ' + branchColor.hex());
+    // Check if matched repo has local branch rules
+    if (
+        matchedRepoConfig &&
+        matchedRepoConfig.useGlobalBranchRules === false &&
+        matchedRepoConfig.branchRules &&
+        matchedRepoConfig.branchRules.length > 0
+    ) {
+        hasLocalBranchRulesConfigured = true;
+        outputChannel.appendLine(
+            `  Checking local branch rules for repo (${matchedRepoConfig.branchRules.length} rules)`,
+        );
+
+        for (const rule of matchedRepoConfig.branchRules) {
+            // Skip disabled rules
+            if (rule.enabled === false) {
+                continue;
             }
-            branchMatch = true;
-            // if (repoColor === undefined) {
-            //     outputChannel.appendLine('  No repo color specified, using branch color as repo color');
-            //     // No repo config, so use the branch color as the repo color
-            //     repoColor = branchColor;
-            // }
 
-            break;
+            if (rule.pattern === '') {
+                continue;
+            }
+
+            if (currentBranch?.match(rule.pattern)) {
+                // Check if this is a profile name
+                const advancedProfiles = workspace
+                    .getConfiguration('windowColors')
+                    .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+                const profileName = extractProfileName(rule.color, advancedProfiles);
+
+                if (profileName) {
+                    // It's a profile - resolve it
+                    outputChannel.appendLine(
+                        '  Local branch rule matched: "' + rule.pattern + '" using Profile: ' + profileName,
+                    );
+                    matchedRepoConfig.branchProfileName = profileName;
+                } else {
+                    // It's a color
+                    branchColor = Color(rule.color);
+                    outputChannel.appendLine(
+                        '  Local branch rule matched: "' + rule.pattern + '" with color: ' + branchColor.hex(),
+                    );
+                }
+                branchMatch = true;
+                break;
+            }
+        }
+    } else if (matchedRepoConfig && matchedRepoConfig.useGlobalBranchRules === false) {
+        // Repo is configured to use local rules, but the array is empty or undefined
+        hasLocalBranchRulesConfigured = true;
+        outputChannel.appendLine('  Repo configured for local branch rules, but none defined');
+    }
+
+    // Only check global branch rules if local rules are not configured
+    if (!branchMatch && !hasLocalBranchRulesConfigured) {
+        for (const [branch, colorOrProfile] of branchMap) {
+            if (branch === '') {
+                continue;
+            }
+            if (currentBranch?.match(branch)) {
+                // Check if this is a profile name
+                const advancedProfiles = workspace
+                    .getConfiguration('windowColors')
+                    .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+                const profileName = extractProfileName(colorOrProfile, advancedProfiles);
+
+                if (profileName) {
+                    // It's a profile - resolve it
+                    outputChannel.appendLine('  Branch rule matched: "' + branch + '" using Profile: ' + profileName);
+                    // Set the branch profile name so it gets resolved later
+                    if (!matchedRepoConfig) {
+                        matchedRepoConfig = {
+                            repoQualifier: '',
+                            defaultBranch: undefined,
+                            primaryColor: '',
+                            branchColor: undefined,
+                            branchProfileName: profileName,
+                        };
+                    } else {
+                        matchedRepoConfig.branchProfileName = profileName;
+                    }
+                } else {
+                    // It's a color
+                    branchColor = Color(colorOrProfile);
+                    outputChannel.appendLine(
+                        '  Branch rule matched: "' + branch + '" with color: ' + branchColor.hex(),
+                    );
+                }
+                branchMatch = true;
+                // if (repoColor === undefined) {
+                //     outputChannel.appendLine('  No repo color specified, using branch color as repo color');
+                //     // No repo config, so use the branch color as the repo color
+                //     repoColor = branchColor;
+                // }
+
+                break;
+            }
         }
     }
 
@@ -1311,11 +1400,22 @@ async function doit(reason: string) {
     let repoProfileName: string | null = null;
     let branchProfileName: string | null = null;
 
+    outputChannel.appendLine('  [DEBUG] Determining profiles...');
     if (matchedRepoConfig) {
+        outputChannel.appendLine(
+            '    matchedRepoConfig.profileName: ' + (matchedRepoConfig.profileName || 'undefined'),
+        );
+        outputChannel.appendLine(
+            '    matchedRepoConfig.primaryColor: ' + (matchedRepoConfig.primaryColor || 'undefined'),
+        );
+
         // Check for explicit profile name or profile from primaryColor
         repoProfileName =
             matchedRepoConfig.profileName || extractProfileName(matchedRepoConfig.primaryColor, advancedProfiles);
         outputChannel.appendLine(`  Repo profile: ${repoProfileName || 'none'}`);
+        outputChannel.appendLine(
+            '    Extracted from: ' + (matchedRepoConfig.profileName ? 'profileName field' : 'primaryColor field'),
+        );
 
         // Check for branch profile (from branch rule or branchColor)
         branchProfileName =
@@ -1324,13 +1424,20 @@ async function doit(reason: string) {
                 ? extractProfileName(matchedRepoConfig.branchColor, advancedProfiles)
                 : null);
         outputChannel.appendLine(`  Branch profile: ${branchProfileName || 'none'}`);
+    } else {
+        outputChannel.appendLine('    No matchedRepoConfig found');
     }
 
     // Apply profiles: repo profile first (if any), then branch profile overrides (if any)
     // If there's no repo profile but there IS a repo color, apply legacy mode first
+    outputChannel.appendLine('  [DEBUG] Choosing mode:');
+    outputChannel.appendLine('    repoProfileName: ' + (repoProfileName || 'null'));
+    outputChannel.appendLine('    repoColor: ' + (repoColor ? repoColor.hex() : 'null'));
+    outputChannel.appendLine('    branchColor: ' + (branchColor ? branchColor.hex() : 'null'));
+
     if (!repoProfileName && repoColor && branchColor) {
         // Legacy Mode - apply base colors from repo/branch
-        outputChannel.appendLine(`  Applying legacy color mode for repo color: ${repoColor.hex()}`);
+        outputChannel.appendLine(`  [MODE: LEGACY] Applying legacy color mode for repo color: ${repoColor.hex()}`);
 
         let titleBarTextColor: Color = Color('#ffffff');
         let titleBarColor: Color = Color('#ffffff');
@@ -1393,10 +1500,16 @@ async function doit(reason: string) {
         );
     } else if (repoProfileName && advancedProfiles[repoProfileName]) {
         // Apply repo profile
-        outputChannel.appendLine(`  Applying repo profile "${repoProfileName}"`);
+        outputChannel.appendLine(`  [MODE: REPO PROFILE] Applying repo profile "${repoProfileName}"`);
+        outputChannel.appendLine('    Profile exists in advancedProfiles: true');
         const repoProfile = advancedProfiles[repoProfileName];
         newColors = resolveProfile(repoProfile, repoColor || Color('#000000'), branchColor || Color('#000000'));
         outputChannel.appendLine(`  Repo profile resolved ${Object.keys(newColors).length} color mappings`);
+    } else if (repoProfileName && !advancedProfiles[repoProfileName]) {
+        outputChannel.appendLine(`  [ERROR] Repo profile "${repoProfileName}" not found in advancedProfiles!`);
+        outputChannel.appendLine('    Available profiles: ' + Object.keys(advancedProfiles).join(', '));
+    } else {
+        outputChannel.appendLine('  [MODE: NONE] No repo profile or legacy colors to apply');
     }
 
     if (branchProfileName && advancedProfiles[branchProfileName]) {

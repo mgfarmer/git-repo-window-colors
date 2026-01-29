@@ -59,17 +59,42 @@ export function resolveProfile(
             // Handle both string (legacy) and object (new with opacity) formats
             let slotName: string;
             let mappingOpacity: number | undefined;
+            let fixedColor: string | undefined;
 
             if (typeof mappingValue === 'string') {
                 slotName = mappingValue;
             } else {
                 slotName = mappingValue.slot;
                 mappingOpacity = mappingValue.opacity;
+                fixedColor = mappingValue.fixedColor;
             }
 
             if (!slotName || slotName === 'none' || slotName === 'transparent') {
                 // Keep 'transparent' check for backwards compatibility
                 finalColors[uiKey] = undefined;
+            } else if (slotName === '__fixed__' && fixedColor) {
+                // Handle fixed color directly from mapping
+                try {
+                    let c = Color(fixedColor);
+
+                    // Apply mapping-level opacity if specified
+                    if (mappingOpacity !== undefined && mappingOpacity >= 0 && mappingOpacity <= 1) {
+                        c = c.alpha(mappingOpacity);
+                    }
+
+                    if (c.alpha() < 1) {
+                        // Use #RRGGBBAA format for colors with alpha channel
+                        const hex = c.hex();
+                        const alpha = Math.round(c.alpha() * 255)
+                            .toString(16)
+                            .padStart(2, '0');
+                        finalColors[uiKey] = hex + alpha;
+                    } else {
+                        finalColors[uiKey] = c.hex();
+                    }
+                } catch (e) {
+                    console.warn(`[AdvancedMode] Error parsing fixed color for ${uiKey}:`, e);
+                }
             } else if (paletteResults[slotName]) {
                 let c = paletteResults[slotName];
 

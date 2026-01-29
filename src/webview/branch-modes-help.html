@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Branch Modes Guide</title>
+    <link rel="stylesheet" href="help.css">
+</head>
+<body>
+    <div class="help-content">
+        <div class="help-toc">
+            <h3>Help Topics</h3>
+            <ul>
+                <li><a href="#" data-switch-help="getting-started">Getting Started</a></li>
+                <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+                <li><a class="current">Branch Modes Guide</a> (current)</li>
+                <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
+            </ul>
+        </div>
+
+        <h1>Branch Modes: Global vs. Local</h1>
+        
+        <p>
+            Each repository rule can use either <strong>Global Branch Rules</strong> or <strong>Local Branch Rules</strong>. 
+            This powerful feature allows you to customize branch coloring on a per-repository basis while maintaining 
+            a set of common rules across all repositories.
+        </p>
+
+        <h2>Understanding Branch Modes</h2>
+
+        <h3>Global Mode (Default)</h3>
+        <p>
+            When a repository uses <strong>Global</strong> mode, it shares the common branch rules defined in the 
+            Branch Rules panel. This is the default behavior and is ideal for:
+        </p>
+        <ul>
+            <li>Maintaining consistent branch colors across all your repositories</li>
+            <li>Having a single set of branch patterns (e.g., <code>feature/.*</code>, <code>main</code>) that apply everywhere</li>
+            <li>Simplifying configuration when your branching strategy is consistent across projects</li>
+        </ul>
+
+        <div class="example">
+            <strong>Example:</strong><br>
+            If your global branch rules define:<br>
+            • <code>main|master</code> → Blue<br>
+            • <code>feature/.*</code> → Green<br>
+            • <code>hotfix/.*</code> → Red<br>
+            <br>
+            Then ALL repositories in Global mode will use these same branch color patterns.
+        </div>
+
+        <h3>Local Mode</h3>
+        <p>
+            When a repository uses <strong>Local</strong> mode, it has its own dedicated set of branch rules 
+            that override the global rules. This is useful when:
+        </p>
+        <ul>
+            <li>A specific repository has unique branching conventions</li>
+            <li>You want different branch colors for a particular project</li>
+            <li>You need more granular control over branch matching for certain repos</li>
+        </ul>
+
+        <div class="example">
+            <strong>Example:</strong><br>
+            Your <code>client-project</code> repository might use Local mode with custom rules:<br>
+            • <code>prod</code> → Dark Red (production branch)<br>
+            • <code>staging</code> → Orange (staging branch)<br>
+            • <code>dev</code> → Yellow (development branch)<br>
+            <br>
+            While all your other repositories continue to use the global branch rules.
+        </div>
+
+        <h2>How to Use Branch Modes</h2>
+
+        <h3>Switching Between Modes</h3>
+        <p>
+            In the Repository Rules table, each repository has a <strong>Branch Mode</strong> dropdown in the rightmost column:
+        </p>
+        <ol>
+            <li>Select a repository by clicking its radio button (leftmost column)</li>
+            <li>Find the "Branch Mode" dropdown for that repository</li>
+            <li>Choose <strong>Global</strong> or <strong>Local</strong></li>
+        </ol>
+
+        <p>
+            When you switch to Local mode, the extension will:
+        </p>
+        <ul>
+            <li>Initialize an empty local branch rules array for that repository</li>
+            <li>Update the Branch Rules section header to show "Branch Rules - [Repository Name]"</li>
+            <li>Display only that repository's local rules in the Branch Rules table</li>
+            <li>Show a "Copy From..." button to help you populate local rules</li>
+        </ul>
+
+        <h3>Working with Local Rules</h3>
+        <p>
+            When a repository is in Local mode and selected, the Branch Rules panel operates on that repository's 
+            local rules instead of the global rules:
+        </p>
+
+        <h4>Adding Local Rules</h4>
+        <p>
+            Click the "+ Add" button in the Branch Rules panel to create a new local rule for the selected repository. 
+            The rule will only apply to that specific repository.
+        </p>
+
+        <h4>Copying Rules</h4>
+        <p>
+            The <strong>"📋 Copy From..."</strong> button appears when editing local rules. It allows you to:
+        </p>
+        <ul>
+            <li><strong>Copy from Global Rules</strong> - Import all global branch rules into the local rule set</li>
+            <li><strong>Copy from Another Repository</strong> - Import local rules from any other repository that has local rules defined</li>
+        </ul>
+
+        <div class="tip">
+            <strong>Tip:</strong> The Copy From feature <strong>appends</strong> rules instead of replacing them. 
+            This allows you to start with global rules and then add repository-specific customizations on top.
+        </div>
+
+        <h4>Editing and Managing Local Rules</h4>
+        <p>
+            Local rules work exactly like global rules:
+        </p>
+        <ul>
+            <li>Drag to reorder (first matching rule wins)</li>
+            <li>Toggle enabled/disabled with the checkbox</li>
+            <li>Edit patterns and colors inline</li>
+            <li>Delete rules with the trash icon</li>
+        </ul>
+
+        <h2>How Branch Matching Works</h2>
+        
+        <p>
+            When the extension needs to determine the branch color for your current workspace, it follows this priority:
+        </p>
+
+        <ol>
+            <li><strong>Match Repository:</strong> First, find the repository rule that matches your workspace</li>
+            <li><strong>Check Branch Mode:</strong> Determine if that repository uses Global or Local branch rules</li>
+            <li><strong>Search Branch Rules:</strong>
+                <ul>
+                    <li>If <strong>Local mode</strong>: Search the repository's local branch rules first</li>
+                    <li>If <strong>Global mode</strong> OR no local match: Search the global branch rules</li>
+                </ul>
+            </li>
+            <li><strong>Apply First Match:</strong> Use the first matching branch rule found</li>
+        </ol>
+
+        <div class="note">
+            <strong>Important:</strong> Branch rules are processed in order. The <strong>first</strong> matching 
+            pattern is used, and subsequent matches are ignored. This applies to both local and global rules.
+        </div>
+
+        <h2>Best Practices</h2>
+
+        <h3>When to Use Global Mode</h3>
+        <ul>
+            <li>Most of your repositories follow the same branching conventions</li>
+            <li>You want simple, consistent branch colors across all projects</li>
+            <li>You're just getting started and want to minimize configuration</li>
+        </ul>
+
+        <h3>When to Use Local Mode</h3>
+        <ul>
+            <li>A repository has unique branch names or patterns</li>
+            <li>You need different visual cues for branches in a critical production repository</li>
+            <li>Client projects have different color requirements</li>
+            <li>You want to experiment with branch rules without affecting other repositories</li>
+        </ul>
+
+        <h3>Hybrid Approach</h3>
+        <p>
+            The most powerful approach is to use <strong>both modes</strong>:
+        </p>
+        <ul>
+            <li>Set up comprehensive global branch rules for your standard workflow</li>
+            <li>Keep most repositories in Global mode</li>
+            <li>Switch specific repositories to Local mode only when they need custom behavior</li>
+            <li>Use "Copy From Global" as a starting point when creating local rules</li>
+        </ul>
+
+        <div class="example">
+            <strong>Example Hybrid Setup:</strong><br>
+            <br>
+            <strong>Global Rules:</strong><br>
+            • <code>main|master</code> → Blue<br>
+            • <code>develop</code> → Purple<br>
+            • <code>feature/.*</code> → Green<br>
+            • <code>bugfix/.*</code> → Orange<br>
+            • <code>hotfix/.*</code> → Red<br>
+            <br>
+            <strong>Production Client Repository (Local Mode):</strong><br>
+            • <code>production</code> → Dark Red<br>
+            • <code>staging</code> → Orange<br>
+            • <code>develop</code> → Yellow<br>
+            • <code>feature/.*</code> → Light Blue<br>
+            <br>
+            All other repositories continue using the global rules automatically.
+        </div>
+
+        <h2>Selection and Visual Indicators</h2>
+
+        <h3>Radio Button Selection</h3>
+        <p>
+            The leftmost column in the Repository Rules table contains radio buttons. Clicking a radio button:
+        </p>
+        <ul>
+            <li>Highlights the selected row with a blue outline</li>
+            <li>Updates the Branch Rules panel to show that repository's rules</li>
+            <li>Changes the panel header to indicate which rules you're viewing</li>
+        </ul>
+
+        <h3>Matched Workspace Indicator</h3>
+        <p>
+            The repository rule that matches your currently open workspace displays a green checkmark (✓) icon. 
+            This helps you quickly identify which rule is actively controlling your window colors.
+        </p>
+
+        <div class="tip">
+            <strong>Tip:</strong> When you first open the configuration panel, it automatically selects the 
+            repository rule that matches your current workspace, making it easy to customize colors for the 
+            project you're currently working on.
+        </div>
+
+        <h2>Troubleshooting</h2>
+
+        <h3>Branch Rules Not Applying</h3>
+        <p>
+            If your local branch rules aren't working:
+        </p>
+        <ol>
+            <li>Verify the repository is in <strong>Local</strong> mode (check the Branch Mode dropdown)</li>
+            <li>Confirm the branch pattern matches your current branch name (patterns are regular expressions)</li>
+            <li>Check rule order - earlier rules take precedence</li>
+            <li>Ensure the rule is enabled (checkbox in the Actions column)</li>
+            <li>Look at the Output panel (View → Output → Git Repo Window Colors) for matching details</li>
+        </ol>
+
+        <h3>Seeing Wrong Colors After Switching Modes</h3>
+        <p>
+            If colors don't update immediately after switching between Global and Local:
+        </p>
+        <ol>
+            <li>Save the configuration (it should auto-save, but you can trigger it by making any edit)</li>
+            <li>Switch to a different branch and back, or reload VS Code window</li>
+            <li>Check the Output panel to see which rule is being matched</li>
+        </ol>
+
+        <h3>Copy From Button Not Appearing</h3>
+        <p>
+            The "Copy From..." button only appears when:
+        </p>
+        <ul>
+            <li>A repository is selected (via radio button)</li>
+            <li>That repository is in <strong>Local</strong> mode</li>
+        </ul>
+        <p>
+            If you don't see it, verify the repository's Branch Mode is set to "Local".
+        </p>
+
+        <h2>Additional Resources</h2>
+        <ul>
+            <li><a href="#" data-switch-help="rules">Rules Guide</a> - Learn more about repository and branch rules</li>
+            <li><a href="#" data-switch-help="profile">Profiles Guide</a> - Advanced color profiles for more control</li>
+            <li><a href="#" data-switch-help="report">Color Report</a> - See which rules are currently active</li>
+        </ul>
+    </div>
+</body>
+</html>

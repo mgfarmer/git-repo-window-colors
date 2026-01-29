@@ -10,11 +10,12 @@ let currentConfig: any = null;
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
 let selectedMappingTab: string | null = null; // Track which mapping tab is active
+let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
 
 // Load checkbox states from localStorage with defaults
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
 let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
-let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') === 'true'; // Default to false
+let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') !== 'false'; // Default to true
 
 // Advanced Mode Types
 type PaletteSlotSource = 'fixed' | 'repoColor' | 'branchColor' | 'transparent';
@@ -516,14 +517,8 @@ window.addEventListener('message', (event) => {
         case 'gettingStartedHelpContent':
             handleGettingStartedHelpContent(message.data);
             break;
-        case 'profileHelpContent':
-            handleProfileHelpContent(message.data);
-            break;
-        case 'rulesHelpContent':
-            handleRulesHelpContent(message.data);
-            break;
-        case 'reportHelpContent':
-            handleReportHelpContent(message.data);
+        case 'helpContent':
+            handleHelpContent(message.data);
             break;
         case 'confirmDeleteProfile':
             if (message.data && message.data.profileName) {
@@ -538,6 +533,56 @@ function handleConfigurationData(data: any) {
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
+
+    // Synchronize profileName fields for backward compatibility
+    // If primaryColor/branchColor/color matches a profile but profileName is not set, set it
+    if (currentConfig?.advancedProfiles && currentConfig?.repoRules) {
+        let needsUpdate = false;
+
+        for (const rule of currentConfig.repoRules) {
+            // Check primaryColor
+            if (rule.primaryColor && !rule.profileName && currentConfig.advancedProfiles[rule.primaryColor]) {
+                rule.profileName = rule.primaryColor;
+                needsUpdate = true;
+            }
+
+            // Check branchColor
+            if (rule.branchColor && !rule.branchProfileName && currentConfig.advancedProfiles[rule.branchColor]) {
+                rule.branchProfileName = rule.branchColor;
+                needsUpdate = true;
+            }
+
+            // Check local branch rules
+            if (rule.branchRules) {
+                for (const branchRule of rule.branchRules) {
+                    if (
+                        branchRule.color &&
+                        !branchRule.profileName &&
+                        currentConfig.advancedProfiles[branchRule.color]
+                    ) {
+                        branchRule.profileName = branchRule.color;
+                        needsUpdate = true;
+                    }
+                }
+            }
+        }
+
+        // Check global branch rules
+        if (currentConfig.branchRules) {
+            for (const branchRule of currentConfig.branchRules) {
+                if (branchRule.color && !branchRule.profileName && currentConfig.advancedProfiles[branchRule.color]) {
+                    branchRule.profileName = branchRule.color;
+                    needsUpdate = true;
+                }
+            }
+        }
+
+        // If we made changes, save the updated config
+        if (needsUpdate) {
+            debounceValidateAndSend();
+        }
+    }
+
     renderConfiguration(currentConfig);
 }
 
@@ -610,21 +655,15 @@ function handleProfileHelpContent(data: { content: string }) {
     }
 }
 
-function handleRulesHelpContent(data: { content: string }) {
-    console.log('[TOC Navigation] handleRulesHelpContent called, content length:', data.content?.length);
+function handleHelpContent(data: { helpType: string; content: string }) {
+    console.log(
+        `[TOC Navigation] handleHelpContent called for ${data.helpType}, content length:`,
+        data.content?.length,
+    );
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
-        console.log('[TOC Navigation] Rules help content loaded');
-    }
-}
-
-function handleReportHelpContent(data: any) {
-    console.log('[TOC Navigation] handleReportHelpContent called, content length:', data.content?.length);
-    const contentDiv = document.getElementById('helpPanelContent');
-    if (contentDiv && data.content) {
-        contentDiv.innerHTML = data.content;
-        console.log('[TOC Navigation] Report help content loaded');
+        console.log(`[TOC Navigation] ${data.helpType} help content loaded`);
     }
 }
 
@@ -640,6 +679,8 @@ function handleSwitchHelp(target: string) {
             titleElement.textContent = 'Profiles Guide';
         } else if (target === 'rules') {
             titleElement.textContent = 'Rules Guide';
+        } else if (target === 'branch-modes') {
+            titleElement.textContent = 'Branch Modes Guide';
         } else if (target === 'report') {
             titleElement.textContent = 'Color Report Guide';
         }
@@ -649,15 +690,20 @@ function handleSwitchHelp(target: string) {
     // Request the new content
     if (target === 'getting-started') {
         console.log('[TOC Navigation] Requesting getting started help from extension');
-        vscode.postMessage({ command: 'requestGettingStartedHelp' });
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'profile') {
-        vscode.postMessage({ command: 'requestProfileHelp' });
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'rules') {
-        console.log('[TOC Navigation] Requesting rules help from extension');
-        vscode.postMessage({ command: 'requestRulesHelp' });
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'branch-modes') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'report') {
-        console.log('[TOC Navigation] Requesting report help from extension');
-        vscode.postMessage({ command: 'requestReportHelp' });
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     }
 }
 
@@ -671,21 +717,16 @@ function openHelp(helpType: string) {
             titleElement.textContent = 'Profiles Guide';
         } else if (helpType === 'rules') {
             titleElement.textContent = 'Rules Guide';
+        } else if (helpType === 'branch-modes') {
+            titleElement.textContent = 'Branch Modes Guide';
         } else if (helpType === 'report') {
             titleElement.textContent = 'Color Report Guide';
         }
     }
 
     // Request help content from backend
-    if (helpType === 'getting-started') {
-        vscode.postMessage({ command: 'requestGettingStartedHelp' });
-    } else if (helpType === 'profile') {
-        vscode.postMessage({ command: 'requestProfileHelp' });
-    } else if (helpType === 'rules') {
-        vscode.postMessage({ command: 'requestRulesHelp' });
-    } else if (helpType === 'report') {
-        vscode.postMessage({ command: 'requestReportHelp' });
-    }
+    console.log(`[Help] Requesting ${helpType} help content from extension`);
+    vscode.postMessage({ command: 'requestHelp', data: { helpType } });
 
     // Show the help panel
     const overlay = document.getElementById('helpPanelOverlay');
@@ -711,7 +752,7 @@ function renderConfiguration(config: any) {
     clearValidationErrors();
 
     renderRepoRules(config.repoRules, config.matchingIndexes?.repoRule);
-    renderBranchRules(config.branchRules, config.matchingIndexes?.branchRule);
+    renderBranchRulesForSelectedRepo();
     renderOtherSettings(config.otherSettings);
     renderProfiles(config.advancedProfiles);
     renderWorkspaceInfo(config.workspaceInfo);
@@ -789,8 +830,20 @@ function handleDocumentClick(event: Event) {
             });
         } else if (branchMatch) {
             const index = parseInt(branchMatch[1]);
-            const rule = currentConfig?.branchRules?.[index];
-            const ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
+
+            // Check if we're deleting a local branch rule or a global one
+            const isLocalRule =
+                selectedRepoRuleIndex >= 0 &&
+                currentConfig?.repoRules?.[selectedRepoRuleIndex]?.useGlobalBranchRules === false;
+
+            let rule, ruleDescription;
+            if (isLocalRule) {
+                rule = currentConfig?.repoRules?.[selectedRepoRuleIndex]?.branchRules?.[index];
+                ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
+            } else {
+                rule = currentConfig?.branchRules?.[index];
+                ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
+            }
 
             // Send delete confirmation request to backend
             vscode.postMessage({
@@ -800,6 +853,7 @@ function handleDocumentClick(event: Event) {
                         ruleType: 'branch',
                         index: index,
                         ruleDescription: ruleDescription,
+                        repoIndex: isLocalRule ? selectedRepoRuleIndex : undefined,
                     },
                 },
             });
@@ -826,6 +880,17 @@ function handleDocumentClick(event: Event) {
         if (match) {
             const [, index, ruleType] = match;
             toggleRule(parseInt(index), ruleType);
+        }
+        return;
+    }
+
+    // Handle repo rule selection radio button
+    if (target.classList.contains('repo-select-radio')) {
+        const action = target.getAttribute('data-action');
+        const match = action?.match(/selectRepoRule\((\d+)\)/);
+        if (match) {
+            const index = parseInt(match[1]);
+            selectRepoRule(index);
         }
         return;
     }
@@ -894,10 +959,14 @@ function handleDocumentClick(event: Event) {
     }
 
     // Handle move/reorder buttons
-    const moveMatch = target.getAttribute('data-action')?.match(/moveRule\((\d+), '(\w+)', (-?\d+)\)/);
-    if (moveMatch) {
-        const [, index, ruleType, direction] = moveMatch;
-        moveRule(parseInt(index), ruleType, parseInt(direction));
+    const reorderBtn = target.closest('.reorder-btn') as HTMLElement;
+    if (reorderBtn) {
+        const action = reorderBtn.getAttribute('data-action');
+        const match = action?.match(/moveRule\((\d+), '(\w+)', (-?\d+)\)/);
+        if (match) {
+            const [, index, ruleType, direction] = match;
+            moveRule(parseInt(index), ruleType, parseInt(direction));
+        }
         return;
     }
 
@@ -933,6 +1002,14 @@ function handleDocumentChange(event: Event) {
     if (branchMatch) {
         const [, index, field] = branchMatch;
         updateBranchRule(parseInt(index), field, target.value);
+        return;
+    }
+
+    // Handle branch mode change
+    const branchModeMatch = action.match(/changeBranchMode\((\d+), this\.value\)/);
+    if (branchModeMatch) {
+        const index = parseInt(branchModeMatch[1]);
+        changeBranchMode(index, target.value === 'true');
         return;
     }
 
@@ -1143,11 +1220,13 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
     const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
+        <th scope="col" class="select-column">Select</th>
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
         <th scope="col">Primary Color${colorSuffix}</th>
         <th scope="col" class="branch-column">Default Branch</th>
         <th scope="col" class="branch-column">Branch Color${colorSuffix}</th>
+        <th scope="col" class="branch-mode-column">Branch Mode</th>
     `;
 
     // Create body
@@ -1155,6 +1234,11 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     rules.forEach((rule, index) => {
         const row = tbody.insertRow();
         row.className = 'rule-row';
+
+        // Add selected class if this is the selected rule
+        if (selectedRepoRuleIndex === index) {
+            row.classList.add('selected-rule');
+        }
 
         // Highlight matched rule
         if (matchingIndex !== undefined && index === matchingIndex) {
@@ -1176,10 +1260,39 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
 
     // Update branch column visibility
     updateBranchColumnVisibility();
+
+    // Initialize selection if needed
+    if (selectedRepoRuleIndex === -1 && rules.length > 0) {
+        // Prefer matched workspace rule, then first enabled rule, then first rule
+        if (
+            matchingIndex !== undefined &&
+            matchingIndex !== null &&
+            matchingIndex >= 0 &&
+            matchingIndex < rules.length
+        ) {
+            selectedRepoRuleIndex = matchingIndex;
+        } else {
+            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
+            selectedRepoRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
+        }
+        renderBranchRulesForSelectedRepo();
+    }
 }
 
 function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): string {
+    const isSelected = selectedRepoRuleIndex === index;
+    const useGlobal = rule.useGlobalBranchRules !== false; // Default to true
+
     return `
+        <td class="select-cell">
+            <input type="radio" 
+                   name="selected-repo-rule" 
+                   class="repo-select-radio" 
+                   id="repo-select-${index}"
+                   ${isSelected ? 'checked' : ''}
+                   data-action="selectRepoRule(${index})"
+                   aria-label="Select ${escapeHtml(rule.repoQualifier || 'rule ' + (index + 1))} for branch rules configuration">
+        </td>
         <td class="reorder-controls">
             ${createReorderControlsHTML(index, 'repo', totalCount, rule)}
         </td>
@@ -1207,16 +1320,28 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
         <td class="color-cell branch-column">
             ${createColorInputHTML(rule.branchColor || '', 'repo', index, 'branchColor')}
         </td>
+        <td class="branch-mode-cell">
+            <select class="branch-mode-select" 
+                    id="branch-mode-${index}"
+                    data-action="changeBranchMode(${index}, this.value)"
+                    aria-label="Branch rule mode for ${escapeHtml(rule.repoQualifier || 'rule ' + (index + 1))}">
+                <option value="true" ${useGlobal ? 'selected' : ''}>Global</option>
+                <option value="false" ${!useGlobal ? 'selected' : ''}>Local</option>
+            </select>
+        </td>
     `;
 }
 
-function renderBranchRules(rules: any[], matchingIndex?: number) {
+function renderBranchRules(rules: any[], matchingIndex?: number, isGlobalMode: boolean = true, repoRuleIndex?: number) {
     const container = document.getElementById('branchRulesContent');
     if (!container) return;
 
     if (!rules || rules.length === 0) {
-        container.innerHTML =
-            '<div class="no-rules">No branch rules defined. Click "Add" to create your first rule.</div>';
+        const selectedRule = repoRuleIndex !== undefined ? currentConfig?.repoRules?.[repoRuleIndex] : null;
+        const emptyMessage = !isGlobalMode
+            ? `<div class="no-rules">No local branch rules defined for "${escapeHtml(selectedRule?.repoQualifier || 'this repository')}". Click "Add" to create a rule or use "Copy From..." to import rules.</div>`
+            : '<div class="no-rules">No branch rules defined. Click "Add" to create your first rule.</div>';
+        container.innerHTML = emptyMessage;
         return;
     }
 
@@ -1578,8 +1703,18 @@ function renderColorReport(config: any) {
     // Get matching rules
     const matchedRepoRule =
         config.matchingIndexes?.repoRule >= 0 ? config.repoRules?.[config.matchingIndexes.repoRule] : null;
-    const matchedBranchRule =
-        config.matchingIndexes?.branchRule >= 0 ? config.branchRules?.[config.matchingIndexes.branchRule] : null;
+
+    // Determine if we should use a local or global branch rule
+    const isLocalBranchRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+    let matchedBranchRule = null;
+
+    if (isLocalBranchRule && matchedRepoRule?.branchRules && config.matchingIndexes?.branchRule >= 0) {
+        // Use local branch rule from the matched repo
+        matchedBranchRule = matchedRepoRule.branchRules[config.matchingIndexes.branchRule];
+    } else if (config.matchingIndexes?.branchRule >= 0) {
+        // Use global branch rule
+        matchedBranchRule = config.branchRules?.[config.matchingIndexes.branchRule];
+    }
 
     // Helper function to determine source for each theme key
     const getSourceForKey = (key: string): { description: string; gotoData: string } => {
@@ -1589,21 +1724,26 @@ function renderColorReport(config: any) {
 
         if (isActivityBarKey && matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
-            const gotoData = `branch:${config.matchingIndexes.branchRule}`;
+            // Include repo index if this is a local branch rule
+            const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+            const ruleTypeLabel = isLocalRule ? 'Local Branch Rule' : 'Global Branch Rule';
+            const gotoData = isLocalRule
+                ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
+                : `branch:${config.matchingIndexes.branchRule}`;
 
             // Check if using a profile
             if (matchedBranchRule.profileName) {
                 const profileName = matchedBranchRule.profileName;
                 const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
                 return {
-                    description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${escapeHtml(pattern)}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${escapeHtml(pattern)}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
                     gotoData: profileGotoData,
                 };
             }
 
             const color = escapeHtml(matchedBranchRule.color);
             return {
-                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
+                description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
             };
         }
@@ -1629,21 +1769,26 @@ function renderColorReport(config: any) {
 
         if (matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
-            const gotoData = `branch:${config.matchingIndexes.branchRule}`;
+            // Include repo index if this is a local branch rule
+            const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+            const ruleTypeLabel = isLocalRule ? 'Local Branch Rule' : 'Global Branch Rule';
+            const gotoData = isLocalRule
+                ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
+                : `branch:${config.matchingIndexes.branchRule}`;
 
             // Check if using a profile
             if (matchedBranchRule.profileName) {
                 const profileName = matchedBranchRule.profileName;
                 const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
                 return {
-                    description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
                     gotoData: profileGotoData,
                 };
             }
 
             const color = escapeHtml(matchedBranchRule.color);
             return {
-                description: `Branch Rule: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
+                description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
             };
         }
@@ -1671,7 +1816,12 @@ function renderColorReport(config: any) {
                 if (branchProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
                 } else {
-                    gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+                    // Include repo index if this is a local branch rule
+                    const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+                    const gotoData = isLocalRule
+                        ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
+                        : `branch:${config.matchingIndexes.branchRule}`;
+                    gotoTarget = `data-goto="${gotoData}"`;
                 }
             } else if (matchedRepoRule) {
                 // Check if repo rule uses a profile (can be in profileName or primaryColor field)
@@ -1695,7 +1845,12 @@ function renderColorReport(config: any) {
                 if (branchProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
                 } else {
-                    gotoTarget = `data-goto="branch:${config.matchingIndexes.branchRule}"`;
+                    // Include repo index if this is a local branch rule
+                    const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+                    const gotoData = isLocalRule
+                        ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
+                        : `branch:${config.matchingIndexes.branchRule}`;
+                    gotoTarget = `data-goto="${gotoData}"`;
                 }
             }
 
@@ -1843,9 +1998,29 @@ function addBranchRule() {
     const newRule = {
         pattern: randomDefectName,
         color: getThemeAppropriateColor(),
+        enabled: true,
     };
 
-    currentConfig.branchRules.push(newRule);
+    // Determine if we're in global or local mode
+    if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        const useGlobal = selectedRule.useGlobalBranchRules !== false;
+
+        if (useGlobal) {
+            // Add to global branch rules
+            currentConfig.branchRules.push(newRule);
+        } else {
+            // Add to local branch rules for this repo
+            if (!selectedRule.branchRules) {
+                selectedRule.branchRules = [];
+            }
+            selectedRule.branchRules.push(newRule);
+        }
+    } else {
+        // Fallback to global
+        currentConfig.branchRules.push(newRule);
+    }
+
     sendConfiguration();
 }
 
@@ -1857,19 +2032,323 @@ function updateRepoRule(index: number, field: string, value: string) {
 }
 
 function updateBranchRule(index: number, field: string, value: string) {
-    if (!currentConfig?.branchRules?.[index]) return;
+    // Determine if we're updating global or local branch rules
+    if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        const useGlobal = selectedRule.useGlobalBranchRules !== false;
 
-    currentConfig.branchRules[index][field] = value;
+        if (useGlobal) {
+            // Update global branch rules
+            if (!currentConfig?.branchRules?.[index]) return;
+            currentConfig.branchRules[index][field] = value;
+        } else {
+            // Update local branch rules
+            if (!selectedRule.branchRules?.[index]) return;
+            selectedRule.branchRules[index][field] = value;
+        }
+    } else {
+        // Fallback to global
+        if (!currentConfig?.branchRules?.[index]) return;
+        currentConfig.branchRules[index][field] = value;
+    }
+
+    debounceValidateAndSend();
+}
+
+function selectRepoRule(index: number) {
+    if (!currentConfig?.repoRules?.[index]) return;
+
+    selectedRepoRuleIndex = index;
+
+    // Re-render repo rules to update selected state
+    renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+
+    // Render branch rules for the selected repo
+    renderBranchRulesForSelectedRepo();
+}
+
+function changeBranchMode(index: number, useGlobal: boolean) {
+    if (!currentConfig?.repoRules?.[index]) return;
+
+    currentConfig.repoRules[index].useGlobalBranchRules = useGlobal;
+
+    // Initialize local branch rules array if switching to local mode
+    if (!useGlobal && !currentConfig.repoRules[index].branchRules) {
+        currentConfig.repoRules[index].branchRules = [];
+    }
+
+    // Re-render repo rules to update the dropdown display
+    renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+
+    // If this is the selected rule, re-render branch rules
+    if (selectedRepoRuleIndex === index) {
+        renderBranchRulesForSelectedRepo();
+    }
+
+    sendConfiguration();
+}
+
+function renderBranchRulesForSelectedRepo() {
+    if (!currentConfig || selectedRepoRuleIndex === -1) return;
+
+    const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
+    if (!selectedRule) return;
+
+    const useGlobal = selectedRule.useGlobalBranchRules !== false;
+    const branchRules = useGlobal ? currentConfig.branchRules : selectedRule.branchRules || [];
+    const ruleSource = useGlobal ? 'Global' : selectedRule.repoQualifier || 'Local';
+
+    // Update section header
+    const header = document.querySelector('#branch-rules-heading');
+    if (header) {
+        const count = branchRules?.length || 0;
+        header.textContent = `Branch Rules - ${ruleSource} (${count})`;
+    }
+
+    // Show/hide Copy From button based on mode
+    updateCopyFromButton(!useGlobal);
+
+    renderBranchRules(branchRules, currentConfig.matchingIndexes?.branchRule, useGlobal, selectedRepoRuleIndex);
+}
+
+function updateCopyFromButton(showButton: boolean) {
+    const panelHeader = document.querySelector('.branch-panel .panel-header');
+    if (!panelHeader) return;
+
+    // Get or create button container
+    let buttonContainer = panelHeader.querySelector('.panel-header-buttons');
+    const addBtn = panelHeader.querySelector('.branch-add-button');
+
+    if (!buttonContainer && addBtn) {
+        // Wrap the Add button in a container if it doesn't exist
+        buttonContainer = document.createElement('div');
+        buttonContainer.className = 'panel-header-buttons';
+        panelHeader.insertBefore(buttonContainer, addBtn);
+        buttonContainer.appendChild(addBtn);
+    }
+
+    if (!buttonContainer) return;
+
+    // Remove existing copy button if present
+    const existingBtn = buttonContainer.querySelector('.copy-from-button');
+    if (existingBtn) existingBtn.remove();
+
+    if (!showButton) return;
+
+    // Create Copy From button
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'copy-from-button';
+    copyBtn.textContent = '📋 Copy From...';
+    copyBtn.title = 'Copy branch rules from global or another repository';
+    copyBtn.setAttribute('aria-label', 'Copy branch rules from another source');
+
+    // Insert before the Add button in the container
+    if (addBtn) {
+        buttonContainer.insertBefore(copyBtn, addBtn);
+    }
+
+    // Add click handler to show dropdown
+    copyBtn.addEventListener('click', showCopyFromMenu);
+}
+
+function showCopyFromMenu(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const button = event.currentTarget as HTMLElement;
+    const rect = button.getBoundingClientRect();
+
+    // Remove any existing menu
+    const existingMenu = document.querySelector('.copy-from-menu');
+    if (existingMenu) existingMenu.remove();
+
+    // Build menu options
+    const menu = document.createElement('div');
+    menu.className = 'copy-from-menu';
+    menu.setAttribute('role', 'menu');
+
+    // Add Global option if there are global rules
+    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'copy-from-option';
+        option.textContent = `Global Rules (${currentConfig.branchRules.length})`;
+        option.setAttribute('role', 'menuitem');
+        option.setAttribute('data-source-type', 'global');
+        menu.appendChild(option);
+    }
+
+    // Add options for other repos with local rules
+    if (currentConfig?.repoRules) {
+        currentConfig.repoRules.forEach((rule, index) => {
+            if (index === selectedRepoRuleIndex) return; // Skip current repo
+            if (rule.useGlobalBranchRules !== false) return; // Skip repos using global
+            if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
+
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'copy-from-option';
+            option.textContent = `${rule.repoQualifier} (${rule.branchRules.length})`;
+            option.setAttribute('role', 'menuitem');
+            option.setAttribute('data-source-type', 'repo');
+            option.setAttribute('data-source-index', String(index));
+            menu.appendChild(option);
+        });
+    }
+
+    // If no options, show message
+    if (menu.children.length === 0) {
+        const noOptions = document.createElement('div');
+        noOptions.className = 'copy-from-no-options';
+        noOptions.textContent = 'No rules available to copy';
+        menu.appendChild(noOptions);
+    }
+
+    // Position menu below button
+    menu.style.position = 'absolute';
+    menu.style.top = `${rect.bottom + window.scrollY}px`;
+    menu.style.left = `${rect.left + window.scrollX}px`;
+
+    document.body.appendChild(menu);
+
+    // Add event handlers
+    menu.addEventListener('click', handleCopyFromSelection);
+
+    // Close menu when clicking outside
+    const closeMenu = (e: MouseEvent) => {
+        if (!menu.contains(e.target as Node) && e.target !== button) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+}
+
+function handleCopyFromSelection(event: Event) {
+    const target = event.target as HTMLElement;
+    if (!target.classList.contains('copy-from-option')) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const sourceType = target.getAttribute('data-source-type');
+    const sourceIndex = target.getAttribute('data-source-index');
+
+    if (sourceType === 'global') {
+        copyBranchRulesFrom('global', -1);
+    } else if (sourceType === 'repo' && sourceIndex !== null) {
+        copyBranchRulesFrom('repo', parseInt(sourceIndex, 10));
+    }
+
+    // Remove menu
+    const menu = document.querySelector('.copy-from-menu');
+    if (menu) menu.remove();
+}
+
+function copyBranchRulesFrom(sourceType: 'global' | 'repo', sourceIndex: number) {
+    if (!currentConfig || selectedRepoRuleIndex === -1) return;
+
+    const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
+    if (!selectedRule) return;
+
+    // Get source rules
+    let sourceRules: any[] = [];
+    if (sourceType === 'global') {
+        sourceRules = currentConfig.branchRules || [];
+    } else if (sourceType === 'repo') {
+        const sourceRepo = currentConfig.repoRules?.[sourceIndex];
+        if (sourceRepo) {
+            sourceRules = sourceRepo.branchRules || [];
+        }
+    }
+
+    if (sourceRules.length === 0) return;
+
+    // Initialize local branchRules if needed
+    if (!selectedRule.branchRules) {
+        selectedRule.branchRules = [];
+    }
+
+    // Deep clone and append rules (not replace!)
+    sourceRules.forEach((rule) => {
+        const clonedRule = {
+            pattern: rule.pattern,
+            color: rule.color,
+            enabled: rule.enabled !== false, // Default to true
+        };
+        selectedRule.branchRules!.push(clonedRule);
+    });
+
+    // Re-render
+    renderBranchRulesForSelectedRepo();
     debounceValidateAndSend();
 }
 
 function updateColorRule(ruleType: string, index: number, field: string, value: string) {
     if (!currentConfig) return;
 
-    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
-    if (!rules?.[index]) return;
+    if (ruleType === 'repo') {
+        const rules = currentConfig.repoRules;
+        if (!rules?.[index]) return;
+        rules[index][field] = value;
 
-    rules[index][field] = value;
+        // If updating primaryColor or branchColor with a profile name, also set the profileName field
+        if (field === 'primaryColor' && value && currentConfig.advancedProfiles?.[value]) {
+            rules[index].profileName = value;
+        } else if (field === 'primaryColor') {
+            // If primaryColor is not a profile, clear profileName
+            delete rules[index].profileName;
+        }
+
+        if (field === 'branchColor' && value && currentConfig.advancedProfiles?.[value]) {
+            rules[index].branchProfileName = value;
+        } else if (field === 'branchColor') {
+            // If branchColor is not a profile, clear branchProfileName
+            delete rules[index].branchProfileName;
+        }
+    } else if (ruleType === 'branch') {
+        // Determine if we're updating global or local branch rules
+        if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const useGlobal = selectedRule.useGlobalBranchRules !== false;
+
+            if (useGlobal) {
+                // Update global branch rules
+                if (!currentConfig?.branchRules?.[index]) return;
+                currentConfig.branchRules[index][field] = value;
+
+                // If updating color with a profile name, also set the profileName field
+                if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
+                    currentConfig.branchRules[index].profileName = value;
+                } else if (field === 'color') {
+                    delete currentConfig.branchRules[index].profileName;
+                }
+            } else {
+                // Update local branch rules
+                if (!selectedRule.branchRules?.[index]) return;
+                selectedRule.branchRules[index][field] = value;
+
+                // If updating color with a profile name, also set the profileName field
+                if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
+                    selectedRule.branchRules[index].profileName = value;
+                } else if (field === 'color') {
+                    delete selectedRule.branchRules[index].profileName;
+                }
+            }
+        } else {
+            // Fallback to global
+            if (!currentConfig?.branchRules?.[index]) return;
+            currentConfig.branchRules[index][field] = value;
+
+            // If updating color with a profile name, also set the profileName field
+            if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
+                currentConfig.branchRules[index].profileName = value;
+            } else if (field === 'color') {
+                delete currentConfig.branchRules[index].profileName;
+            }
+        }
+    }
 
     // Update color swatch if present
     updateColorSwatch(ruleType, index, field, value);
@@ -1927,10 +2406,44 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
     const randomColor = getThemeAppropriateColor();
 
     // Update the config
-    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
-    if (!rules?.[index]) return;
+    if (ruleType === 'repo') {
+        const rules = currentConfig.repoRules;
+        if (!rules?.[index]) return;
+        rules[index][field] = randomColor;
 
-    rules[index][field] = randomColor;
+        // Clear profile fields when generating a random color
+        if (field === 'primaryColor') {
+            delete rules[index].profileName;
+        } else if (field === 'branchColor') {
+            delete rules[index].branchProfileName;
+        }
+    } else if (ruleType === 'branch') {
+        // Determine if we're updating global or local branch rules
+        if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const useGlobal = selectedRule.useGlobalBranchRules !== false;
+
+            if (useGlobal) {
+                // Update global branch rules
+                if (!currentConfig?.branchRules?.[index]) return;
+                currentConfig.branchRules[index][field] = randomColor;
+                // Clear profileName when generating a random color
+                delete currentConfig.branchRules[index].profileName;
+            } else {
+                // Update local branch rules
+                if (!selectedRule.branchRules?.[index]) return;
+                selectedRule.branchRules[index][field] = randomColor;
+                // Clear profileName when generating a random color
+                delete selectedRule.branchRules[index].profileName;
+            }
+        } else {
+            // Fallback to global
+            if (!currentConfig?.branchRules?.[index]) return;
+            currentConfig.branchRules[index][field] = randomColor;
+            // Clear profileName when generating a random color
+            delete currentConfig.branchRules[index].profileName;
+        }
+    }
 
     // Update the UI elements
     updateColorSwatch(ruleType, index, field, randomColor);
@@ -1959,7 +2472,20 @@ function moveRule(index: number, ruleType: string, direction: number) {
 
     if (!currentConfig) return;
 
-    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
+    let rules;
+    if (ruleType === 'repo') {
+        rules = currentConfig.repoRules;
+    } else {
+        // For branch rules, check if we're in local mode
+        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const useGlobal = selectedRule.useGlobalBranchRules !== false;
+            rules = useGlobal ? currentConfig.branchRules : selectedRule.branchRules;
+        } else {
+            rules = currentConfig.branchRules;
+        }
+    }
+
     // console.log('[DEBUG] Rules array exists:', !!rules, 'length:', rules?.length);
 
     if (!rules) return;
@@ -1980,6 +2506,13 @@ function moveRule(index: number, ruleType: string, direction: number) {
     rules[index] = rules[newIndex];
     rules[newIndex] = temp;
 
+    // Update selection if we moved a repo rule
+    if (ruleType === 'repo' && selectedRepoRuleIndex === index) {
+        selectedRepoRuleIndex = newIndex;
+    } else if (ruleType === 'repo' && selectedRepoRuleIndex === newIndex) {
+        selectedRepoRuleIndex = index;
+    }
+
     // console.log(
     //     '[DEBUG] Rules after move:',
     //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
@@ -1994,7 +2527,20 @@ function moveRule(index: number, ruleType: string, direction: number) {
 function toggleRule(index: number, ruleType: string) {
     if (!currentConfig) return;
 
-    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
+    let rules;
+    if (ruleType === 'repo') {
+        rules = currentConfig.repoRules;
+    } else {
+        // For branch rules, check if we're in local mode
+        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const useGlobal = selectedRule.useGlobalBranchRules !== false;
+            rules = useGlobal ? currentConfig.branchRules : selectedRule.branchRules;
+        } else {
+            rules = currentConfig.branchRules;
+        }
+    }
+
     if (!rules || !rules[index]) return;
 
     // Toggle the enabled state (default to true if not set)
@@ -2158,19 +2704,56 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
         // Find and highlight the rule
         setTimeout(() => {
             const index = parseInt(parts[1]);
-            const container =
-                type === 'repo'
-                    ? document.getElementById('repoRulesContent')
-                    : document.getElementById('branchRulesContent');
-            if (container) {
-                const rows = container.querySelectorAll('.rule-row');
-                if (rows[index]) {
-                    const targetRow = rows[index] as HTMLElement;
-                    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    targetRow.classList.add('highlight-fadeout');
-                    setTimeout(() => {
-                        targetRow.classList.remove('highlight-fadeout');
-                    }, 2000);
+
+            // If this is a branch rule with a repo index (local branch rule), select the repo first
+            if (type === 'branch' && parts.length >= 3) {
+                const repoIndex = parseInt(parts[2]);
+                console.log(`[Navigation] Local branch rule detected, selecting repo ${repoIndex} first`);
+
+                // Select the repo rule to show its local branch rules
+                const repoContainer = document.getElementById('repoRulesContent');
+                if (repoContainer) {
+                    const repoRows = repoContainer.querySelectorAll('.rule-row');
+                    if (repoRows[repoIndex]) {
+                        const repoRadio = repoRows[repoIndex].querySelector('input[type="radio"]') as HTMLInputElement;
+                        if (repoRadio) {
+                            repoRadio.click();
+                            console.log(`[Navigation] Selected repo ${repoIndex}`);
+                        }
+                    }
+                }
+
+                // Wait for the branch rules to re-render, then highlight the branch rule
+                setTimeout(() => {
+                    const branchContainer = document.getElementById('branchRulesContent');
+                    if (branchContainer) {
+                        const branchRows = branchContainer.querySelectorAll('.rule-row');
+                        if (branchRows[index]) {
+                            const targetRow = branchRows[index] as HTMLElement;
+                            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetRow.classList.add('highlight-fadeout');
+                            setTimeout(() => {
+                                targetRow.classList.remove('highlight-fadeout');
+                            }, 2000);
+                        }
+                    }
+                }, 300);
+            } else {
+                // Regular repo or global branch rule navigation
+                const container =
+                    type === 'repo'
+                        ? document.getElementById('repoRulesContent')
+                        : document.getElementById('branchRulesContent');
+                if (container) {
+                    const rows = container.querySelectorAll('.rule-row');
+                    if (rows[index]) {
+                        const targetRow = rows[index] as HTMLElement;
+                        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetRow.classList.add('highlight-fadeout');
+                        setTimeout(() => {
+                            targetRow.classList.remove('highlight-fadeout');
+                        }, 2000);
+                    }
                 }
             }
         }, 100);
@@ -3603,6 +4186,7 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
     // Render the selected profile if one exists
     if (selectedProfileName && profiles && profiles[selectedProfileName]) {
         renderProfileEditor(selectedProfileName, profiles[selectedProfileName]);
+        initializeProfileEditorCheckboxListeners();
     }
 }
 
@@ -3627,6 +4211,7 @@ function selectProfile(name: string) {
 
     const profile = currentConfig.advancedProfiles[name];
     renderProfileEditor(name, profile);
+    initializeProfileEditorCheckboxListeners();
 }
 
 /**
@@ -4343,37 +4928,59 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             tabToActivate.style.fontWeight = 'bold';
         }
 
-        // Set up sync checkbox event listeners and restore their states
-        const syncFgBgCheckbox = document.getElementById('syncFgBgCheckbox') as HTMLInputElement;
-        if (syncFgBgCheckbox) {
-            syncFgBgCheckbox.checked = syncFgBgEnabled;
-            syncFgBgCheckbox.addEventListener('change', () => {
-                syncFgBgEnabled = syncFgBgCheckbox.checked;
-                localStorage.setItem('syncFgBgEnabled', syncFgBgEnabled.toString());
-            });
-        }
+        // Update checkbox states (but don't re-add event listeners)
+        updateProfileEditorCheckboxStates();
+    }
+}
 
-        const syncActiveInactiveCheckbox = document.getElementById('syncActiveInactiveCheckbox') as HTMLInputElement;
-        if (syncActiveInactiveCheckbox) {
-            syncActiveInactiveCheckbox.checked = syncActiveInactiveEnabled;
-            syncActiveInactiveCheckbox.addEventListener('change', () => {
-                syncActiveInactiveEnabled = syncActiveInactiveCheckbox.checked;
-                localStorage.setItem('syncActiveInactiveEnabled', syncActiveInactiveEnabled.toString());
-            });
-        }
+function updateProfileEditorCheckboxStates() {
+    const syncFgBgCheckbox = document.getElementById('syncFgBgCheckbox') as HTMLInputElement;
+    if (syncFgBgCheckbox) {
+        syncFgBgCheckbox.checked = syncFgBgEnabled;
+    }
 
-        const limitOptionsCheckbox = document.getElementById('limitOptionsCheckbox') as HTMLInputElement;
-        if (limitOptionsCheckbox) {
-            limitOptionsCheckbox.checked = limitOptionsEnabled;
-            limitOptionsCheckbox.addEventListener('change', () => {
-                limitOptionsEnabled = limitOptionsCheckbox.checked;
-                localStorage.setItem('limitOptionsEnabled', limitOptionsEnabled.toString());
-                // Re-render the profile editor to update all dropdowns
-                if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
-                    renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
-                }
-            });
-        }
+    const syncActiveInactiveCheckbox = document.getElementById('syncActiveInactiveCheckbox') as HTMLInputElement;
+    if (syncActiveInactiveCheckbox) {
+        syncActiveInactiveCheckbox.checked = syncActiveInactiveEnabled;
+    }
+
+    const limitOptionsCheckbox = document.getElementById('limitOptionsCheckbox') as HTMLInputElement;
+    if (limitOptionsCheckbox) {
+        limitOptionsCheckbox.checked = limitOptionsEnabled;
+    }
+}
+
+function initializeProfileEditorCheckboxListeners() {
+    // Set up sync checkbox event listeners (only called once during initialization)
+    const syncFgBgCheckbox = document.getElementById('syncFgBgCheckbox') as HTMLInputElement;
+    if (syncFgBgCheckbox && !syncFgBgCheckbox.dataset.listenerAttached) {
+        syncFgBgCheckbox.dataset.listenerAttached = 'true';
+        syncFgBgCheckbox.addEventListener('change', () => {
+            syncFgBgEnabled = syncFgBgCheckbox.checked;
+            localStorage.setItem('syncFgBgEnabled', syncFgBgEnabled.toString());
+        });
+    }
+
+    const syncActiveInactiveCheckbox = document.getElementById('syncActiveInactiveCheckbox') as HTMLInputElement;
+    if (syncActiveInactiveCheckbox && !syncActiveInactiveCheckbox.dataset.listenerAttached) {
+        syncActiveInactiveCheckbox.dataset.listenerAttached = 'true';
+        syncActiveInactiveCheckbox.addEventListener('change', () => {
+            syncActiveInactiveEnabled = syncActiveInactiveCheckbox.checked;
+            localStorage.setItem('syncActiveInactiveEnabled', syncActiveInactiveEnabled.toString());
+        });
+    }
+
+    const limitOptionsCheckbox = document.getElementById('limitOptionsCheckbox') as HTMLInputElement;
+    if (limitOptionsCheckbox && !limitOptionsCheckbox.dataset.listenerAttached) {
+        limitOptionsCheckbox.dataset.listenerAttached = 'true';
+        limitOptionsCheckbox.addEventListener('change', () => {
+            limitOptionsEnabled = limitOptionsCheckbox.checked;
+            localStorage.setItem('limitOptionsEnabled', limitOptionsEnabled.toString());
+            // Re-render the profile editor to update all dropdowns
+            if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+            }
+        });
     }
 }
 

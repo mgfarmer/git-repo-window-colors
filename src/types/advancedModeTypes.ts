@@ -28,8 +28,9 @@ export interface Palette {
 }
 
 export interface MappingValue {
-    slot: string; // Maps to a key in Palette (e.g. "primaryActiveBg") or "none"
+    slot: string; // Maps to a key in Palette (e.g. "primaryActiveBg") or "none" or "__fixed__"
     opacity?: number; // Optional opacity override (0-1)
+    fixedColor?: string; // Fixed hex color when slot is "__fixed__"
 }
 
 export interface SectionMappings {

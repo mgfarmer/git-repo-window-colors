@@ -6,12 +6,16 @@ export interface RepoRule {
     primaryColor: string;
     branchColor?: string;
     profileName?: string;
+    branchProfileName?: string;
     enabled?: boolean;
+    branchRules?: BranchRule[];
+    useGlobalBranchRules?: boolean;
 }
 
 export interface BranchRule {
     pattern: string;
     color: string;
+    profileName?: string;
     enabled?: boolean;
 }
 
@@ -40,10 +44,7 @@ export interface WebviewMessage {
         | 'exportConfig'
         | 'importConfig'
         | 'updateAdvancedProfiles'
-        | 'requestGettingStartedHelp'
-        | 'requestProfileHelp'
-        | 'requestRulesHelp'
-        | 'requestReportHelp';
+        | 'requestHelp';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -65,5 +66,7 @@ export interface WebviewMessage {
             index: number;
             ruleDescription: string;
         };
+        helpType?: string;
+        content?: string;
     };
 }

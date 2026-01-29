@@ -107,7 +107,8 @@ body {
     background-color: var(--vscode-button-secondaryBackground);
 }
 .bottom-panel {
-    height: 200px;
+    min-height: 200px;
+    max-height: none;
     border: 1px solid var(--vscode-panel-border);
     padding: 15px;
     border-radius: 4px;
@@ -162,11 +163,13 @@ h2 {
 }
 /* Highlight matched rules */
 .rules-table tr.matched-rule {
-    outline: 2px solid var(--vscode-charts-green);
-    outline-offset: -1px;
     position: relative;
 }
-.rules-table tr.matched-rule td:not(.reorder-controls):not(.color-cell):not(.repo-rule-cell):not(.branch-column) {
+.rules-table
+    tr.matched-rule
+    td:not(.reorder-controls):not(.color-cell):not(.repo-rule-cell):not(.branch-column):not(.select-cell):not(
+        .branch-mode-cell
+    ) {
     background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
 }
 /* Add matched rule overlay with checkmark icon */
@@ -191,6 +194,71 @@ h2 {
     text-align: center;
     font-weight: bold;
 }
+
+/* Highlight selected repo rule */
+.rules-table tr.selected-rule {
+    outline: 3px solid var(--vscode-focusBorder);
+    outline-offset: -2px;
+    position: relative;
+    background-color: var(--vscode-list-activeSelectionBackground, rgba(100, 150, 255, 0.08));
+}
+
+/* Select column styling */
+.select-column {
+    width: 50px;
+    min-width: 50px;
+    text-align: center;
+}
+
+.select-cell {
+    text-align: center;
+    vertical-align: middle;
+    padding: 4px !important;
+}
+
+.repo-select-radio {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    margin: 0;
+    accent-color: var(--vscode-focusBorder, #007acc);
+}
+
+.repo-select-radio:hover {
+    transform: scale(1.1);
+}
+
+/* Branch mode column styling */
+.branch-mode-column {
+    width: 100px;
+    min-width: 100px;
+}
+
+.branch-mode-cell {
+    padding: 2px 4px !important;
+    padding-right: 30px !important;
+}
+
+.branch-mode-select {
+    width: 100%;
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    border: 1px solid var(--vscode-dropdown-border);
+    border-radius: 2px;
+    padding: 4px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.branch-mode-select:hover {
+    background: var(--vscode-dropdown-listBackground);
+}
+
+.branch-mode-select:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
 .rule-input,
 .color-input {
     width: 100%;
@@ -428,6 +496,11 @@ h2 {
     align-items: center;
     gap: 8px;
 }
+.panel-header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
 .header-add-button {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -443,6 +516,66 @@ h2 {
 .header-add-button:hover {
     background: var(--vscode-button-hoverBackground);
 }
+
+/* Copy From button */
+.copy-from-button {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 6px 12px;
+    margin-right: 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.copy-from-button:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+/* Copy From dropdown menu */
+.copy-from-menu {
+    background: var(--vscode-menu-background);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    min-width: 200px;
+    max-width: 300px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    padding: 4px 0;
+}
+
+.copy-from-option {
+    display: block;
+    width: 100%;
+    background: transparent;
+    color: var(--vscode-menu-foreground);
+    border: none;
+    padding: 6px 12px;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.copy-from-option:hover {
+    background: var(--vscode-menu-selectionBackground);
+    color: var(--vscode-menu-selectionForeground);
+}
+
+.copy-from-no-options {
+    padding: 8px 12px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    font-style: italic;
+    text-align: center;
+}
+
 .branch-panel .panel-header {
     padding-right: 40px;
 }
@@ -822,7 +955,7 @@ input[type='range'] {
 .section-help {
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
-    margin-top: -15px;
+    margin-top: 0px;
     margin-bottom: 10px;
     padding: 0;
 }
