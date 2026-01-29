@@ -3632,20 +3632,22 @@ const PALETTE_SLOT_LABELS: Record<string, string> = {
     quaternaryFg: 'Quaternary Foreground',
 };
 
-// Explicit ordering for palette slots to ensure Bg/Fg pairs stay together
+// Explicit ordering for palette slots to ensure consistent display order
+// Order: Primary (Active Fg, Active Bg, Inactive Fg, Inactive Bg),
+//        Secondary (same pattern), Tertiary (Fg, Bg), Quaternary (Fg, Bg)
 const PALETTE_SLOT_ORDER: string[] = [
-    'primaryActiveBg',
     'primaryActiveFg',
-    'primaryInactiveBg',
+    'primaryActiveBg',
     'primaryInactiveFg',
-    'secondaryActiveBg',
+    'primaryInactiveBg',
     'secondaryActiveFg',
-    'secondaryInactiveBg',
+    'secondaryActiveBg',
     'secondaryInactiveFg',
-    'terminalBg',
+    'secondaryInactiveBg',
     'terminalFg',
-    'quaternaryBg',
+    'terminalBg',
     'quaternaryFg',
+    'quaternaryBg',
 ];
 
 const DEFAULT_PALETTE: Palette = {
@@ -3972,7 +3974,18 @@ function isSlotCongruousActiveInactive(key: string, slot: string): boolean {
  */
 function getFilteredPaletteOptions(elementKey: string, allSlots: string[], currentSlot?: string): string[] {
     if (!limitOptionsEnabled) {
-        return allSlots; // Return all if filtering is disabled
+        // Even when not filtering, return in proper order
+        const sorted = allSlots
+            .filter((s) => s !== 'none')
+            .sort((a, b) => {
+                const indexA = PALETTE_SLOT_ORDER.indexOf(a);
+                const indexB = PALETTE_SLOT_ORDER.indexOf(b);
+                if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            });
+        return sorted;
     }
 
     const isBg = isBackgroundElement(elementKey);
@@ -3981,8 +3994,27 @@ function getFilteredPaletteOptions(elementKey: string, allSlots: string[], curre
     const isInactive = isInactiveElement(elementKey);
     const isNeutral = isNeutralElement(elementKey);
 
+    // If element is neutral (no fg/bg or active/inactive context), don't filter - show all slots
+    if (isNeutral && !isBg && !isFg && !isActive && !isInactive) {
+        const sorted = allSlots
+            .filter((s) => s !== 'none')
+            .sort((a, b) => {
+                const indexA = PALETTE_SLOT_ORDER.indexOf(a);
+                const indexB = PALETTE_SLOT_ORDER.indexOf(b);
+                if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            });
+        // Include current slot if specified
+        if (currentSlot && currentSlot !== 'none' && currentSlot !== '__fixed__' && !sorted.includes(currentSlot)) {
+            sorted.push(currentSlot);
+        }
+        return sorted;
+    }
+
     const filtered = allSlots.filter((slot) => {
-        if (slot === 'none') return true; // Always include 'none'
+        if (slot === 'none') return false; // Will be added manually in dropdown
 
         const slotLower = slot.toLowerCase();
 
@@ -4002,7 +4034,6 @@ function getFilteredPaletteOptions(elementKey: string, allSlots: string[], curre
         // For elements with active/inactive state, filter accordingly
         if (isActive && !(slotIsActive || slotIsNeutral)) return false;
         if (isInactive && !(slotIsInactive || slotIsNeutral)) return false;
-        if (isNeutral && !slotIsNeutral) return false;
 
         return true;
     });
@@ -4011,6 +4042,24 @@ function getFilteredPaletteOptions(elementKey: string, allSlots: string[], curre
     if (currentSlot && currentSlot !== 'none' && currentSlot !== '__fixed__' && !filtered.includes(currentSlot)) {
         filtered.push(currentSlot);
     }
+
+    // Sort according to PALETTE_SLOT_ORDER
+    filtered.sort((a, b) => {
+        const indexA = PALETTE_SLOT_ORDER.indexOf(a);
+        const indexB = PALETTE_SLOT_ORDER.indexOf(b);
+
+        // If both are in the order array, sort by their index
+        if (indexA !== -1 && indexB !== -1) {
+            return indexA - indexB;
+        }
+
+        // If only one is in the order array, it comes first
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+
+        // If neither is in the order array, sort alphabetically
+        return a.localeCompare(b);
+    });
 
     return filtered;
 }
@@ -4550,6 +4599,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 select.setAttribute('role', 'combobox');
                 select.setAttribute('aria-expanded', 'false');
                 select.style.flex = '1';
+                select.style.minWidth = '200px';
                 select.style.position = 'relative';
                 select.style.cursor = 'pointer';
 
@@ -4641,6 +4691,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     optionDiv.style.alignItems = 'center';
                     optionDiv.style.gap = '8px';
                     optionDiv.style.fontSize = '12px';
+                    optionDiv.style.whiteSpace = 'nowrap';
 
                     if (isSelected) {
                         optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
@@ -4661,6 +4712,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                     const text = document.createElement('span');
                     text.textContent = opt.label;
+                    text.style.whiteSpace = 'nowrap';
                     optionDiv.appendChild(text);
 
                     // Hover effect
