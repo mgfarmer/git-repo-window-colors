@@ -231,15 +231,31 @@ export async function activate(context: ExtensionContext) {
 
     // Test newly added contributions...
     try {
-        workspace.getConfiguration('windowColors').get('advancedProfiles') as {
+        const advancedProfiles = workspace.getConfiguration('windowColors').get('advancedProfiles') as {
             [key: string]: AdvancedProfile;
         };
-    } catch (error) {
-        const msg =
-            'Please restart VS Code to enable new Git Repo Window Colors features.  The extension will not work until you do.  If you are using Settings Sync, please make sure all your VS Code installations are using the same version of this extension.';
-        vscode.window.showInformationMessage(msg);
-        outputChannel.appendLine(msg);
-        return;
+
+        // If the configuration returns undefined, try to initialize it
+        if (advancedProfiles === undefined) {
+            await workspace
+                .getConfiguration('windowColors')
+                .update('advancedProfiles', {}, vscode.ConfigurationTarget.Global);
+        }
+    } catch (error: any) {
+        if (error.message.includes('not a registered configuration')) {
+            vscode.window
+                .showWarningMessage(
+                    'New configuration settings detected. Please restart VSCode to use the new features.',
+                    'Restart Now',
+                )
+                .then((selection) => {
+                    if (selection === 'Restart Now') {
+                        vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                });
+        } else {
+            throw error;
+        }
     }
 
     // Create status bar item
