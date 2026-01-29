@@ -218,9 +218,28 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         return repoConfigList.map((rule) => this._parseRepoRule(rule)).filter((rule) => rule !== null) as RepoRule[];
     }
 
-    private _parseRepoRule(ruleString: string): RepoRule | null {
+    private _parseRepoRule(rule: string | any): RepoRule | null {
         try {
-            // Try parsing as JSON first (new format with enabled field)
+            // Handle JSON object format (new format)
+            if (typeof rule === 'object' && rule !== null) {
+                return {
+                    repoQualifier: rule.repoQualifier || '',
+                    defaultBranch: rule.defaultBranch,
+                    primaryColor: rule.primaryColor || '',
+                    branchColor: rule.branchColor,
+                    profileName: rule.profileName,
+                    enabled: rule.enabled !== undefined ? rule.enabled : true,
+                } as any;
+            }
+
+            // Handle string formats
+            if (typeof rule !== 'string') {
+                return null;
+            }
+
+            const ruleString = rule;
+
+            // Try parsing as JSON string (for backward compatibility)
             if (ruleString.trim().startsWith('{')) {
                 const obj = JSON.parse(ruleString);
                 return {
@@ -228,7 +247,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     defaultBranch: obj.defaultBranch,
                     primaryColor: obj.primaryColor || '',
                     branchColor: obj.branchColor,
-                    enabled: obj.enabled,
+                    profileName: obj.profileName,
+                    enabled: obj.enabled !== undefined ? obj.enabled : true,
                 } as any;
             }
 
@@ -262,9 +282,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 defaultBranch: defaultBranch ? defaultBranch.trim() : undefined,
                 primaryColor: primaryColor.trim(),
                 branchColor: branchColor ? branchColor.trim() : undefined,
+                enabled: true,
             };
         } catch (error) {
-            console.warn('Failed to parse repo rule:', ruleString, error);
+            console.warn('Failed to parse repo rule:', rule, error);
             return null;
         }
     }
@@ -278,15 +299,31 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             .filter((rule) => rule !== null) as BranchRule[];
     }
 
-    private _parseBranchRule(ruleString: string): BranchRule | null {
+    private _parseBranchRule(rule: string | any): BranchRule | null {
         try {
-            // Try parsing as JSON first (new format with enabled field)
+            // Handle JSON object format (new format)
+            if (typeof rule === 'object' && rule !== null) {
+                return {
+                    pattern: rule.pattern || '',
+                    color: rule.color || '',
+                    enabled: rule.enabled !== undefined ? rule.enabled : true,
+                } as any;
+            }
+
+            // Handle string formats
+            if (typeof rule !== 'string') {
+                return null;
+            }
+
+            const ruleString = rule;
+
+            // Try parsing as JSON string (for backward compatibility)
             if (ruleString.trim().startsWith('{')) {
                 const obj = JSON.parse(ruleString);
                 return {
                     pattern: obj.pattern || '',
                     color: obj.color || '',
-                    enabled: obj.enabled,
+                    enabled: obj.enabled !== undefined ? obj.enabled : true,
                 } as any;
             }
 
@@ -299,9 +336,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return {
                 pattern: parts[0].trim(),
                 color: parts[1].trim(),
+                enabled: true,
             };
         } catch (error) {
-            console.warn('Failed to parse branch rule:', ruleString, error);
+            console.warn('Failed to parse branch rule:', rule, error);
             return null;
         }
     }
@@ -423,16 +461,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 // console.log('[DEBUG] Updating branch rules:', data.branchRules);
                 const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
                     // console.log('[DEBUG]   branch rule:', rule);
-                    // If enabled field is explicitly false, store as JSON object
-                    if (rule.enabled === false) {
-                        return JSON.stringify({
-                            pattern: rule.pattern,
-                            color: rule.color,
-                            enabled: false,
-                        });
-                    }
-                    // Otherwise use legacy string format
-                    return `${rule.pattern}:${rule.color}`;
+                    // Always return JSON object format
+                    return {
+                        pattern: rule.pattern,
+                        color: rule.color,
+                        enabled: rule.enabled !== undefined ? rule.enabled : true,
+                    };
                 });
                 updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
             }
@@ -460,28 +494,24 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private _formatRepoRule(rule: RepoRule | any): string {
-        // If enabled field is explicitly false, store as JSON object
-        if (rule.enabled === false) {
-            return JSON.stringify({
-                repoQualifier: rule.repoQualifier,
-                defaultBranch: rule.defaultBranch,
-                primaryColor: rule.primaryColor,
-                branchColor: rule.branchColor,
-                profileName: rule.profileName,
-                enabled: false,
-            });
+    private _formatRepoRule(rule: RepoRule | any): any {
+        // Always return JSON object format
+        const result: any = {
+            repoQualifier: rule.repoQualifier,
+            primaryColor: rule.primaryColor,
+            enabled: rule.enabled !== undefined ? rule.enabled : true,
+        };
+
+        if (rule.defaultBranch) {
+            result.defaultBranch = rule.defaultBranch;
+        }
+        if (rule.branchColor) {
+            result.branchColor = rule.branchColor;
+        }
+        if (rule.profileName) {
+            result.profileName = rule.profileName;
         }
 
-        // Otherwise use legacy string format for backward compatibility
-        let result = rule.repoQualifier;
-        if (rule.defaultBranch) {
-            result += `|${rule.defaultBranch}`;
-        }
-        result += `:${rule.primaryColor}`;
-        if (rule.branchColor) {
-            result += `|${rule.branchColor}`;
-        }
         return result;
     }
 

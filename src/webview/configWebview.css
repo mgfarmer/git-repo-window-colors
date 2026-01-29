@@ -299,12 +299,11 @@ h2 {
 .reorder-btn {
     background: var(--vscode-editor-background);
     color: var(--vscode-foreground);
-    border: 1px solid var(--vscode-panel-border);
+    border: none;
     width: 15px;
     height: 15px;
     font-size: 10px;
     cursor: pointer;
-    border-radius: 2px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -316,8 +315,8 @@ h2 {
 .reorder-btn:disabled {
     background: var(--vscode-editor-background);
     color: var(--vscode-disabledForeground);
-    border: none;
     cursor: not-allowed;
+    pointer-events: none;
     /* Don't use opacity on the whole button - it affects tooltips */
 }
 .drag-handle {
@@ -331,16 +330,20 @@ h2 {
     align-items: center;
     justify-content: center;
     border: none;
-    border-radius: 2px;
     background: var(--vscode-editor-background);
-    line-height: 1;
+    /* line-height: 1;
     font-weight: normal;
     text-align: center;
     vertical-align: middle;
     font-family: sans-serif;
-    box-sizing: border-box;
+    box-sizing: border-box; */
     padding: 0;
-    margin-top: 6px;
+    /* margin-top: 6px; */
+}
+.drag-handle.disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 .rule-row.dragging {
     opacity: 0.5;

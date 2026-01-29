@@ -1338,30 +1338,34 @@ function createReorderControlsHTML(index: number, ruleType: string, totalCount: 
         : '<span class="codicon codicon-eye-closed"></span>';
     const eyeTitle = isEnabled ? 'Disable this rule' : 'Enable this rule';
 
+    // Disable drag handle when there's only one entry
+    const isDragDisabled = totalCount <= 1;
+
     return `
         <div class="reorder-buttons">
-            <div class="drag-handle tooltip right-tooltip" 
-                 draggable="true" 
+            <div class="drag-handle tooltip right-tooltip${isDragDisabled ? ' disabled' : ''}" 
+                 ${isDragDisabled ? '' : 'draggable="true"'} 
                  data-drag-index="${index}"
                  data-drag-type="${ruleType}"
-                 title="Drag to reorder"
-                 tabindex="0"
+                 title="${isDragDisabled ? 'Cannot reorder single entry' : 'Drag to reorder'}"
+                 tabindex="${isDragDisabled ? '-1' : '0'}"
                  role="button"
-                 aria-label="Drag handle for rule ${index + 1}"><span class="codicon codicon-grabber"></span>
+                 aria-label="Drag handle for rule ${index + 1}"
+                 ${isDragDisabled ? 'aria-disabled="true"' : ''}><span class="codicon codicon-gripper"></span>
                 <span class="tooltiptext" role="tooltip">
-                    Drag this handle to reorder rules. Rules are processed from top to bottom.
+                    ${isDragDisabled ? 'Cannot reorder when only one rule exists' : 'Drag this handle to reorder rules. Rules are processed from top to bottom.'}
                 </span>
             </div>
             <button class="reorder-btn" 
                     data-action="moveRule(${index}, '${ruleType}', -1)" 
                     title="Move up"
                     aria-label="Move rule ${index + 1} up"
-                    ${index === 0 ? 'disabled' : ''}>▲</button>
+                    ${index === 0 ? 'disabled' : ''}><span class="codicon codicon-triangle-up"></span></button>
             <button class="reorder-btn" 
                     data-action="moveRule(${index}, '${ruleType}', 1)" 
                     title="Move down"
                     aria-label="Move rule ${index + 1} down"
-                    ${index === totalCount - 1 ? 'disabled' : ''}>▼</button>
+                    ${index === totalCount - 1 ? 'disabled' : ''}><span class="codicon codicon-triangle-down"></span></button>
             <button class="eye-btn" 
                     data-action="toggleRule(${index}, '${ruleType}')"
                     title="${eyeTitle}"

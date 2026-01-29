@@ -226,8 +226,150 @@ function getCurrentMatchingRule(): RepoConfig | undefined {
     return undefined;
 }
 
+/**
+ * Migrate legacy string-based configuration to JSON object format
+ */
+async function migrateConfigurationToJson(): Promise<void> {
+    const config = workspace.getConfiguration('windowColors');
+    const migrated = config.get<boolean>('configMigratedToJson', false);
+
+    // Skip if already migrated
+    if (migrated) {
+        outputChannel.appendLine('Configuration already migrated to JSON format.');
+        return;
+    }
+
+    outputChannel.appendLine('Starting configuration migration to JSON format...');
+
+    try {
+        // Get advanced profiles for validation
+        const advancedProfiles = config.get('advancedProfiles', {}) as { [key: string]: any };
+
+        // Migrate repoConfigurationList
+        const repoConfigList = config.get('repoConfigurationList', []) as any[];
+        const migratedRepoList: any[] = [];
+
+        for (const item of repoConfigList) {
+            // Skip if already JSON object
+            if (typeof item === 'object' && item !== null) {
+                migratedRepoList.push(item);
+                continue;
+            }
+
+            // Parse legacy string format
+            if (typeof item === 'string') {
+                try {
+                    const parts = item.split(':');
+                    if (parts.length < 2) {
+                        outputChannel.appendLine(`Skipping invalid repo rule: ${item}`);
+                        continue;
+                    }
+
+                    const repoParts = parts[0].split(SEPARATOR);
+                    const repoQualifier = repoParts[0].trim();
+                    const defaultBranch = repoParts.length > 1 ? repoParts[1].trim() : undefined;
+
+                    const colorParts = parts[1].split(SEPARATOR);
+                    const primaryColor = colorParts[0].trim();
+                    const branchColor = colorParts.length > 1 ? colorParts[1].trim() : undefined;
+
+                    // Check for profile name in third part
+                    let profileName: string | undefined = undefined;
+                    if (advancedProfiles[primaryColor]) {
+                        profileName = primaryColor;
+                    } else if (parts.length > 2) {
+                        const p2 = parts[2].trim();
+                        if (advancedProfiles[p2]) {
+                            profileName = p2;
+                        }
+                    }
+
+                    const migratedRule: any = {
+                        repoQualifier,
+                        primaryColor,
+                        enabled: true,
+                    };
+
+                    if (defaultBranch) {
+                        migratedRule.defaultBranch = defaultBranch;
+                    }
+                    if (branchColor) {
+                        migratedRule.branchColor = branchColor;
+                    }
+                    if (profileName) {
+                        migratedRule.profileName = profileName;
+                    }
+
+                    migratedRepoList.push(migratedRule);
+                    outputChannel.appendLine(`Migrated repo rule: ${item} -> JSON object`);
+                } catch (err) {
+                    outputChannel.appendLine(`Error migrating repo rule: ${item} - ${err}`);
+                    // Keep original on error
+                    migratedRepoList.push(item);
+                }
+            }
+        }
+
+        // Migrate branchConfigurationList
+        const branchConfigList = config.get('branchConfigurationList', []) as any[];
+        const migratedBranchList: any[] = [];
+
+        for (const item of branchConfigList) {
+            // Skip if already JSON object
+            if (typeof item === 'object' && item !== null) {
+                migratedBranchList.push(item);
+                continue;
+            }
+
+            // Parse legacy string format
+            if (typeof item === 'string') {
+                try {
+                    const parts = item.split(':');
+                    if (parts.length < 2) {
+                        outputChannel.appendLine(`Skipping invalid branch rule: ${item}`);
+                        continue;
+                    }
+
+                    const pattern = parts[0].trim();
+                    const color = parts[1].trim();
+
+                    const migratedRule = {
+                        pattern,
+                        color,
+                        enabled: true,
+                    };
+
+                    migratedBranchList.push(migratedRule);
+                    outputChannel.appendLine(`Migrated branch rule: ${item} -> JSON object`);
+                } catch (err) {
+                    outputChannel.appendLine(`Error migrating branch rule: ${item} - ${err}`);
+                    // Keep original on error
+                    migratedBranchList.push(item);
+                }
+            }
+        }
+
+        // Write migrated configuration
+        await config.update('repoConfigurationList', migratedRepoList, vscode.ConfigurationTarget.Global);
+        await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
+        await config.update('configMigratedToJson', true, vscode.ConfigurationTarget.Global);
+
+        outputChannel.appendLine(
+            `Configuration migration completed: ${migratedRepoList.length} repo rules, ${migratedBranchList.length} branch rules`,
+        );
+    } catch (error) {
+        outputChannel.appendLine(`Error during migration: ${error}`);
+        vscode.window.showErrorMessage(
+            'Failed to migrate configuration to JSON format. Please check the output channel for details.',
+        );
+    }
+}
+
 export async function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
+
+    // Migrate configuration to JSON format if needed
+    await migrateConfigurationToJson();
 
     // Test newly added contributions...
     try {
@@ -657,7 +799,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
     const result = new Array<RepoConfig>();
     const isActive = vscode.window.state.active;
 
-    // NEW LOGIC: Check for Profiles (get once before loop)
+    // Get advanced profiles (get once before loop)
     const advancedProfiles =
         (workspace.getConfiguration('windowColors').get('advancedProfiles', {}) as { [key: string]: any }) || {};
 
@@ -665,112 +807,167 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
         let error = false;
         const setting = json[item];
 
-        // Try parsing as JSON first (new format with enabled field)
-        if (setting.trim().startsWith('{')) {
-            try {
-                const obj = JSON.parse(setting);
-                const repoConfig: RepoConfig = {
-                    repoQualifier: obj.repoQualifier || '',
-                    defaultBranch: obj.defaultBranch,
-                    primaryColor: obj.primaryColor || '',
-                    branchColor: obj.branchColor,
-                    profileName: obj.profileName,
-                    enabled: obj.enabled,
-                };
-                result.push(repoConfig);
-                continue;
-            } catch (err) {
-                // If JSON parsing fails, fall through to legacy parsing
-                outputChannel.appendLine(`Failed to parse JSON rule: ${setting}`);
-            }
-        }
+        // PRIMARY: Handle JSON object format (new format)
+        if (typeof setting === 'object' && setting !== null) {
+            const repoConfig: RepoConfig = {
+                repoQualifier: setting.repoQualifier || '',
+                defaultBranch: setting.defaultBranch,
+                primaryColor: setting.primaryColor || '',
+                branchColor: setting.branchColor,
+                profileName: setting.profileName,
+                enabled: setting.enabled !== undefined ? setting.enabled : true,
+            };
 
-        // Legacy string format parsing
-        const parts = setting.split(':');
-        if (validate && isActive && parts.length < 2) {
-            // Invalid entry
-            const msg = 'Setting `' + setting + "': missing a color specifier";
-            vscode.window.showErrorMessage(msg);
-            outputChannel.appendLine(msg);
-            error = true;
+            // Validate if needed
+            if (validate && isActive) {
+                if (!repoConfig.repoQualifier || !repoConfig.primaryColor) {
+                    const msg = 'Repository rule missing required fields (repoQualifier or primaryColor)';
+                    vscode.window.showErrorMessage(msg);
+                    outputChannel.appendLine(msg);
+                    continue;
+                }
+
+                // Validate colors if not profile names
+                const primaryIsProfile = advancedProfiles[repoConfig.primaryColor];
+                if (!primaryIsProfile) {
+                    try {
+                        Color(repoConfig.primaryColor);
+                    } catch (error) {
+                        const msg = `Invalid primary color: ${repoConfig.primaryColor}`;
+                        vscode.window.showErrorMessage(msg);
+                        outputChannel.appendLine(msg);
+                        continue;
+                    }
+                }
+
+                if (repoConfig.branchColor) {
+                    const branchIsProfile = advancedProfiles[repoConfig.branchColor];
+                    if (!branchIsProfile) {
+                        try {
+                            Color(repoConfig.branchColor);
+                        } catch (error) {
+                            const msg = `Invalid branch color: ${repoConfig.branchColor}`;
+                            vscode.window.showErrorMessage(msg);
+                            outputChannel.appendLine(msg);
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            result.push(repoConfig);
             continue;
         }
 
-        const repoParts = parts[0].split(SEPARATOR);
-        let defBranch: string | undefined = undefined;
-        const branchQualifier = repoParts[0].trim();
-
-        if (repoParts.length > 1) {
-            defBranch = repoParts[1].trim();
-        }
-
-        const colorParts = parts[1].split(SEPARATOR);
-        const rColor = colorParts[0].trim();
-        let bColor = undefined;
-
-        let profileName: string | undefined = undefined;
-        // Check if rColor is a profile name
-        if (advancedProfiles[rColor]) {
-            profileName = rColor;
-        } else if (parts.length > 2) {
-            // Check third part for profile name (format: repo:color:ProfileName)
-            const p2 = parts[2].trim();
-            if (advancedProfiles[p2]) {
-                profileName = p2;
+        // FALLBACK: Handle legacy string format
+        if (typeof setting === 'string') {
+            // Try parsing as JSON string first (for backward compatibility)
+            if (setting.trim().startsWith('{')) {
+                try {
+                    const obj = JSON.parse(setting);
+                    const repoConfig: RepoConfig = {
+                        repoQualifier: obj.repoQualifier || '',
+                        defaultBranch: obj.defaultBranch,
+                        primaryColor: obj.primaryColor || '',
+                        branchColor: obj.branchColor,
+                        profileName: obj.profileName,
+                        enabled: obj.enabled !== undefined ? obj.enabled : true,
+                    };
+                    result.push(repoConfig);
+                    continue;
+                } catch (err) {
+                    // If JSON parsing fails, fall through to legacy parsing
+                    outputChannel.appendLine(`Failed to parse JSON rule: ${setting}`);
+                }
             }
-        }
 
-        if (colorParts.length > 1) {
-            bColor = colorParts[1].trim();
-            if (validate && isActive && defBranch === undefined) {
-                const msg = 'Setting `' + setting + "': specifies a branch color, but not a default branch.";
+            // Legacy string format parsing: repo[|branch]:color[|branchColor][:profile]
+            const parts = setting.split(':');
+            if (validate && isActive && parts.length < 2) {
+                // Invalid entry
+                const msg = 'Setting `' + setting + "': missing a color specifier";
+                vscode.window.showErrorMessage(msg);
+                outputChannel.appendLine(msg);
+                error = true;
+                continue;
+            }
+
+            const repoParts = parts[0].split(SEPARATOR);
+            let defBranch: string | undefined = undefined;
+            const branchQualifier = repoParts[0].trim();
+
+            if (repoParts.length > 1) {
+                defBranch = repoParts[1].trim();
+            }
+
+            const colorParts = parts[1].split(SEPARATOR);
+            const rColor = colorParts[0].trim();
+            let bColor = undefined;
+
+            let profileName: string | undefined = undefined;
+            // Check if rColor is a profile name
+            if (advancedProfiles[rColor]) {
+                profileName = rColor;
+            } else if (parts.length > 2) {
+                // Check third part for profile name (format: repo:color:ProfileName)
+                const p2 = parts[2].trim();
+                if (advancedProfiles[p2]) {
+                    profileName = p2;
+                }
+            }
+
+            if (colorParts.length > 1) {
+                bColor = colorParts[1].trim();
+                if (validate && isActive && defBranch === undefined) {
+                    const msg = 'Setting `' + setting + "': specifies a branch color, but not a default branch.";
+                    vscode.window.showErrorMessage(msg);
+                    outputChannel.appendLine(msg);
+                    error = true;
+                }
+            }
+
+            // Test all the colors to ensure they are parseable
+            let colorMessage = '';
+            // Only validate rColor as a color if it's not being used as a profile name
+            const rColorIsProfile = profileName === rColor;
+            if (!rColorIsProfile) {
+                try {
+                    Color(rColor);
+                } catch (error) {
+                    colorMessage = '`' + rColor + '` is not a known color';
+                }
+            }
+
+            // Check if bColor is a profile name
+            const bColorIsProfile = bColor ? extractProfileName(bColor, advancedProfiles) !== null : false;
+            if (bColor !== undefined && !bColorIsProfile) {
+                try {
+                    Color(bColor);
+                } catch (error) {
+                    if (colorMessage != '') {
+                        colorMessage += ' and ';
+                    }
+                    colorMessage += '`' + bColor + '` is not a known color';
+                }
+            }
+            if (validate && isActive && colorMessage != '') {
+                const msg = 'Setting `' + setting + '`: ' + colorMessage;
                 vscode.window.showErrorMessage(msg);
                 outputChannel.appendLine(msg);
                 error = true;
             }
-        }
 
-        // Test all the colors to ensure they are parseable
-        let colorMessage = '';
-        // Only validate rColor as a color if it's not being used as a profile name
-        const rColorIsProfile = profileName === rColor;
-        if (!rColorIsProfile) {
-            try {
-                Color(rColor);
-            } catch (error) {
-                colorMessage = '`' + rColor + '` is not a known color';
+            const repoConfig: RepoConfig = {
+                repoQualifier: branchQualifier,
+                defaultBranch: defBranch,
+                primaryColor: rColor,
+                branchColor: bColor,
+                profileName: profileName,
+            };
+
+            if (!error) {
+                result.push(repoConfig);
             }
-        }
-
-        // Check if bColor is a profile name
-        const bColorIsProfile = bColor ? extractProfileName(bColor, advancedProfiles) !== null : false;
-        if (bColor !== undefined && !bColorIsProfile) {
-            try {
-                Color(bColor);
-            } catch (error) {
-                if (colorMessage != '') {
-                    colorMessage += ' and ';
-                }
-                colorMessage += '`' + bColor + '` is not a known color';
-            }
-        }
-        if (validate && isActive && colorMessage != '') {
-            const msg = 'Setting `' + setting + '`: ' + colorMessage;
-            vscode.window.showErrorMessage(msg);
-            outputChannel.appendLine(msg);
-            error = true;
-        }
-
-        const repoConfig: RepoConfig = {
-            repoQualifier: branchQualifier,
-            defaultBranch: defBranch,
-            primaryColor: rColor,
-            branchColor: bColor,
-            profileName: profileName,
-        };
-
-        if (!error) {
-            result.push(repoConfig);
         }
     }
 
@@ -791,59 +988,91 @@ function getBranchData(validate: boolean = false): Map<string, string> {
     for (const item in json) {
         const setting = json[item];
 
-        // Try parsing as JSON first (new format with enabled field)
-        if (setting.trim().startsWith('{')) {
-            try {
-                const obj = JSON.parse(setting);
-                // Skip disabled rules
-                if (obj.enabled === false) {
-                    continue;
-                }
-                // Add enabled rules to the map
-                if (obj.pattern && obj.color) {
-                    result.set(obj.pattern, obj.color);
-                }
+        // PRIMARY: Handle JSON object format (new format)
+        if (typeof setting === 'object' && setting !== null) {
+            // Skip disabled rules
+            if (setting.enabled === false) {
                 continue;
-            } catch (err) {
-                // If JSON parsing fails, fall through to legacy parsing
-                outputChannel.appendLine(`Failed to parse JSON branch rule: ${setting}`);
             }
-        }
 
-        // Legacy string format parsing
-        const parts = setting.split(':');
-        if (validate && parts.length < 2) {
-            // Invalid entry
-            const msg = 'Setting `' + setting + "': missing a color specifier";
-            vscode.window.showErrorMessage(msg);
-            outputChannel.appendLine(msg);
+            // Validate and add enabled rules to the map
+            if (setting.pattern && setting.color) {
+                // Validate if needed
+                if (validate) {
+                    const profileName = extractProfileName(setting.color, advancedProfiles);
+                    if (!profileName) {
+                        try {
+                            Color(setting.color);
+                        } catch (error) {
+                            const msg = `Invalid color in branch rule (${setting.pattern}): ${setting.color}`;
+                            vscode.window.showErrorMessage(msg);
+                            outputChannel.appendLine(msg);
+                            continue;
+                        }
+                    }
+                }
+
+                result.set(setting.pattern, setting.color);
+            }
             continue;
         }
 
-        const branchName = parts[0].trim();
-        const branchColor = parts[1].trim();
-
-        // Test all the colors to ensure they are parseable
-        let colorMessage = '';
-
-        const profileName = extractProfileName(branchColor, advancedProfiles);
-
-        // Only validate as a color if it's not a profile name
-        if (!profileName) {
-            try {
-                Color(branchColor);
-            } catch (error) {
-                colorMessage = '`' + branchColor + '` is not a known color';
+        // FALLBACK: Handle legacy string format
+        if (typeof setting === 'string') {
+            // Try parsing as JSON string first (for backward compatibility)
+            if (setting.trim().startsWith('{')) {
+                try {
+                    const obj = JSON.parse(setting);
+                    // Skip disabled rules
+                    if (obj.enabled === false) {
+                        continue;
+                    }
+                    // Add enabled rules to the map
+                    if (obj.pattern && obj.color) {
+                        result.set(obj.pattern, obj.color);
+                    }
+                    continue;
+                } catch (err) {
+                    // If JSON parsing fails, fall through to legacy parsing
+                    outputChannel.appendLine(`Failed to parse JSON branch rule: ${setting}`);
+                }
             }
-        }
 
-        if (validate && colorMessage != '') {
-            const msg = 'Setting `' + setting + '`: ' + colorMessage;
-            vscode.window.showErrorMessage(msg);
-            outputChannel.appendLine(msg);
-        }
+            // Legacy string format parsing: pattern:color
+            const parts = setting.split(':');
+            if (validate && parts.length < 2) {
+                // Invalid entry
+                const msg = 'Setting `' + setting + "': missing a color specifier";
+                vscode.window.showErrorMessage(msg);
+                outputChannel.appendLine(msg);
+                continue;
+            }
 
-        result.set(branchName, branchColor);
+            const branchName = parts[0].trim();
+            const branchColor = parts[1].trim();
+
+            // Test all the colors to ensure they are parseable
+            let colorMessage = '';
+
+            const profileName = extractProfileName(branchColor, advancedProfiles);
+
+            // Only validate as a color if it's not a profile name
+            if (!profileName) {
+                try {
+                    Color(branchColor);
+                } catch (error) {
+                    colorMessage = '`' + branchColor + '` is not a known color';
+                }
+            }
+
+            if (validate && colorMessage != '') {
+                const msg = 'Setting `' + setting + '`: ' + colorMessage;
+                vscode.window.showErrorMessage(msg);
+                outputChannel.appendLine(msg);
+            }
+
+            result.set(branchName, branchColor);
+        }
     }
 
     return result;

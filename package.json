@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
     "icon": "img/grwc-icon.png",
-    "version": "1.5.12",
+    "version": "1.5.13",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -79,10 +79,49 @@
                 "properties": {
                     "windowColors.repoConfigurationList": {
                         "order": 1,
-                        "markdownDescription": "Entries in this list are optional. Each entry in the ordered list has the form `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]` (i.e. `myrepo:blue` or `myrepo/main:blue/green`).  The `repo-qualifier` is required. The repository qualifier is a simple string. If this string is found in the repository URL as given by `git config --get remote.origin.url`, then a match is made.  The first match found  will be used.  The `primary-color` is the color associated with the repository.  This color will be used to color the window title bar and activity bar (when not using branch colors).\n\nThe `default-branch` is optional and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `#windowColors.automaticBranchIndicatorColorKnob#` setting. You can invert the branch coloring logic using `#windowColors.invertBranchColorLogic#`\n\nColors can be specified in any form recognized by the Javascript Color class.  See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).\n\nYou can use whitespace to make the list more readable.  All whitespace will be stripped for processing.\n\nFormat Reference: `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]`",
+                        "markdownDescription": "Repository-specific color rules. Each rule can be defined as a JSON object with properties `repoQualifier` (required), `primaryColor` (required), `defaultBranch`, `branchColor`, `profileName`, and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"repoQualifier\": \"myrepo\",\n  \"primaryColor\": \"blue\",\n  \"defaultBranch\": \"main\",\n  \"branchColor\": \"green\",\n  \"enabled\": true\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]` (e.g., `myrepo:blue` or `myrepo/main:blue/green`)\n\nThe `repoQualifier` is matched against the repository URL from `git config --get remote.origin.url`. The first matching rule is used. Colors can be CSS color names, hex values, or profile names. See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).",
                         "type": "array",
                         "items": {
-                            "type": "string"
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "description": "Legacy format: <repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "repoQualifier": {
+                                            "type": "string",
+                                            "description": "Repository identifier (matched against git remote URL)"
+                                        },
+                                        "defaultBranch": {
+                                            "type": "string",
+                                            "description": "Default branch name (e.g., 'main', 'master')"
+                                        },
+                                        "primaryColor": {
+                                            "type": "string",
+                                            "description": "Primary color for title bar and activity bar (CSS color or profile name)"
+                                        },
+                                        "branchColor": {
+                                            "type": "string",
+                                            "description": "Color when not on default branch (CSS color or profile name)"
+                                        },
+                                        "profileName": {
+                                            "type": "string",
+                                            "description": "Advanced profile name to use"
+                                        },
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "default": true,
+                                            "description": "Whether this rule is enabled"
+                                        }
+                                    },
+                                    "required": [
+                                        "repoQualifier",
+                                        "primaryColor"
+                                    ]
+                                }
+                            ]
                         },
                         "scope": "application",
                         "uniqueItems": true
@@ -103,10 +142,37 @@
                     },
                     "windowColors.branchConfigurationList": {
                         "order": 4,
-                        "markdownDescription": "Each entry in the ordered list has the form `<branch-pattern>:<branch-color>` (i.e. `feature-.*:blue` or 'bug-.*:red' or 'mybranch').  If a branch pattern in this table is matched against the current working branch, then this setting will override any branch coloring from the repo configuration list above.  The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo whos working branch matches the pattern the coloring will be applied.\n\nFormat Reference: `<branch-pattern>:<branch-color>`",
+                        "markdownDescription": "Branch-specific color rules that override repository rules. Each rule can be defined as a JSON object with properties `pattern` (required, regex), `color` (required), and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"pattern\": \"^feature/.*\",\n  \"color\": \"green\",\n  \"enabled\": true\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<branch-pattern>:<branch-color>` (e.g., `feature-.*:blue` or `bug-.*:red`)\n\nBranch patterns are regex expressions matched against the current branch name. The first matching rule is used. These rules apply to all repositories.",
                         "type": "array",
                         "items": {
-                            "type": "string"
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "description": "Legacy format: <branch-pattern>:<branch-color>"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "pattern": {
+                                            "type": "string",
+                                            "description": "Regex pattern to match branch name"
+                                        },
+                                        "color": {
+                                            "type": "string",
+                                            "description": "Branch color (CSS color or profile name)"
+                                        },
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "default": true,
+                                            "description": "Whether this rule is enabled"
+                                        }
+                                    },
+                                    "required": [
+                                        "pattern",
+                                        "color"
+                                    ]
+                                }
+                            ]
                         },
                         "default": [
                             "^(bug/|bug-.*):red",
@@ -188,6 +254,13 @@
                         "type": "boolean",
                         "default": false,
                         "description": "Enable the advanced Profiles feature. When enabled, the Profiles tab will be visible in the configuration interface, allowing you to define reusable color palettes and map them to specific UI elements.",
+                        "scope": "application"
+                    },
+                    "windowColors.configMigratedToJson": {
+                        "order": 28,
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Internal flag indicating whether configuration has been migrated from string to JSON format",
                         "scope": "application"
                     },
                     "windowColors.lastExportPath": {

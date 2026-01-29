@@ -5,11 +5,14 @@ export interface RepoRule {
     defaultBranch?: string;
     primaryColor: string;
     branchColor?: string;
+    profileName?: string;
+    enabled?: boolean;
 }
 
 export interface BranchRule {
     pattern: string;
     color: string;
+    enabled?: boolean;
 }
 
 export interface OtherSettings {
