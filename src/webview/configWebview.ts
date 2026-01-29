@@ -916,8 +916,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 <h3>Reference Palette
                                     <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help"><span class="codicon codicon-info"></span>
                                         <span class="tooltiptext">
-                                            <strong>Reference Palette (10 Slots)</strong><br>
-                                            Define 10 referenced colors that can be used in the mappings.<br><br>
+                                            <strong>Reference Palette</strong><br>
+                                            Define reference colors that can be used in the mappings.<br><br>
                                         </span>
                                     </span>
                                 </h3>
@@ -937,7 +937,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Mappings Help"><span class="codicon codicon-info"></span>
                                         <span class="tooltiptext">
                                             <strong>Section Mappings</strong><br>
-                                            Map UI elements (like Title Bar, Status Bar) to one of the 10 palette slots defined above.
+                                            Map UI elements (like Title Bar, Status Bar) to one of the palette slots defined above.
                                         </span>
                                     </span>
                                 </h3>
@@ -997,7 +997,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 <button class="tooltip panel-tooltip help-icon" 
                                         type="button"
                                         aria-label="Help for Color Report"
-                                        tabindex="0">ℹ️
+                                        tabindex="0"><span class="codicon codicon-info"></span>
                                     <span class="tooltiptext" role="tooltip">
                                         <strong>Color Report</strong><br>
                                         Detailed report showing all theme elements that are currently being colored,

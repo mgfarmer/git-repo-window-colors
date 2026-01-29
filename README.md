@@ -143,13 +143,14 @@ Repository Rules:
 
 Each profile consists of two parts:
 
-**1. Palette Slots** (10 standard colors)
+**1. Palette Slots**
 
 - Primary Active Background & Foreground
 - Primary Inactive Background & Foreground  
 - Secondary Active Background & Foreground
 - Secondary Inactive Background & Foreground
-- Terminal Background & Foreground
+- Tertiary Background & Foreground
+- Quartenary Background & Foreground
 
 **2. Mappings** (which palette colors go where)
 
@@ -164,7 +165,7 @@ Each profile consists of two parts:
 1. Open the configuration editor (click status bar icon or use Command Palette)
 2. Navigate to the **"Profiles"** tab
 3. Click **"+ Add Profile"** to create a new profile
-4. Set up your **Palette** - define your 10 base colors
+4. Set up your **Palette** - define your reference colors
 5. Configure **Mappings** - assign palette colors to VS Code UI elements
 
 **Pro Tips:**

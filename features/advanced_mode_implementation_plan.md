@@ -32,7 +32,7 @@ Profiles are **completely separate** from simple mode coloring:
         - `repo:Color:ProfileName` (Color acts as the "Seed" for dynamic slots).
 2. **Profile Resolution Engine**:
     - Implement function `resolveProfile(profile: AdvancedProfile, seedColor: string, branchColor: string): ColorMap`.
-    - **Step A (Palette Resolution):** Calculate actual hex values for the 10 reference slots based on inputs (Fixed hex, or derived from Seed/Branch).
+    - **Step A (Palette Resolution):** Calculate actual hex values for the reference slots based on inputs (Fixed hex, or derived from Seed/Branch).
     - **Step B (Mapping Resolution):** Walk through the Section Mappings and assign the calculated palette colors to the specific VS Code theme keys.
 3. **Integration**:
     - Update main `doit()` loop to check for profile existence before falling back to legacy logic.
@@ -45,14 +45,14 @@ Profiles are **completely separate** from simple mode coloring:
     - Create `src/webview/AdvancedConfigWebview.ts`.
     - Register command `windowColors.openAdvancedConfig`.
 2. **UI Component: Palette Editor (Top Section)**:
-    - Input fields for the 10 reference slots.
+    - Input fields for the reference slots.
     - Type selector for each slot: "Fixed Color", "Repo Color", "Branch Color".
     - Color picker for Fixed types.
     - Opacity/Lightness modifiers for Derived types.
 3. **UI Component: Mapping Editor (Bottom Section)**:
     - Tabbed container (Tabs for "Title Bar", "Activities", "Terminal", etc.).
     - Rows for each VS Code element.
-    - Dropdowns to select one of the 10 Reference Slots (or "Transparent").
+    - Dropdowns to select one of the Reference Slots (or "Transparent").
 
 ## Phase 4: Testing & Polish
 

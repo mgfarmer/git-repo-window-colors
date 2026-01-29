@@ -23,7 +23,7 @@ export interface Palette {
     terminalBg: PaletteSlotDefinition;
     terminalFg: PaletteSlotDefinition;
 
-    // Allow other custom slots if needed in future, but these are the standard 10
+    // Allow other custom slots if needed in future, but these are the standard ones
     [key: string]: PaletteSlotDefinition;
 }
 

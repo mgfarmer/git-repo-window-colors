@@ -3581,7 +3581,7 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
 
             swatch.style.backgroundColor = bgColor;
             swatch.style.color = fgColor;
-            swatch.textContent = 'sample';
+            swatch.textContent = 'Sample';
 
             el.appendChild(nameContainer);
             el.appendChild(swatch);
@@ -3905,7 +3905,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             grid.style.display = 'grid';
             grid.style.gridTemplateColumns = '1fr 1px 1fr';
             grid.style.gap = '8px 20px';
-            grid.style.padding = '10px 0';
+            grid.style.padding = '10px 10px';
 
             keys.forEach((key: string) => {
                 const row = document.createElement('div');

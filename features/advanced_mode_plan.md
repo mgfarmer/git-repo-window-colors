@@ -10,13 +10,10 @@
 
 ### Layer 1: The Palette (Reference Colors)
 
-A set of ~10 abstract "Color Slots" acting as variables (e.g., `PrimaryActive`, `TerminalBG`).
+A set of abstract "Color Slots" acting as variables.
 Each slot can be:
 
 * **Fixed**: A specific hex color (e.g., `#ff0000`).
-* **RepoColor Source**: References the profile's internal "repoColor" palette slot (not related to simple mode colors).
-* **BranchColor Source**: References the profile's internal "branchColor" palette slot (not related to simple mode colors).
-* **Transparent**: No color applied.
 
 ### Layer 2: Section Mapping
 
@@ -76,7 +73,7 @@ A dedicated "Advanced Profile Editor" Webview.
 
 ### Top Section: Palette Editor
 
-* List of the fixed 10 slots.
+* List of the fixed slots.
 * For each slot, a control to choose the type (Fixed/Dynamic) and value.
 * Color pickers for fixed values.
 

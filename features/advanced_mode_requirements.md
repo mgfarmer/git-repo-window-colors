@@ -8,30 +8,9 @@ In simple mode, rules like `my-repo:blue` use the extension's built-in color der
 
 ---
 
-## 1. Reference Palette (The 10 Colors)
-
-The foundational layer of the advanced mode. Users define these ~10 slots, which serve as variables for the rest of the configuration.
-
-| Slot Name | Description | Default Source |
-| :--- | :--- | :--- |
-| **Primary Active BG** | Main background color (e.g., Title Bar). | `Repo Color` |
-| **Primary Active FG** | Main text color on top of Primary BG. | `Contrast(Repo Color)` |
-| **Primary Inactive BG** | Background for inactive states (e.g., Inactive Tabs). | `Repo Color` (Darkened) |
-| **Primary Inactive FG** | Text color for inactive states. | `Contrast(Inactive BG)` |
-| **Secondary Active BG** | Accent background (e.g., Badges, Highlights). | `Branch Color` |
-| **Secondary Active FG** | Text color on top of Secondary BG. | `Contrast(Branch Color)` |
-| **Secondary Inactive BG** | Subtler accent background. | `Branch Color` (Faded/Darkened) |
-| **Secondary Inactive FG** | Text color for subtler accents. | `Contrast(Secondary Inactive)` |
-| **Terminal BG** | Specific background for the terminal panel. | Fixed (e.g., `#000000`) |
-| **Terminal FG** | Specific text color for the terminal. | Fixed (e.g., `#ffffff`) |
-
-*Note: Each slot can be set to a **Fixed Hex**, **Repo Color Source** (inherits from profile's repoColor palette slot), **Branch Color Source** (inherits from profile's branchColor palette slot), or **Transparent**. These "Repo Color" and "Branch Color" sources are palette slot references within the profile system, not references to simple mode colors.*
-
----
-
 ## 2. Colorable Sections & Elements
 
-The UI allows mapping the following VS Code elements to one of the 10 Palette Slots (or "None").
+The UI allows mapping the following VS Code elements to one of the Palette Slots (or "None").
 
 ### Section A: Title Bar
 
