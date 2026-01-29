@@ -4541,28 +4541,63 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 dropdownContainer.style.gap = '8px';
                 dropdownContainer.style.alignItems = 'center';
 
-                const select = document.createElement('select');
+                // Create custom dropdown with color swatches
+                const select = document.createElement('div');
+                select.className = 'custom-dropdown';
                 select.title = `Select palette color for ${key}`;
+                select.setAttribute('data-value', currentSlot);
+                select.setAttribute('tabindex', '0');
+                select.setAttribute('role', 'combobox');
+                select.setAttribute('aria-expanded', 'false');
                 select.style.flex = '1';
-                select.style.background = 'var(--vscode-dropdown-background)';
-                select.style.color = 'var(--vscode-dropdown-foreground)';
-                select.style.border = '1px solid var(--vscode-dropdown-border)';
-                select.style.padding = '4px';
-                select.style.fontSize = '12px';
+                select.style.position = 'relative';
+                select.style.cursor = 'pointer';
+
+                // Selected value display
+                const selectedDisplay = document.createElement('div');
+                selectedDisplay.className = 'dropdown-selected';
+                selectedDisplay.style.background = 'var(--vscode-dropdown-background)';
+                selectedDisplay.style.color = 'var(--vscode-dropdown-foreground)';
+                selectedDisplay.style.border = '1px solid var(--vscode-dropdown-border)';
+                selectedDisplay.style.padding = '4px 20px 4px 4px';
+                selectedDisplay.style.fontSize = '12px';
+                selectedDisplay.style.display = 'flex';
+                selectedDisplay.style.alignItems = 'center';
+                selectedDisplay.style.gap = '6px';
+                selectedDisplay.style.position = 'relative';
+
+                // Arrow indicator
+                const arrow = document.createElement('span');
+                arrow.textContent = '▼';
+                arrow.style.position = 'absolute';
+                arrow.style.right = '4px';
+                arrow.style.fontSize = '8px';
+                arrow.style.pointerEvents = 'none';
+                selectedDisplay.appendChild(arrow);
+
+                // Dropdown options container
+                const optionsContainer = document.createElement('div');
+                optionsContainer.className = 'dropdown-options';
+                optionsContainer.style.display = 'none';
+                optionsContainer.style.position = 'absolute';
+                optionsContainer.style.top = '100%';
+                optionsContainer.style.left = '0';
+                optionsContainer.style.right = '0';
+                optionsContainer.style.background = 'var(--vscode-dropdown-background)';
+                optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
+                optionsContainer.style.maxHeight = '200px';
+                optionsContainer.style.overflowY = 'auto';
+                optionsContainer.style.zIndex = '1000';
+                optionsContainer.style.marginTop = '2px';
+
+                // Build options
+                const options: Array<{ value: string; label: string; color?: string }> = [];
 
                 // Add 'none' option
-                const noneOption = document.createElement('option');
-                noneOption.value = 'none';
-                noneOption.textContent = 'None';
-                if (currentSlot === 'none') noneOption.selected = true;
-                select.appendChild(noneOption);
+                options.push({ value: 'none', label: 'None' });
 
-                // Add 'Fixed Color' option (always included)
-                const fixedOption = document.createElement('option');
-                fixedOption.value = '__fixed__';
-                fixedOption.textContent = 'Fixed Color';
-                if (currentSlot === '__fixed__') fixedOption.selected = true;
-                select.appendChild(fixedOption);
+                // Add 'Fixed Color' option
+                options.push({ value: '__fixed__', label: 'Fixed Color' });
 
                 // Add palette slot options (filtered)
                 const allPaletteOptions = Object.keys(profile.palette);
@@ -4582,14 +4617,150 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 }
 
                 filteredPaletteOptions.forEach((opt) => {
-                    const option = document.createElement('option');
-                    option.value = opt;
-                    option.textContent = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
+                    const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
+                    const slotDef = profile.palette[opt];
+                    const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
+                    options.push({ value: opt, label, color });
+
                     if (opt === currentSlot) {
-                        option.selected = true;
                         console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
                     }
-                    select.appendChild(option);
+                });
+
+                // Helper to create option element
+                const createOptionElement = (
+                    opt: { value: string; label: string; color?: string },
+                    isSelected: boolean,
+                ) => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'dropdown-option';
+                    optionDiv.setAttribute('data-value', opt.value);
+                    optionDiv.style.padding = '4px 8px';
+                    optionDiv.style.cursor = 'pointer';
+                    optionDiv.style.display = 'flex';
+                    optionDiv.style.alignItems = 'center';
+                    optionDiv.style.gap = '8px';
+                    optionDiv.style.fontSize = '12px';
+
+                    if (isSelected) {
+                        optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
+                        optionDiv.style.color = 'var(--vscode-list-activeSelectionForeground)';
+                    }
+
+                    // Add color swatch if available
+                    if (opt.color) {
+                        const swatch = document.createElement('div');
+                        swatch.style.width = '16px';
+                        swatch.style.height = '16px';
+                        swatch.style.background = opt.color;
+                        swatch.style.border = '1px solid var(--vscode-panel-border)';
+                        swatch.style.borderRadius = '2px';
+                        swatch.style.flexShrink = '0';
+                        optionDiv.appendChild(swatch);
+                    }
+
+                    const text = document.createElement('span');
+                    text.textContent = opt.label;
+                    optionDiv.appendChild(text);
+
+                    // Hover effect
+                    optionDiv.addEventListener('mouseenter', () => {
+                        if (!isSelected) {
+                            optionDiv.style.background = 'var(--vscode-list-hoverBackground)';
+                        }
+                    });
+                    optionDiv.addEventListener('mouseleave', () => {
+                        if (!isSelected) {
+                            optionDiv.style.background = '';
+                        }
+                    });
+
+                    return optionDiv;
+                };
+
+                // Update selected display
+                const updateSelectedDisplay = (value: string) => {
+                    const opt = options.find((o) => o.value === value);
+                    if (!opt) return;
+
+                    // Clear current content (except arrow)
+                    while (selectedDisplay.firstChild && selectedDisplay.firstChild !== arrow) {
+                        selectedDisplay.removeChild(selectedDisplay.firstChild);
+                    }
+
+                    // Add color swatch if available
+                    if (opt.color) {
+                        const swatch = document.createElement('div');
+                        swatch.style.width = '16px';
+                        swatch.style.height = '16px';
+                        swatch.style.background = opt.color;
+                        swatch.style.border = '1px solid var(--vscode-panel-border)';
+                        swatch.style.borderRadius = '2px';
+                        swatch.style.flexShrink = '0';
+                        selectedDisplay.insertBefore(swatch, arrow);
+                    }
+
+                    // Add text
+                    const text = document.createElement('span');
+                    text.textContent = opt.label;
+                    selectedDisplay.insertBefore(text, arrow);
+                };
+
+                // Populate options container
+                options.forEach((opt) => {
+                    const optionElement = createOptionElement(opt, opt.value === currentSlot);
+                    optionElement.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        select.setAttribute('data-value', opt.value);
+                        updateSelectedDisplay(opt.value);
+                        optionsContainer.style.display = 'none';
+                        select.setAttribute('aria-expanded', 'false');
+
+                        // Trigger change event
+                        const changeEvent = new Event('change', { bubbles: true });
+                        select.dispatchEvent(changeEvent);
+                    });
+                    optionsContainer.appendChild(optionElement);
+                });
+
+                // Toggle dropdown
+                selectedDisplay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = optionsContainer.style.display === 'block';
+                    optionsContainer.style.display = isOpen ? 'none' : 'block';
+                    select.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+                });
+
+                // Close on outside click
+                document.addEventListener('click', () => {
+                    optionsContainer.style.display = 'none';
+                    select.setAttribute('aria-expanded', 'false');
+                });
+
+                // Keyboard support
+                select.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        selectedDisplay.click();
+                    }
+                });
+
+                // Initialize display
+                updateSelectedDisplay(currentSlot);
+
+                select.appendChild(selectedDisplay);
+                select.appendChild(optionsContainer);
+
+                // Helper to get value like a select element
+                (select as any).value = currentSlot;
+                Object.defineProperty(select, 'value', {
+                    get() {
+                        return this.getAttribute('data-value');
+                    },
+                    set(val) {
+                        this.setAttribute('data-value', val);
+                        updateSelectedDisplay(val);
+                    },
                 });
 
                 // Create fixed color picker (hidden by default)
@@ -4626,7 +4797,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Update select width when fixed color is shown/hidden
                 const updateSelectWidth = () => {
-                    if (select.value === '__fixed__') {
+                    if (select.getAttribute('data-value') === '__fixed__') {
                         select.style.flex = '0 0 95px';
                         select.style.width = '95px';
                         fixedColorPicker.style.display = 'flex';
@@ -4666,7 +4837,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Get the color from the selected palette slot to create gradient
                 const updateSliderGradient = () => {
-                    const slotName = select.value;
+                    const slotName = select.getAttribute('data-value') || 'none';
                     if (slotName === 'none') {
                         // Disable and gray out opacity controls when 'none' is selected
                         opacitySlider.disabled = true;
@@ -4711,45 +4882,10 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 opacityContainer.appendChild(opacitySlider);
                 opacityContainer.appendChild(opacityValue);
 
-                // Create color swatch preview
-                const colorSwatch = document.createElement('div');
-                colorSwatch.style.width = '22px';
-                colorSwatch.style.height = '22px';
-                colorSwatch.style.border = '1px solid var(--vscode-panel-border)';
-                colorSwatch.style.borderRadius = '2px';
-                colorSwatch.style.flexShrink = '0';
-
-                // Function to update the swatch color
-                const updateSwatchColor = () => {
-                    const slotName = select.value;
-                    if (slotName === 'none') {
-                        colorSwatch.style.background = 'transparent';
-                    } else if (slotName === '__fixed__') {
-                        const color = convertColorToHex(textInput.value);
-                        const opacity = parseInt(opacitySlider.value) / 100;
-                        const rgbaColor = hexToRgba(color, opacity);
-                        colorSwatch.style.background = rgbaColor;
-                    } else if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
-                        const profile = currentConfig.advancedProfiles[selectedProfileName];
-                        const slotDef = profile.palette[slotName];
-                        if (slotDef && slotDef.value) {
-                            const color = convertColorToHex(slotDef.value);
-                            const opacity = parseInt(opacitySlider.value) / 100;
-                            const rgbaColor = hexToRgba(color, opacity);
-                            colorSwatch.style.background = rgbaColor;
-                        } else {
-                            colorSwatch.style.background = 'transparent';
-                        }
-                    }
-                };
-
-                // Initial swatch color
-                updateSwatchColor();
-
                 // Update function for both select and opacity
                 const updateMapping = () => {
                     if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
-                        const newSlot = select.value;
+                        const newSlot = select.getAttribute('data-value') || 'none';
                         const newOpacity = parseInt(opacitySlider.value) / 100;
 
                         if (newSlot === 'none') {
@@ -4783,7 +4919,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Update display value when slider changes
                 opacitySlider.oninput = () => {
                     opacityValue.textContent = opacitySlider.value + '%';
-                    updateSwatchColor();
                 };
 
                 // Fixed color picker event handlers
@@ -4791,7 +4926,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     textInput.value = colorInput.value;
                     updateMapping();
                     updateSliderGradient();
-                    updateSwatchColor();
                 };
 
                 randomBtn.onclick = () => {
@@ -4800,7 +4934,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     colorInput.value = convertColorToHex(randomColor);
                     updateMapping();
                     updateSliderGradient();
-                    updateSwatchColor();
                 };
 
                 textInput.oninput = () => {
@@ -4813,16 +4946,14 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 textInput.onchange = () => {
                     updateMapping();
                     updateSliderGradient();
-                    updateSwatchColor();
                 };
 
                 select.onchange = () => {
                     updateSelectWidth();
                     updateMapping();
                     updateSliderGradient();
-                    updateSwatchColor();
 
-                    const newSlot = select.value;
+                    const newSlot = select.getAttribute('data-value') || 'none';
                     const keysToSync: string[] = [];
 
                     // Only sync if the selected slot is congruous with the current key
@@ -4877,10 +5008,14 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         }
 
                         // Find and update the corresponding select element
-                        const allSelects = document.querySelectorAll('select');
+                        const allSelects = document.querySelectorAll('.custom-dropdown');
                         allSelects.forEach((otherSelect: any) => {
                             if (otherSelect.title === `Select palette color for ${correspondingKey}`) {
-                                otherSelect.value = correspondingSlot;
+                                otherSelect.setAttribute('data-value', correspondingSlot);
+                                // Update display using the value property setter
+                                if (otherSelect.value !== undefined) {
+                                    otherSelect.value = correspondingSlot;
+                                }
                                 // Trigger change event to update the mapping (but prevent recursive syncing)
                                 const tempFgBg = syncFgBgEnabled;
                                 const tempActiveInactive = syncActiveInactiveEnabled;
@@ -4897,7 +5032,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 row.appendChild(label);
                 row.appendChild(dropdownContainer);
-                row.appendChild(colorSwatch);
                 row.appendChild(opacityContainer);
                 grid.appendChild(row);
 
