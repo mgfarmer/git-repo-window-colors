@@ -367,11 +367,30 @@ async function migrateConfigurationToJson(): Promise<void> {
     }
 }
 
-export async function activate(context: ExtensionContext) {
-    outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
+async function checkConfiguration(): Promise<void> {
+    // Check if the configMigratedToJson configuration item is present
+    const config = workspace.getConfiguration('windowColors');
+    const configInspect = config.inspect('configMigratedToJson');
 
-    // Migrate configuration to JSON format if needed
-    await migrateConfigurationToJson();
+    // If the configuration item doesn't exist in the schema, all value fields will be undefined
+    if (
+        configInspect &&
+        configInspect.defaultValue === undefined &&
+        configInspect.globalValue === undefined &&
+        configInspect.workspaceValue === undefined &&
+        configInspect.workspaceFolderValue === undefined
+    ) {
+        const selection = await vscode.window.showWarningMessage(
+            'New configuration settings detected. Please restart VS Code to enable migration features.',
+            'Restart Now',
+            'Later',
+        );
+
+        if (selection === 'Restart Now') {
+            await vscode.commands.executeCommand('workbench.action.reloadWindow');
+        }
+        return; // Stop activation until restart
+    }
 
     // Test newly added contributions...
     try {
@@ -401,6 +420,15 @@ export async function activate(context: ExtensionContext) {
             throw error;
         }
     }
+}
+
+export async function activate(context: ExtensionContext) {
+    outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
+
+    await checkConfiguration();
+
+    // Migrate configuration to JSON format if needed
+    await migrateConfigurationToJson();
 
     // Create status bar item
     createStatusBarItem(context);
