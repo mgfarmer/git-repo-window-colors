@@ -1,6 +1,17 @@
 // This script runs within the webview context
 // It cannot access the main VS Code APIs directly.
 
+// Import shared types
+import {
+    PaletteSlotSource,
+    PaletteSlotDefinition,
+    Palette,
+    MappingValue,
+    SectionMappings,
+    AdvancedProfile,
+    AdvancedProfileMap,
+} from '../types/advancedModeTypes';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
@@ -16,53 +27,6 @@ let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
 let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
 let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') !== 'false'; // Default to true
-
-// Advanced Mode Types
-type PaletteSlotSource = 'fixed' | 'repoColor' | 'branchColor' | 'transparent';
-
-interface PaletteSlotDefinition {
-    source: PaletteSlotSource;
-    value?: string;
-    opacity?: number;
-    lighten?: number;
-    darken?: number;
-    highContrast?: boolean;
-}
-
-interface Palette {
-    primaryActiveBg: PaletteSlotDefinition;
-    primaryActiveFg: PaletteSlotDefinition;
-    primaryInactiveBg: PaletteSlotDefinition;
-    primaryInactiveFg: PaletteSlotDefinition;
-    secondaryActiveBg: PaletteSlotDefinition;
-    secondaryActiveFg: PaletteSlotDefinition;
-    secondaryInactiveBg: PaletteSlotDefinition;
-    secondaryInactiveFg: PaletteSlotDefinition;
-    terminalBg: PaletteSlotDefinition;
-    terminalFg: PaletteSlotDefinition;
-    quaternaryBg: PaletteSlotDefinition;
-    quaternaryFg: PaletteSlotDefinition;
-    [key: string]: PaletteSlotDefinition;
-}
-
-interface MappingValue {
-    slot: string;
-    opacity?: number;
-    fixedColor?: string; // For when slot is '__fixed__'
-}
-
-interface SectionMappings {
-    [vscodeKey: string]: string | MappingValue;
-}
-
-interface AdvancedProfile {
-    palette: Palette;
-    mappings: SectionMappings;
-}
-
-type AdvancedProfileMap = {
-    [profileName: string]: AdvancedProfile;
-};
 
 // Tab Switching
 function initTabs() {
@@ -3626,8 +3590,8 @@ const PALETTE_SLOT_LABELS: Record<string, string> = {
     secondaryActiveFg: 'Secondary Active Foreground',
     secondaryInactiveBg: 'Secondary Inactive Background',
     secondaryInactiveFg: 'Secondary Inactive Foreground',
-    terminalBg: 'Tertiary Background',
-    terminalFg: 'Tertiary Foreground',
+    tertiaryBg: 'Tertiary Background',
+    tertiaryFg: 'Tertiary Foreground',
     quaternaryBg: 'Quaternary Background',
     quaternaryFg: 'Quaternary Foreground',
 };
@@ -3644,8 +3608,8 @@ const PALETTE_SLOT_ORDER: string[] = [
     'secondaryActiveBg',
     'secondaryInactiveFg',
     'secondaryInactiveBg',
-    'terminalFg',
-    'terminalBg',
+    'tertiaryFg',
+    'tertiaryBg',
     'quaternaryFg',
     'quaternaryBg',
 ];
@@ -3659,8 +3623,8 @@ const DEFAULT_PALETTE: Palette = {
     secondaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
     secondaryInactiveBg: { source: 'fixed', value: '#4278B0' },
     secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-    terminalBg: { source: 'fixed', value: '#1E1E1E' },
-    terminalFg: { source: 'fixed', value: '#CCCCCC' },
+    tertiaryBg: { source: 'fixed', value: '#1E1E1E' },
+    tertiaryFg: { source: 'fixed', value: '#CCCCCC' },
     quaternaryBg: { source: 'fixed', value: '#2D2D30' },
     quaternaryFg: { source: 'fixed', value: '#D4D4D4' },
 };
@@ -4368,7 +4332,23 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
     if (paletteGrid) {
         paletteGrid.innerHTML = '';
 
+        // Migrate old terminalBg/terminalFg to tertiaryBg/tertiaryFg
+        if ((profile.palette as any).terminalBg && !profile.palette.tertiaryBg) {
+            profile.palette.tertiaryBg = (profile.palette as any).terminalBg;
+            delete (profile.palette as any).terminalBg;
+        }
+        if ((profile.palette as any).terminalFg && !profile.palette.tertiaryFg) {
+            profile.palette.tertiaryFg = (profile.palette as any).terminalFg;
+            delete (profile.palette as any).terminalFg;
+        }
+
         // Ensure all palette slots exist (migration for older profiles)
+        if (!profile.palette.tertiaryBg) {
+            profile.palette.tertiaryBg = DEFAULT_PALETTE.tertiaryBg;
+        }
+        if (!profile.palette.tertiaryFg) {
+            profile.palette.tertiaryFg = DEFAULT_PALETTE.tertiaryFg;
+        }
         if (!profile.palette.quaternaryBg) {
             profile.palette.quaternaryBg = DEFAULT_PALETTE.quaternaryBg;
         }
@@ -4386,7 +4366,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 name: 'Secondary',
                 slots: ['secondaryActiveBg', 'secondaryActiveFg', 'secondaryInactiveBg', 'secondaryInactiveFg'],
             },
-            { name: 'Tertiary', slots: ['terminalBg', 'terminalFg'] },
+            { name: 'Tertiary', slots: ['tertiaryBg', 'tertiaryFg'] },
             { name: 'Quaternary', slots: ['quaternaryBg', 'quaternaryFg'] },
         ];
 

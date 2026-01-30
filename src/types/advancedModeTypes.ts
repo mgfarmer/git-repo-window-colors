@@ -20,8 +20,11 @@ export interface Palette {
     secondaryInactiveBg: PaletteSlotDefinition;
     secondaryInactiveFg: PaletteSlotDefinition;
 
-    terminalBg: PaletteSlotDefinition;
-    terminalFg: PaletteSlotDefinition;
+    tertiaryBg: PaletteSlotDefinition;
+    tertiaryFg: PaletteSlotDefinition;
+
+    quaternaryBg: PaletteSlotDefinition;
+    quaternaryFg: PaletteSlotDefinition;
 
     // Allow other custom slots if needed in future, but these are the standard ones
     [key: string]: PaletteSlotDefinition;
