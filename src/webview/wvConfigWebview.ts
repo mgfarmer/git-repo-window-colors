@@ -729,6 +729,9 @@ function renderConfiguration(config: any) {
     attachEventListeners();
 }
 
+// Store reference to help panel handler so we can remove it
+let handleHelpPanelLinks: ((event: Event) => void) | null = null;
+
 function attachEventListeners() {
     // Remove old event listeners to prevent duplicates
     document.removeEventListener('click', handleDocumentClick);
@@ -740,6 +743,9 @@ function attachEventListeners() {
     document.removeEventListener('dragstart', handleDocumentDragStart);
     document.removeEventListener('dragover', handleDocumentDragOver);
     document.removeEventListener('drop', handleDocumentDrop);
+    if (handleHelpPanelLinks) {
+        document.removeEventListener('click', handleHelpPanelLinks);
+    }
 
     // Add new event listeners using event delegation
     document.addEventListener('click', handleDocumentClick);
@@ -753,7 +759,7 @@ function attachEventListeners() {
     document.addEventListener('drop', handleDocumentDrop);
 
     // Add event delegation for help panel TOC links
-    document.addEventListener('click', (event) => {
+    handleHelpPanelLinks = (event: Event) => {
         const target = event.target as HTMLElement;
         const link = target.closest('[data-switch-help]');
         if (link) {
@@ -763,7 +769,8 @@ function attachEventListeners() {
                 handleSwitchHelp(helpTarget);
             }
         }
-    });
+    };
+    document.addEventListener('click', handleHelpPanelLinks);
 }
 
 function handleDocumentClick(event: Event) {
@@ -1564,21 +1571,6 @@ function renderOtherSettings(settings: any) {
                     <div class="setting-item tooltip">
                         <label>
                             <input type="checkbox" 
-                                   id="show-branch-columns"
-                                   ${settings.showBranchColumns ? 'checked' : ''}
-                                   data-action="updateOtherSetting('showBranchColumns', this.checked)"
-                                   data-extra-action="updateBranchColumnVisibility">
-                            Show Branch Columns in Repository Rules
-                        </label>
-                        <span class="tooltiptext" role="tooltip">
-                            Show or hide the Default Branch and Branch Color columns in the Repository Rules table. 
-                            Disable this to simplify the interface if you only use basic repository coloring, or want to
-                            use separate branch rules instead.
-                        </span>
-                    </div>
-                    <div class="setting-item tooltip">
-                        <label>
-                            <input type="checkbox" 
                                    id="ask-to-colorize-repo-when-opened"
                                    ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
                                    data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
@@ -1611,22 +1603,38 @@ function renderOtherSettings(settings: any) {
     setupRangeInputUpdates();
 }
 
+// Store references to handlers so we can remove them
+let activityBarKnobHandler: ((this: HTMLInputElement, ev: Event) => any) | null = null;
+let branchHueRotationHandler: ((this: HTMLInputElement, ev: Event) => any) | null = null;
+
 function setupRangeInputUpdates() {
     const activityBarKnob = document.getElementById('activity-bar-knob') as HTMLInputElement;
     const branchHueRotation = document.getElementById('branch-hue-rotation') as HTMLInputElement;
 
     if (activityBarKnob) {
-        activityBarKnob.addEventListener('input', function () {
+        // Remove old listener if exists
+        if (activityBarKnobHandler) {
+            activityBarKnob.removeEventListener('input', activityBarKnobHandler);
+        }
+        // Create and add new listener
+        activityBarKnobHandler = function () {
             const valueSpan = document.getElementById('activity-bar-knob-value');
             if (valueSpan) valueSpan.textContent = this.value;
-        });
+        };
+        activityBarKnob.addEventListener('input', activityBarKnobHandler);
     }
 
     if (branchHueRotation) {
-        branchHueRotation.addEventListener('input', function () {
+        // Remove old listener if exists
+        if (branchHueRotationHandler) {
+            branchHueRotation.removeEventListener('input', branchHueRotationHandler);
+        }
+        // Create and add new listener
+        branchHueRotationHandler = function () {
             const valueSpan = document.getElementById('branch-hue-rotation-value');
             if (valueSpan) valueSpan.textContent = this.value + '°';
-        });
+        };
+        branchHueRotation.addEventListener('input', branchHueRotationHandler);
     }
 }
 
@@ -3900,6 +3908,64 @@ function isNeutralElement(key: string): boolean {
 }
 
 /**
+ * Check if a palette slot is compatible with a mapping key for drag-and-drop
+ * Returns true if the slot can logically be assigned to this key
+ */
+function isSlotCompatibleWithKey(slotName: string, mappingKey: string): boolean {
+    const keyIsBg = isBackgroundElement(mappingKey);
+    const keyIsFg = isForegroundElement(mappingKey);
+    const keyIsActive = isActiveElement(mappingKey);
+    const keyIsInactive = isInactiveElement(mappingKey);
+    const keyIsNeutral = isNeutralElement(mappingKey);
+
+    const slotIsBg = slotName.endsWith('Bg');
+    const slotIsFg = slotName.endsWith('Fg');
+    const slotIsActive = slotName.includes('Active') && !slotName.includes('Inactive');
+    const slotIsInactive = slotName.includes('Inactive');
+    const slotIsNeutral = !slotName.includes('Active') && !slotName.includes('Inactive');
+
+    // Neutral keys are compatible with everything
+    if (keyIsNeutral && !keyIsBg && !keyIsFg && !keyIsActive && !keyIsInactive) {
+        return true;
+    }
+
+    // Check Bg/Fg compatibility
+    if (keyIsBg && !slotIsBg) return false;
+    if (keyIsFg && !slotIsFg) return false;
+
+    // Check Active/Inactive compatibility
+    // Active keys can use active or neutral slots
+    if (keyIsActive && !(slotIsActive || slotIsNeutral)) return false;
+    // Inactive keys can use inactive or neutral slots
+    if (keyIsInactive && !(slotIsInactive || slotIsNeutral)) return false;
+    // Neutral keys with bg/fg context can use neutral slots or matching state
+    if (keyIsNeutral && !slotIsNeutral) return false;
+
+    return true;
+}
+
+/**
+ * Highlight or unhighlight compatible drop zones during drag
+ */
+function highlightCompatibleDropZones(slotName: string, highlight: boolean) {
+    const allDropdowns = document.querySelectorAll('.custom-dropdown');
+    allDropdowns.forEach((dropdown) => {
+        const dropdownEl = dropdown as HTMLElement;
+        const mappingKey = dropdownEl.getAttribute('data-mapping-key');
+
+        if (highlight && mappingKey) {
+            const isCompatible = isSlotCompatibleWithKey(slotName, mappingKey);
+            if (isCompatible) {
+                dropdownEl.classList.add('drag-compatible');
+            }
+        } else {
+            dropdownEl.classList.remove('drag-compatible');
+            dropdownEl.classList.remove('drag-hover');
+        }
+    });
+}
+
+/**
  * Check if a palette slot is congruous with a theme key for Fg/Bg
  * Returns true if the slot type matches the key type (both Fg or both Bg)
  */
@@ -4575,6 +4641,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 select.className = 'custom-dropdown';
                 select.title = `Select palette color for ${key}`;
                 select.setAttribute('data-value', currentSlot);
+                select.setAttribute('data-mapping-key', key);
                 select.setAttribute('tabindex', '0');
                 select.setAttribute('role', 'combobox');
                 select.setAttribute('aria-expanded', 'false');
@@ -4582,6 +4649,39 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 select.style.minWidth = '200px';
                 select.style.position = 'relative';
                 select.style.cursor = 'pointer';
+
+                // Add drop event handlers
+                select.addEventListener('dragover', (e: DragEvent) => {
+                    e.preventDefault();
+                    if (e.dataTransfer) {
+                        e.dataTransfer.dropEffect = 'copy';
+                    }
+                    select.classList.add('drag-hover');
+                });
+
+                select.addEventListener('dragleave', () => {
+                    select.classList.remove('drag-hover');
+                });
+
+                select.addEventListener('drop', (e: DragEvent) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    select.classList.remove('drag-hover');
+
+                    if (!e.dataTransfer) return;
+
+                    const slotName =
+                        e.dataTransfer.getData('application/x-palette-slot') || e.dataTransfer.getData('text/plain');
+                    if (!slotName) return;
+
+                    // Set the dropdown value
+                    select.setAttribute('data-value', slotName);
+                    (select as any).value = slotName;
+
+                    // Trigger change event to update mapping
+                    const changeEvent = new Event('change', { bubbles: true });
+                    select.dispatchEvent(changeEvent);
+                });
 
                 // Selected value display
                 const selectedDisplay = document.createElement('div');
@@ -4755,18 +4855,43 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     optionsContainer.appendChild(optionElement);
                 });
 
+                // Close on outside click handler
+                let outsideClickHandler: ((e: MouseEvent) => void) | null = null;
+
                 // Toggle dropdown
                 selectedDisplay.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const isOpen = optionsContainer.style.display === 'block';
-                    optionsContainer.style.display = isOpen ? 'none' : 'block';
-                    select.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
-                });
 
-                // Close on outside click
-                document.addEventListener('click', () => {
-                    optionsContainer.style.display = 'none';
-                    select.setAttribute('aria-expanded', 'false');
+                    if (isOpen) {
+                        optionsContainer.style.display = 'none';
+                        select.setAttribute('aria-expanded', 'false');
+                        // Remove outside click handler when closing
+                        if (outsideClickHandler) {
+                            document.removeEventListener('click', outsideClickHandler);
+                            outsideClickHandler = null;
+                        }
+                    } else {
+                        optionsContainer.style.display = 'block';
+                        select.setAttribute('aria-expanded', 'true');
+                        // Add outside click handler when opening
+                        outsideClickHandler = (e: MouseEvent) => {
+                            if (!select.contains(e.target as Node)) {
+                                optionsContainer.style.display = 'none';
+                                select.setAttribute('aria-expanded', 'false');
+                                if (outsideClickHandler) {
+                                    document.removeEventListener('click', outsideClickHandler);
+                                    outsideClickHandler = null;
+                                }
+                            }
+                        };
+                        // Use setTimeout to avoid immediate triggering
+                        setTimeout(() => {
+                            if (outsideClickHandler) {
+                                document.addEventListener('click', outsideClickHandler);
+                            }
+                        }, 0);
+                    }
                 });
 
                 // Keyboard support
@@ -5159,6 +5284,10 @@ function createPaletteSlotElement(
     el.style.display = 'flex';
     el.style.flexDirection = 'column';
     el.style.gap = '2px';
+    el.className = 'palette-slot-draggable';
+    el.setAttribute('draggable', 'true');
+    el.setAttribute('data-slot-name', key);
+    el.style.cursor = 'grab';
 
     const row = document.createElement('div');
     row.style.display = 'flex';
@@ -5171,6 +5300,61 @@ function createPaletteSlotElement(
     title.style.fontWeight = 'bold';
     title.style.fontSize = '12px';
     row.appendChild(title);
+
+    // Add drag event handlers
+    el.addEventListener('dragstart', (e: DragEvent) => {
+        if (!e.dataTransfer) return;
+
+        el.style.opacity = '0.5';
+        el.style.cursor = 'grabbing';
+
+        // Store slot name and color
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', key);
+        e.dataTransfer.setData('application/x-palette-slot', key);
+        e.dataTransfer.setData('application/x-palette-color', convertColorToHex(def.value || '#000000'));
+
+        // Create drag preview
+        const dragPreview = document.createElement('div');
+        dragPreview.style.position = 'absolute';
+        dragPreview.style.left = '-1000px';
+        dragPreview.style.padding = '8px 12px';
+        dragPreview.style.background = 'var(--vscode-editor-background)';
+        dragPreview.style.border = '2px solid var(--vscode-focusBorder)';
+        dragPreview.style.borderRadius = '4px';
+        dragPreview.style.display = 'flex';
+        dragPreview.style.alignItems = 'center';
+        dragPreview.style.gap = '8px';
+        dragPreview.style.fontSize = '12px';
+
+        const colorBox = document.createElement('div');
+        colorBox.style.width = '20px';
+        colorBox.style.height = '20px';
+        colorBox.style.backgroundColor = convertColorToHex(def.value || '#000000');
+        colorBox.style.border = '1px solid var(--vscode-panel-border)';
+        colorBox.style.borderRadius = '2px';
+
+        const label = document.createElement('span');
+        label.textContent = PALETTE_SLOT_LABELS[key] || key;
+        label.style.color = 'var(--vscode-foreground)';
+
+        dragPreview.appendChild(colorBox);
+        dragPreview.appendChild(label);
+        document.body.appendChild(dragPreview);
+        e.dataTransfer.setDragImage(dragPreview, 0, 0);
+
+        // Clean up drag preview after drag starts
+        setTimeout(() => dragPreview.remove(), 0);
+
+        // Highlight compatible drop zones
+        highlightCompatibleDropZones(key, true);
+    });
+
+    el.addEventListener('dragend', () => {
+        el.style.opacity = '1';
+        el.style.cursor = 'grab';
+        highlightCompatibleDropZones('', false);
+    });
 
     // Color input controls (matching the Rules tab)
     const colorContainer = document.createElement('div');

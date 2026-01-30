@@ -1751,3 +1751,32 @@ button:focus {
     border: none;
     display: block;
 }
+
+/* Drag and Drop Styles */
+.palette-slot-draggable {
+    transition: opacity 0.2s;
+}
+
+.palette-slot-draggable:active {
+    cursor: grabbing !important;
+}
+
+.custom-dropdown.drag-compatible {
+    box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+    animation: pulse-border 1s ease-in-out infinite;
+}
+
+.custom-dropdown.drag-hover {
+    box-shadow: 0 0 0 3px var(--vscode-focusBorder);
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+@keyframes pulse-border {
+    0%,
+    100% {
+        box-shadow: 0 0 0 2px var(--vscode-focusBorder);
+    }
+    50% {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 50%, transparent);
+    }
+}
