@@ -195,6 +195,13 @@ h2 {
     font-weight: bold;
 }
 
+/* Highlight rule in preview mode */
+.rules-table tr.preview-active {
+    background-color: var(--vscode-list-hoverBackground);
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: -2px;
+}
+
 /* Highlight selected repo rule */
 .rules-table tr.selected-rule {
     outline: 3px solid var(--vscode-focusBorder);

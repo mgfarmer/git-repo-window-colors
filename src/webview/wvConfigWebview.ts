@@ -22,6 +22,7 @@ let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
 let selectedMappingTab: string | null = null; // Track which mapping tab is active
 let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
+let previewMode: boolean = false; // Track if preview mode is enabled
 
 // Load checkbox states from localStorage with defaults
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
@@ -715,6 +716,9 @@ function renderConfiguration(config: any) {
     // Clear validation errors on new data
     clearValidationErrors();
 
+    // Sync preview mode with configuration
+    previewMode = config.otherSettings?.previewSelectedRepoRule ?? false;
+
     renderRepoRules(config.repoRules, config.matchingIndexes?.repoRule);
     renderBranchRulesForSelectedRepo();
     renderOtherSettings(config.otherSettings);
@@ -1012,6 +1016,8 @@ function handleDocumentChange(event: Event) {
         const extraAction = target.getAttribute('data-extra-action');
         if (extraAction === 'updateBranchColumnVisibility') {
             updateBranchColumnVisibility();
+        } else if (extraAction === 'handlePreviewModeChange') {
+            handlePreviewModeChange();
         }
 
         return;
@@ -1209,6 +1215,11 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         // Add selected class if this is the selected rule
         if (selectedRepoRuleIndex === index) {
             row.classList.add('selected-rule');
+        }
+
+        // Add preview-active class if preview mode is on and this is the selected rule
+        if (previewMode && selectedRepoRuleIndex === index) {
+            row.classList.add('preview-active');
         }
 
         // Highlight matched rule
@@ -1575,6 +1586,21 @@ function renderOtherSettings(settings: any) {
                     <div class="setting-item tooltip">
                         <label>
                             <input type="checkbox" 
+                                   id="preview-selected-repo-rule"
+                                   ${settings.previewSelectedRepoRule ? 'checked' : ''}
+                                   data-action="updateOtherSetting('previewSelectedRepoRule', this.checked)"
+                                   data-extra-action="handlePreviewModeChange">
+                            Preview Selected Repository Rule
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            When enabled, selecting any repository rule will preview its colors in the workspace, 
+                            regardless of whether the repository URL matches. This is useful for testing how different 
+                            rules look before applying them to a specific repository.
+                        </span>
+                    </div>
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
                                    id="ask-to-colorize-repo-when-opened"
                                    ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
                                    data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
@@ -1853,7 +1879,22 @@ function renderColorReport(config: any) {
         return;
     }
 
+    // Add preview indicator if preview mode is active
+    const previewIndicator =
+        previewMode && selectedRepoRuleIndex !== null && config.repoRules?.[selectedRepoRuleIndex]
+            ? `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="codicon codicon-preview" style="font-size: 16px; color: var(--vscode-editorInfo-foreground);"></span>
+                <strong>PREVIEW MODE</strong>
+            </div>
+            <div style="margin-top: 8px; font-size: 12px;">
+                Previewing colors from rule: "<strong>${escapeHtml(config.repoRules[selectedRepoRuleIndex].repoQualifier)}</strong>"
+            </div>
+        </div>`
+            : '';
+
     const tableHTML = `
+        ${previewIndicator}
         <table class="report-table" role="table" aria-label="Applied colors report">
             <thead>
                 <tr>
@@ -1900,6 +1941,33 @@ function updateProfilesTabVisibility() {
         if (rulesTab) {
             (rulesTab as HTMLElement).click();
         }
+    }
+}
+
+function handlePreviewModeChange() {
+    const checkbox = document.getElementById('preview-selected-repo-rule') as HTMLInputElement;
+    if (!checkbox) return;
+
+    previewMode = checkbox.checked;
+
+    if (previewMode) {
+        // If enabling preview and a rule is selected, send preview message
+        if (selectedRepoRuleIndex !== null) {
+            vscode.postMessage({
+                command: 'previewRepoRule',
+                data: { index: selectedRepoRuleIndex },
+            });
+        }
+    } else {
+        // If disabling preview, clear it
+        vscode.postMessage({
+            command: 'clearPreview',
+        });
+    }
+
+    // Re-render repo rules to update visual feedback
+    if (currentConfig) {
+        renderRepoRules(currentConfig.repoRules);
     }
 }
 
@@ -2013,7 +2081,15 @@ function selectRepoRule(index: number) {
 
     selectedRepoRuleIndex = index;
 
-    // Re-render repo rules to update selected state
+    // If preview mode is enabled, send preview command
+    if (previewMode) {
+        vscode.postMessage({
+            command: 'previewRepoRule',
+            data: { index },
+        });
+    }
+
+    // Re-render repo rules to update selected state and preview styling
     renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
 
     // Render branch rules for the selected repo

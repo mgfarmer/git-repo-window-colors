@@ -263,29 +263,29 @@
                         "description": "Enable the advanced Profiles feature. When enabled, the Profiles tab will be visible in the configuration interface, allowing you to define reusable color palettes and map them to specific UI elements.",
                         "scope": "application"
                     },
-                    "windowColors.configMigratedToJson": {
-                        "order": 28,
+                    "windowColors.previewSelectedRepoRule": {
+                        "order": 29,
                         "type": "boolean",
                         "default": false,
-                        "description": "Internal flag indicating whether configuration has been migrated from string to JSON format",
+                        "description": "When enabled, the currently selected repository rule will be previewed in the current window, regardless of whether the workspace matches that rule. This allows you to test how a rule looks before applying it to a repository.",
                         "scope": "application"
                     },
                     "windowColors.lastExportPath": {
-                        "order": 28,
+                        "order": 30,
                         "type": "string",
                         "default": "",
                         "description": "Last directory used for exporting configuration (internal setting)",
                         "scope": "application"
                     },
                     "windowColors.lastImportPath": {
-                        "order": 29,
+                        "order": 31,
                         "type": "string",
                         "default": "",
                         "description": "Last directory used for importing configuration (internal setting)",
                         "scope": "application"
                     },
                     "windowColors.advancedProfiles": {
-                        "order": 30,
+                        "order": 32,
                         "markdownDescription": "Named configuration profiles for Advanced Mode.",
                         "type": "object",
                         "default": {},

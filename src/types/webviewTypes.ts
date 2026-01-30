@@ -32,6 +32,7 @@ export interface OtherSettings {
     showStatusIconWhenNoRuleMatches: boolean;
     askToColorizeRepoWhenOpened: boolean;
     enableProfilesAdvanced: boolean;
+    previewSelectedRepoRule: boolean;
 }
 
 export interface WebviewMessage {
@@ -44,7 +45,9 @@ export interface WebviewMessage {
         | 'exportConfig'
         | 'importConfig'
         | 'updateAdvancedProfiles'
-        | 'requestHelp';
+        | 'requestHelp'
+        | 'previewRepoRule'
+        | 'clearPreview';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];

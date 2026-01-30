@@ -36,6 +36,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _workspaceInfo: { repositoryUrl: string; currentBranch: string } = { repositoryUrl: '', currentBranch: '' };
     private currentConfig: any = null;
     private _configurationListener: vscode.Disposable | undefined;
+    private _previewRepoRuleIndex: number | null = null;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
@@ -56,6 +57,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         if (this._panel) {
             this._sendConfigurationToWebview();
         }
+    }
+
+    public getPreviewRepoRuleIndex(): number | null {
+        return this._previewRepoRuleIndex;
     }
 
     public showAndAddRepoRule(extensionUri: vscode.Uri, repoQualifier: string, primaryColor: string = ''): void {
@@ -150,6 +155,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'requestHelp':
                 await this._sendHelpContent(message.data.helpType || 'getting-started');
+                break;
+            case 'previewRepoRule':
+                this._previewRepoRuleIndex = (message.data as any).index;
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode');
+                break;
+            case 'clearPreview':
+                this._previewRepoRuleIndex = null;
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview');
                 break;
         }
     }
@@ -396,6 +409,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             showStatusIconWhenNoRuleMatches: config.get<boolean>('showStatusIconWhenNoRuleMatches', true),
             askToColorizeRepoWhenOpened: config.get<boolean>('askToColorizeRepoWhenOpened', true),
             enableProfilesAdvanced: config.get<boolean>('enableProfilesAdvanced', false),
+            previewSelectedRepoRule: config.get<boolean>('previewSelectedRepoRule', false),
         };
     }
 

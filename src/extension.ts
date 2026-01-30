@@ -231,15 +231,16 @@ function getCurrentMatchingRule(): RepoConfig | undefined {
 /**
  * Migrate legacy string-based configuration to JSON object format
  */
-async function migrateConfigurationToJson(): Promise<void> {
-    const config = workspace.getConfiguration('windowColors');
-    const migrated = config.get<boolean>('configMigratedToJson', false);
+async function migrateConfigurationToJson(context: ExtensionContext): Promise<void> {
+    const migrated = context.globalState.get<boolean>('configMigratedToJson', false);
 
     // Skip if already migrated
     if (migrated) {
         outputChannel.appendLine('Configuration already migrated to JSON format.');
         return;
     }
+
+    const config = workspace.getConfiguration('windowColors');
 
     outputChannel.appendLine('Starting configuration migration to JSON format...');
 
@@ -354,7 +355,7 @@ async function migrateConfigurationToJson(): Promise<void> {
         // Write migrated configuration
         await config.update('repoConfigurationList', migratedRepoList, vscode.ConfigurationTarget.Global);
         await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
-        await config.update('configMigratedToJson', true, vscode.ConfigurationTarget.Global);
+        await context.globalState.update('configMigratedToJson', true);
 
         outputChannel.appendLine(
             `Configuration migration completed: ${migratedRepoList.length} repo rules, ${migratedBranchList.length} branch rules`,
@@ -367,11 +368,9 @@ async function migrateConfigurationToJson(): Promise<void> {
     }
 }
 
-async function checkConfiguration(): Promise<void> {
-    // Check if the configMigratedToJson configuration item is present
+async function checkConfigurationItem(itemName: string): Promise<boolean> {
     const config = workspace.getConfiguration('windowColors');
-    const configInspect = config.inspect('configMigratedToJson');
-
+    const configInspect = config.inspect(itemName);
     // If the configuration item doesn't exist in the schema, all value fields will be undefined
     if (
         configInspect &&
@@ -380,55 +379,89 @@ async function checkConfiguration(): Promise<void> {
         configInspect.workspaceValue === undefined &&
         configInspect.workspaceFolderValue === undefined
     ) {
+        return true; // Configuration item missing from schema
+    }
+    return false;
+}
+
+/**
+ * Get all configuration property names from the extension's package.json.
+ * This automatically discovers all windowColors.* settings without manual maintenance.
+ */
+function getAllConfigurationProperties(): string[] {
+    const extension = vscode.extensions.getExtension('KevinMills.git-repo-window-colors');
+    if (!extension?.packageJSON?.contributes?.configuration) {
+        return [];
+    }
+
+    const properties: string[] = [];
+    for (const config of extension.packageJSON.contributes.configuration) {
+        if (config.properties) {
+            for (const key of Object.keys(config.properties)) {
+                // Extract the property name after 'windowColors.'
+                if (key.startsWith('windowColors.')) {
+                    properties.push(key.substring('windowColors.'.length));
+                }
+            }
+        }
+    }
+    return properties;
+}
+
+async function checkConfiguration(context: ExtensionContext): Promise<boolean> {
+    const extension = vscode.extensions.getExtension('KevinMills.git-repo-window-colors');
+    const currentVersion = extension?.packageJSON?.version || '0.0.0';
+    const lastCheckedVersion = context.globalState.get<string>('lastConfigCheckVersion', '');
+
+    // Only check configuration if version has changed (or never checked before)
+    if (lastCheckedVersion === currentVersion) {
+        return false; // No need to check, same version
+    }
+
+    outputChannel.appendLine(
+        `Version changed from ${lastCheckedVersion || 'initial'} to ${currentVersion}, checking configuration...`,
+    );
+
+    // Get all configuration properties automatically
+    const allProperties = getAllConfigurationProperties();
+    const missingProperties: string[] = [];
+
+    // Check each property
+    for (const prop of allProperties) {
+        if (await checkConfigurationItem(prop)) {
+            missingProperties.push(prop);
+        }
+    }
+
+    if (missingProperties.length > 0) {
+        outputChannel.appendLine(`Missing configuration properties: ${missingProperties.join(', ')}`);
         const selection = await vscode.window.showWarningMessage(
-            'New configuration settings detected. Please restart VS Code to enable migration features.',
+            `New configuration settings detected (${missingProperties.length} items). Please restart VS Code to enable new features.`,
             'Restart Now',
             'Later',
         );
-
         if (selection === 'Restart Now') {
             await vscode.commands.executeCommand('workbench.action.reloadWindow');
         }
-        return; // Stop activation until restart
+        return true; // Stop activation until restart
     }
 
-    // Test newly added contributions...
-    try {
-        const advancedProfiles = workspace.getConfiguration('windowColors').get('advancedProfiles') as {
-            [key: string]: AdvancedProfile;
-        };
-
-        // If the configuration returns undefined, try to initialize it
-        if (advancedProfiles === undefined) {
-            await workspace
-                .getConfiguration('windowColors')
-                .update('advancedProfiles', {}, vscode.ConfigurationTarget.Global);
-        }
-    } catch (error: any) {
-        if (error.message.includes('not a registered configuration')) {
-            vscode.window
-                .showWarningMessage(
-                    'New configuration settings detected. Please restart VSCode to use the new features.',
-                    'Restart Now',
-                )
-                .then((selection) => {
-                    if (selection === 'Restart Now') {
-                        vscode.commands.executeCommand('workbench.action.reloadWindow');
-                    }
-                });
-        } else {
-            throw error;
-        }
-    }
+    // All configuration items are present, update the last checked version
+    await context.globalState.update('lastConfigCheckVersion', currentVersion);
+    outputChannel.appendLine('Configuration check passed.');
+    return false;
 }
 
 export async function activate(context: ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
 
-    await checkConfiguration();
+    if (await checkConfiguration(context)) {
+        outputChannel.appendLine('This extension is disabled until application restart.');
+        return; // Stop activation until restart
+    }
 
     // Migrate configuration to JSON format if needed
-    await migrateConfigurationToJson();
+    await migrateConfigurationToJson(context);
 
     // Create status bar item
     createStatusBarItem(context);
@@ -1205,7 +1238,26 @@ async function doit(reason: string) {
     let defBranch = undefined;
     let matchedRepoConfig: RepoConfig | undefined = undefined;
 
-    if (repoConfigList !== undefined) {
+    // Check for preview mode
+    const previewIndex = configProvider?.getPreviewRepoRuleIndex();
+
+    if (previewIndex !== null && previewIndex !== undefined && repoConfigList && repoConfigList[previewIndex]) {
+        outputChannel.appendLine('  [PREVIEW MODE] Using rule at index ' + previewIndex);
+        matchedRepoConfig = repoConfigList[previewIndex];
+        outputChannel.appendLine('  [PREVIEW MODE] Rule: "' + matchedRepoConfig.repoQualifier + '"');
+
+        // Set repoColor from preview rule
+        if (matchedRepoConfig.profileName) {
+            outputChannel.appendLine('  [PREVIEW MODE] Using profile: ' + matchedRepoConfig.profileName);
+        } else if (matchedRepoConfig.primaryColor) {
+            try {
+                repoColor = Color(matchedRepoConfig.primaryColor);
+                outputChannel.appendLine('  [PREVIEW MODE] Using color: ' + repoColor.hex());
+            } catch (e) {
+                outputChannel.appendLine('  [PREVIEW MODE] Error parsing color: ' + e);
+            }
+        }
+    } else if (repoConfigList !== undefined) {
         let item: RepoConfig;
         for (item of repoConfigList) {
             // Skip disabled rules
@@ -1215,11 +1267,6 @@ async function doit(reason: string) {
 
             if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
                 matchedRepoConfig = item;
-                outputChannel.appendLine('  [DEBUG] Matched repo rule:');
-                outputChannel.appendLine('    repoQualifier: ' + item.repoQualifier);
-                outputChannel.appendLine('    profileName: ' + (item.profileName || 'undefined'));
-                outputChannel.appendLine('    primaryColor: ' + (item.primaryColor || 'undefined'));
-                outputChannel.appendLine('    branchColor: ' + (item.branchColor || 'undefined'));
 
                 // If profileName is explicitly set, use it and don't try to parse primaryColor as a color
                 if (item.profileName) {
@@ -1267,29 +1314,30 @@ async function doit(reason: string) {
 
         if (!matchedRepoConfig) {
             outputChannel.appendLine('  No repo rule matched');
-        } else {
-            if (repoColor) {
-                if (defBranch !== undefined) {
-                    if (
-                        (!invertBranchColorLogic && currentBranch != defBranch) ||
-                        (invertBranchColorLogic && currentBranch === defBranch)
-                    ) {
-                        // Not on the default branch
-                        if (branchColor === undefined) {
-                            // No color specified, use modified repo color
-                            branchColor = repoColor?.rotate(hueRotation);
-                            outputChannel.appendLine('  No branch name rule, using rotated color for this repo');
-                        }
-                    } else {
-                        // On the default branch
-                        branchColor = repoColor;
-                        outputChannel.appendLine('  Using default branch color for this repo: ' + branchColor.hex());
-                    }
-                } else {
-                    outputChannel.appendLine('  No default branch specified, initializing branch color to repo color');
-                    branchColor = repoColor;
+        }
+    }
+
+    // Handle matched repo config (whether from preview or normal matching)
+    if (matchedRepoConfig && repoColor) {
+        if (defBranch !== undefined) {
+            if (
+                (!invertBranchColorLogic && currentBranch != defBranch) ||
+                (invertBranchColorLogic && currentBranch === defBranch)
+            ) {
+                // Not on the default branch
+                if (branchColor === undefined) {
+                    // No color specified, use modified repo color
+                    branchColor = repoColor?.rotate(hueRotation);
+                    outputChannel.appendLine('  Not on default branch, using rotated color (hue+' + hueRotation + '°)');
                 }
+            } else {
+                // On the default branch
+                branchColor = repoColor;
+                outputChannel.appendLine('  On default branch, using repo color: ' + branchColor.hex());
             }
+        } else {
+            branchColor = repoColor;
+            outputChannel.appendLine('  No default branch specified, using repo color for branch');
         }
     }
 
@@ -1428,22 +1476,13 @@ async function doit(reason: string) {
     let repoProfileName: string | null = null;
     let branchProfileName: string | null = null;
 
-    outputChannel.appendLine('  [DEBUG] Determining profiles...');
     if (matchedRepoConfig) {
-        outputChannel.appendLine(
-            '    matchedRepoConfig.profileName: ' + (matchedRepoConfig.profileName || 'undefined'),
-        );
-        outputChannel.appendLine(
-            '    matchedRepoConfig.primaryColor: ' + (matchedRepoConfig.primaryColor || 'undefined'),
-        );
-
         // Check for explicit profile name or profile from primaryColor
         repoProfileName =
             matchedRepoConfig.profileName || extractProfileName(matchedRepoConfig.primaryColor, advancedProfiles);
-        outputChannel.appendLine(`  Repo profile: ${repoProfileName || 'none'}`);
-        outputChannel.appendLine(
-            '    Extracted from: ' + (matchedRepoConfig.profileName ? 'profileName field' : 'primaryColor field'),
-        );
+        if (repoProfileName) {
+            outputChannel.appendLine(`  Repo profile: ${repoProfileName}`);
+        }
 
         // Check for branch profile (from branch rule or branchColor)
         branchProfileName =
@@ -1451,21 +1490,18 @@ async function doit(reason: string) {
             (matchedRepoConfig.branchColor
                 ? extractProfileName(matchedRepoConfig.branchColor, advancedProfiles)
                 : null);
-        outputChannel.appendLine(`  Branch profile: ${branchProfileName || 'none'}`);
-    } else {
-        outputChannel.appendLine('    No matchedRepoConfig found');
+        if (branchProfileName) {
+            outputChannel.appendLine(`  Branch profile: ${branchProfileName}`);
+        }
     }
 
     // Apply profiles: repo profile first (if any), then branch profile overrides (if any)
     // If there's no repo profile but there IS a repo color, apply legacy mode first
-    outputChannel.appendLine('  [DEBUG] Choosing mode:');
-    outputChannel.appendLine('    repoProfileName: ' + (repoProfileName || 'null'));
-    outputChannel.appendLine('    repoColor: ' + (repoColor ? repoColor.hex() : 'null'));
-    outputChannel.appendLine('    branchColor: ' + (branchColor ? branchColor.hex() : 'null'));
-
     if (!repoProfileName && repoColor && branchColor) {
         // Legacy Mode - apply base colors from repo/branch
-        outputChannel.appendLine(`  [MODE: LEGACY] Applying legacy color mode for repo color: ${repoColor.hex()}`);
+        outputChannel.appendLine(
+            `  Applying legacy color mode (repo: ${repoColor.hex()}, branch: ${branchColor.hex()})`,
+        );
 
         let titleBarTextColor: Color = Color('#ffffff');
         let titleBarColor: Color = Color('#ffffff');
@@ -1524,49 +1560,41 @@ async function doit(reason: string) {
         };
 
         outputChannel.appendLine(
-            `  Legacy mode applied ${Object.keys(newColors).filter((k) => newColors[k] !== undefined).length} color mappings`,
+            `  Applied ${Object.keys(newColors).filter((k) => newColors[k] !== undefined).length} color mappings`,
         );
     } else if (repoProfileName && advancedProfiles[repoProfileName]) {
         // Apply repo profile
-        outputChannel.appendLine(`  [MODE: REPO PROFILE] Applying repo profile "${repoProfileName}"`);
-        outputChannel.appendLine('    Profile exists in advancedProfiles: true');
+        outputChannel.appendLine(`  Applying repo profile "${repoProfileName}"`);
         const repoProfile = advancedProfiles[repoProfileName];
         newColors = resolveProfile(repoProfile, repoColor || Color('#000000'), branchColor || Color('#000000'));
-        outputChannel.appendLine(`  Repo profile resolved ${Object.keys(newColors).length} color mappings`);
+        outputChannel.appendLine(`  Applied ${Object.keys(newColors).length} color mappings from profile`);
     } else if (repoProfileName && !advancedProfiles[repoProfileName]) {
-        outputChannel.appendLine(`  [ERROR] Repo profile "${repoProfileName}" not found in advancedProfiles!`);
-        outputChannel.appendLine('    Available profiles: ' + Object.keys(advancedProfiles).join(', '));
+        outputChannel.appendLine(`  ERROR: Repo profile "${repoProfileName}" not found!`);
+        outputChannel.appendLine(`  Available profiles: ${Object.keys(advancedProfiles).join(', ')}`);
     } else {
-        outputChannel.appendLine('  [MODE: NONE] No repo profile or legacy colors to apply');
+        outputChannel.appendLine('  No repo profile or colors to apply');
     }
 
     if (branchProfileName && advancedProfiles[branchProfileName]) {
         // Apply branch profile (overrides repo profile)
-        outputChannel.appendLine(
-            `  Applying branch profile "${branchProfileName}" (will override repo profile colors)`,
-        );
+        outputChannel.appendLine(`  Applying branch profile "${branchProfileName}" (overrides repo colors)`);
         const branchProfile = advancedProfiles[branchProfileName];
         const branchColors = resolveProfile(
             branchProfile,
             repoColor || Color('#000000'),
             branchColor || Color('#000000'),
         );
-        outputChannel.appendLine(`  Branch profile resolved ${Object.keys(branchColors).length} color mappings`);
-
-        // Debug: show what the branch profile is providing
-        outputChannel.appendLine(`  Branch profile colors before merge:`);
-        Object.entries(branchColors).forEach(([key, value]) => {
-            outputChannel.appendLine(`    ${key} = ${value !== undefined ? value : 'undefined (will not override)'}`);
-        });
 
         // Merge: branch profile colors override repo profile colors, but only for defined values
-        // Filter out undefined values so they don't override repo profile colors
+        const definedBranchColors = Object.entries(branchColors).filter(([, value]) => value !== undefined).length;
         Object.entries(branchColors).forEach(([key, value]) => {
             if (value !== undefined) {
                 newColors[key] = value;
             }
         });
-        outputChannel.appendLine(`  After merge: ${Object.keys(newColors).length} total color mappings`);
+        outputChannel.appendLine(
+            `  Branch profile applied ${definedBranchColors} overrides, total: ${Object.keys(newColors).length} mappings`,
+        );
     }
 
     // If branch color is specified (but no branch profile), override activity bar
