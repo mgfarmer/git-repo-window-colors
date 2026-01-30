@@ -4702,13 +4702,20 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 optionsContainer.style.marginTop = '2px';
 
                 // Build options
-                const options: Array<{ value: string; label: string; color?: string }> = [];
+                type DropdownOption = { value: string; label: string; color?: string; isSeparator?: boolean };
+                const options: DropdownOption[] = [];
+
+                // Basic section
+                options.push({ value: '', label: 'Basic', isSeparator: true });
 
                 // Add 'none' option
                 options.push({ value: 'none', label: 'None' });
 
                 // Add 'Fixed Color' option
                 options.push({ value: '__fixed__', label: 'Fixed Color' });
+
+                // Palette Colors section
+                options.push({ value: '', label: 'Palette Colors', isSeparator: true });
 
                 // Add palette slot options (filtered)
                 const allPaletteOptions = Object.keys(profile.palette);
@@ -4739,10 +4746,27 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 });
 
                 // Helper to create option element
-                const createOptionElement = (
-                    opt: { value: string; label: string; color?: string },
-                    isSelected: boolean,
-                ) => {
+                const createOptionElement = (opt: DropdownOption, isSelected: boolean, index: number) => {
+                    if (opt.isSeparator) {
+                        const separatorDiv = document.createElement('div');
+                        separatorDiv.textContent = opt.label;
+                        separatorDiv.className = 'dropdown-separator';
+                        separatorDiv.style.padding = '4px 8px';
+                        separatorDiv.style.fontWeight = 'bold';
+                        separatorDiv.style.fontSize = '11px';
+                        // Use picker group colors for better visibility/theming
+                        separatorDiv.style.color = 'var(--vscode-pickerGroup-foreground)';
+                        separatorDiv.style.borderBottom = '1px solid var(--vscode-pickerGroup-border)';
+
+                        // Add margin for separation (except first item)
+                        separatorDiv.style.marginTop = index > 0 ? '8px' : '2px';
+                        separatorDiv.style.marginBottom = '2px';
+
+                        separatorDiv.style.textTransform = 'uppercase';
+                        separatorDiv.style.pointerEvents = 'none'; // Make unclickable
+                        return separatorDiv;
+                    }
+
                     const optionDiv = document.createElement('div');
                     optionDiv.className = 'dropdown-option';
                     optionDiv.setAttribute('data-value', opt.value);
@@ -4820,19 +4844,21 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 };
 
                 // Populate options container
-                options.forEach((opt) => {
-                    const optionElement = createOptionElement(opt, opt.value === currentSlot);
-                    optionElement.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        select.setAttribute('data-value', opt.value);
-                        updateSelectedDisplay(opt.value);
-                        optionsContainer.style.display = 'none';
-                        select.setAttribute('aria-expanded', 'false');
+                options.forEach((opt, index) => {
+                    const optionElement = createOptionElement(opt, opt.value === currentSlot, index);
+                    if (!opt.isSeparator) {
+                        optionElement.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            select.setAttribute('data-value', opt.value);
+                            updateSelectedDisplay(opt.value);
+                            optionsContainer.style.display = 'none';
+                            select.setAttribute('aria-expanded', 'false');
 
-                        // Trigger change event
-                        const changeEvent = new Event('change', { bubbles: true });
-                        select.dispatchEvent(changeEvent);
-                    });
+                            // Trigger change event
+                            const changeEvent = new Event('change', { bubbles: true });
+                            select.dispatchEvent(changeEvent);
+                        });
+                    }
                     optionsContainer.appendChild(optionElement);
                 });
 
