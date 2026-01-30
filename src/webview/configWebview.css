@@ -1780,3 +1780,11 @@ button:focus {
         box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 50%, transparent);
     }
 }
+
+/* Limit repo and branch rules tables to show max 9 rows with scrollbar */
+#repoRulesContent,
+#branchRulesContent {
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
