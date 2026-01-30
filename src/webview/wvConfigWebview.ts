@@ -4501,8 +4501,40 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
         let firstTab = true;
         let tabToActivate: HTMLButtonElement | null = null;
 
-        Object.keys(SECTION_DEFINITIONS).forEach((sectionName) => {
-            const keys = SECTION_DEFINITIONS[sectionName];
+        // Helper function to build the "Colored" tab content
+        const buildColoredTabContent = (): string[] => {
+            const coloredKeys: string[] = [];
+            if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                const mappings = currentConfig.advancedProfiles[selectedProfileName].mappings;
+                // Gather all keys from all sections that have a mapping (not 'none')
+                Object.keys(SECTION_DEFINITIONS).forEach((sectionName) => {
+                    const sectionKeys = SECTION_DEFINITIONS[sectionName];
+                    sectionKeys.forEach((key) => {
+                        const mappingValue = mappings[key];
+                        if (mappingValue) {
+                            // Has a mapping (either string or object with slot)
+                            if (typeof mappingValue === 'string' && mappingValue !== 'none') {
+                                coloredKeys.push(key);
+                            } else if (
+                                typeof mappingValue === 'object' &&
+                                mappingValue.slot &&
+                                mappingValue.slot !== 'none'
+                            ) {
+                                coloredKeys.push(key);
+                            }
+                        }
+                    });
+                });
+            }
+            return coloredKeys;
+        };
+
+        // Create array of all tabs (regular sections + Colored)
+        const allTabs = [...Object.keys(SECTION_DEFINITIONS), 'Colored'];
+
+        allTabs.forEach((sectionName) => {
+            // Determine keys for this tab
+            const keys = sectionName === 'Colored' ? buildColoredTabContent() : SECTION_DEFINITIONS[sectionName];
 
             // Count active mappings in this section
             const activeCount = countActiveMappings(profile, keys);
@@ -4513,7 +4545,12 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
             // Tab text
             const tabText = document.createElement('span');
-            tabText.textContent = sectionName;
+            if (sectionName === 'Colored') {
+                tabText.textContent = '\u26a1 ' + sectionName;
+                tabText.style.fontStyle = 'italic';
+            } else {
+                tabText.textContent = sectionName;
+            }
             tabBtn.appendChild(tabText);
 
             // Badge with count (only show if > 0)
@@ -4541,19 +4578,39 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Track the selected tab
                 selectedMappingTab = sectionName;
 
-                // Deactivate all
-                Array.from(tabsHeader.children).forEach((c: any) => {
-                    c.style.borderBottomColor = 'transparent';
-                    c.style.fontWeight = 'normal';
-                });
-                Array.from(tabsContent.children).forEach((c: any) => (c.style.display = 'none'));
+                // Special handling for Colored tab - rebuild content
+                if (sectionName === 'Colored') {
+                    // Deactivate all
+                    Array.from(tabsHeader.children).forEach((c: any) => {
+                        c.style.borderBottomColor = 'transparent';
+                        c.style.fontWeight = 'normal';
+                    });
+                    Array.from(tabsContent.children).forEach((c: any) => (c.style.display = 'none'));
 
-                // Activate self
-                tabBtn.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
-                tabBtn.style.fontWeight = 'bold';
+                    // Activate self
+                    tabBtn.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+                    tabBtn.style.fontWeight = 'bold';
 
-                const content = document.getElementById('mapping-section-' + sectionName.replace(/\s+/g, '-'));
-                if (content) content.style.display = 'block';
+                    // Trigger re-render to rebuild Colored tab content
+                    if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                        renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+                    }
+                } else {
+                    // Regular tab behavior
+                    // Deactivate all
+                    Array.from(tabsHeader.children).forEach((c: any) => {
+                        c.style.borderBottomColor = 'transparent';
+                        c.style.fontWeight = 'normal';
+                    });
+                    Array.from(tabsContent.children).forEach((c: any) => (c.style.display = 'none'));
+
+                    // Activate self
+                    tabBtn.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+                    tabBtn.style.fontWeight = 'bold';
+
+                    const content = document.getElementById('mapping-section-' + sectionName.replace(/\s+/g, '-'));
+                    if (content) content.style.display = 'block';
+                }
             };
 
             tabsHeader.appendChild(tabBtn);
@@ -4571,6 +4628,18 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             grid.style.gridTemplateColumns = '1fr 1px 1fr';
             grid.style.gap = '8px 20px';
             grid.style.padding = '10px 10px';
+
+            // Special handling for empty Colored tab
+            if (sectionName === 'Colored' && keys.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.textContent = 'No color mappings yet. Assign colors in other tabs to see them here.';
+                emptyMsg.style.gridColumn = '1 / -1';
+                emptyMsg.style.padding = '20px';
+                emptyMsg.style.textAlign = 'center';
+                emptyMsg.style.color = 'var(--vscode-descriptionForeground)';
+                emptyMsg.style.fontStyle = 'italic';
+                grid.appendChild(emptyMsg);
+            }
 
             keys.forEach((key: string) => {
                 const row = document.createElement('div');
