@@ -1485,82 +1485,86 @@ function renderOtherSettings(settings: any) {
                 <div class="section-help" style="margin-bottom: 10px;">
                     <strong>Note:</strong> These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration.
                 </div>
-                <div class="settings-grid">
-                    <div class="setting-item tooltip">
-                        <label>
-                            <input type="checkbox" 
-                                   id="color-status-bar"
-                                   ${settings.colorStatusBar ? 'checked' : ''}
-                                   data-action="updateOtherSetting('colorStatusBar', this.checked)">
-                            Color Status Bar
-                        </label>
-                        <span class="tooltiptext" role="tooltip">
-                            Apply repository colors to the status bar at the bottom of the VS Code window. 
-                            This give the repository color more prominence.
-                        </span>
-                    </div>
-                    <div class="setting-item tooltip">
-                        <label>
-                            <input type="checkbox" 
-                                   id="color-editor-tabs"
-                                   ${settings.colorEditorTabs ? 'checked' : ''}
-                                   data-action="updateOtherSetting('colorEditorTabs', this.checked)">
-                            Color Editor Tabs
-                        </label>
-                        <span class="tooltiptext" role="tooltip">
-                            Apply repository colors to editor tabs. This give the repository color more prominence.
-                        </span>
-                    </div>
-                    <div class="setting-item tooltip">
-                        <label>
-                            <input type="checkbox" 
-                                   id="color-inactive-titlebar"
-                                   ${settings.colorInactiveTitlebar ? 'checked' : ''}
-                                   data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
-                            Color Inactive Title Bar
-                        </label>
-                        <span class="tooltiptext" role="tooltip">
-                            Apply colors to the title bar even when the VS Code window is not focused. 
-                            This maintains visual identification when switching between applications.
-                        </span>
-                    </div>
-                    <div class="setting-item range-slider tooltip">
-                        <label for="activity-bar-knob">Color Knob:</label>
-                        <div class="range-controls">
-                            <input type="range" 
-                                   id="activity-bar-knob" 
-                                   min="-10" 
-                                   max="10" 
-                                   value="${settings.activityBarColorKnob || 0}"
-                                   data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
-                                   aria-label="Color adjustment from -10 to +10">
-                            <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="settings-grid">
+                        <div class="setting-item tooltip">
+                            <label>
+                                <input type="checkbox" 
+                                       id="color-status-bar"
+                                       ${settings.colorStatusBar ? 'checked' : ''}
+                                       data-action="updateOtherSetting('colorStatusBar', this.checked)">
+                                Color Status Bar
+                            </label>
+                            <span class="tooltiptext" role="tooltip">
+                                Apply repository colors to the status bar at the bottom of the VS Code window. 
+                                This give the repository color more prominence.
+                            </span>
                         </div>
-                        <span class="tooltiptext" role="tooltip">
-                            Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
-                            Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
-                            Provided for fine-tuning the look and feel.
-                        </span>
-                    </div>
-                    <div class="setting-item range-slider tooltip">
-                        <label for="branch-hue-rotation">Branch Hue Rotation:</label>
-                        <div class="range-controls">
-                            <input type="range" 
-                                   id="branch-hue-rotation" 
-                                   min="-179" 
-                                   max="179" 
-                                   value="${settings.automaticBranchIndicatorColorKnob || 60}"
-                                   data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
-                                   aria-label="Branch hue rotation from -179 to +179 degrees">
-                            <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
+                        <div class="setting-item tooltip">
+                            <label>
+                                <input type="checkbox" 
+                                       id="color-editor-tabs"
+                                       ${settings.colorEditorTabs ? 'checked' : ''}
+                                       data-action="updateOtherSetting('colorEditorTabs', this.checked)">
+                                Color Editor Tabs
+                            </label>
+                            <span class="tooltiptext" role="tooltip">
+                                Apply repository colors to editor tabs. This give the repository color more prominence.
+                            </span>
                         </div>
-                        <span class="tooltiptext" role="tooltip">
-                            Automatically shift the hue of branch indicator colors. This creates visual variation 
-                            for branch-specific coloring when a default branch is specified and no explicit branch color is defined. 
-                            A value of 180 means
-                            opposite colors, while 60 or -60 gives a nice complementary colors. Or use anything you like!
-                            Note: This setting does not apply to discrete branch rules. 
-                        </span>
+                        <div class="setting-item tooltip">
+                            <label>
+                                <input type="checkbox" 
+                                       id="color-inactive-titlebar"
+                                       ${settings.colorInactiveTitlebar ? 'checked' : ''}
+                                       data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
+                                Color Inactive Title Bar
+                            </label>
+                            <span class="tooltiptext" role="tooltip">
+                                Apply colors to the title bar even when the VS Code window is not focused. 
+                                This maintains visual identification when switching between applications.
+                            </span>
+                        </div>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="setting-item range-slider tooltip">
+                            <label for="activity-bar-knob">Color Knob:</label>
+                            <div class="range-controls">
+                                <input type="range" 
+                                       id="activity-bar-knob" 
+                                       min="-10" 
+                                       max="10" 
+                                       value="${settings.activityBarColorKnob || 0}"
+                                       data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
+                                       aria-label="Color adjustment from -10 to +10">
+                                <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
+                            </div>
+                            <span class="tooltiptext" role="tooltip">
+                                Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
+                                Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
+                                Provided for fine-tuning the look and feel.
+                            </span>
+                        </div>
+                        <div class="setting-item range-slider tooltip">
+                            <label for="branch-hue-rotation">Branch Hue Rotation:</label>
+                            <div class="range-controls">
+                                <input type="range" 
+                                       id="branch-hue-rotation" 
+                                       min="-179" 
+                                       max="179" 
+                                       value="${settings.automaticBranchIndicatorColorKnob || 60}"
+                                       data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
+                                       aria-label="Branch hue rotation from -179 to +179 degrees">
+                                <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
+                            </div>
+                            <span class="tooltiptext" role="tooltip">
+                                Automatically shift the hue of branch indicator colors. This creates visual variation 
+                                for branch-specific coloring when a default branch is specified and no explicit branch color is defined. 
+                                A value of 180 means
+                                opposite colors, while 60 or -60 gives a nice complementary colors. Or use anything you like!
+                                Note: This setting does not apply to discrete branch rules. 
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
