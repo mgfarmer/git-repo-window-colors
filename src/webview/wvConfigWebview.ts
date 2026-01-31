@@ -200,10 +200,32 @@ const HTML_COLOR_NAMES = [
     'yellowgreen',
 ];
 
+// Example branch patterns for auto-complete
+const EXAMPLE_BRANCH_PATTERNS = [
+    '^(?!.*(main|master)).*',
+    '^(bug/|bug-).*',
+    '^(feature/|feature-).*',
+    'feature/.*',
+    'bugfix/.*',
+    'main',
+    'master',
+    'develop',
+    'dev',
+    'release.*',
+    'hotfix.*',
+    'fix/.*',
+    'docs/.*',
+    'test/.*',
+    'refactor/.*',
+    'style/.*',
+    'perf/.*',
+];
+
 // Auto-complete state
 let activeAutoCompleteInput: HTMLInputElement | null = null;
 let autoCompleteDropdown: HTMLElement | null = null;
 let selectedSuggestionIndex: number = -1;
+let branchPatternFilterTimeout: any = null;
 
 // Input original value tracking for escape key restoration
 const originalInputValues = new Map<HTMLInputElement, string>();
@@ -544,6 +566,36 @@ function getSmartBranchDefaults(): string {
     ];
 
     return suggestions.join('\\n');
+}
+
+function collectUniqueBranchPatterns(): string[] {
+    const patterns = new Set<string>();
+
+    if (!currentConfig) return [];
+
+    // Collect from global branch rules
+    if (currentConfig.branchRules) {
+        for (const rule of currentConfig.branchRules) {
+            if (rule.pattern && rule.pattern.trim()) {
+                patterns.add(rule.pattern.trim());
+            }
+        }
+    }
+
+    // Collect from local branch rules in repo rules
+    if (currentConfig.repoRules) {
+        for (const repoRule of currentConfig.repoRules) {
+            if (repoRule.branchRules) {
+                for (const branchRule of repoRule.branchRules) {
+                    if (branchRule.pattern && branchRule.pattern.trim()) {
+                        patterns.add(branchRule.pattern.trim());
+                    }
+                }
+            }
+        }
+    }
+
+    return Array.from(patterns).sort();
 }
 
 // Message handler for extension communication
@@ -1136,8 +1188,15 @@ function handleDocumentInput(event: Event) {
         handleColorInputAutoComplete(target);
     }
 
-    // Handle regex validation for branch pattern inputs
+    // Handle branch pattern auto-complete with debouncing
     if (target.id && target.id.startsWith('branch-pattern-')) {
+        // Clear existing timeout for autocomplete
+        clearTimeout(branchPatternFilterTimeout);
+        branchPatternFilterTimeout = setTimeout(() => {
+            filterBranchPatternAutoComplete(target);
+        }, 150); // Debounce autocomplete filtering
+
+        // Regex validation on separate timeout
         clearTimeout(regexValidationTimeout);
         regexValidationTimeout = setTimeout(() => {
             validateRegexPattern(target.value, target.id);
@@ -1202,6 +1261,11 @@ function handleDocumentFocusIn(event: FocusEvent) {
     // Show autocomplete dropdown immediately when focusing color input
     if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
         handleColorInputAutoComplete(target);
+    }
+
+    // Show autocomplete dropdown immediately when focusing branch pattern input
+    if (target.id && target.id.startsWith('branch-pattern-')) {
+        filterBranchPatternAutoComplete(target);
     }
 }
 
@@ -3849,6 +3913,118 @@ function scrollToSelectedItem(selectedItem: HTMLElement, dropdown: HTMLElement) 
 
 function selectAutoCompleteSuggestion(input: HTMLInputElement, colorName: string) {
     input.value = colorName;
+
+    // Trigger the input event to update the configuration
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    hideAutoCompleteDropdown();
+    input.focus();
+}
+
+function filterBranchPatternAutoComplete(input: HTMLInputElement) {
+    const value = input.value.toLowerCase().trim();
+
+    // Collect unique patterns from all rules
+    const existingPatterns = collectUniqueBranchPatterns();
+
+    let matches: string[] = [];
+
+    if (value.length === 0) {
+        // Show all existing patterns when field is empty
+        matches = existingPatterns;
+    } else {
+        // Filter existing patterns - startsWith first, then includes
+        const startsWithMatches = existingPatterns.filter((pattern) => pattern.toLowerCase().startsWith(value));
+        const includesMatches = existingPatterns.filter(
+            (pattern) => !pattern.toLowerCase().startsWith(value) && pattern.toLowerCase().includes(value),
+        );
+        matches = [...startsWithMatches, ...includesMatches];
+    }
+
+    // Add Examples section
+    if (matches.length > 0) {
+        matches.push('__EXAMPLES_SEPARATOR__');
+    }
+
+    // Filter examples using same logic
+    if (value.length === 0) {
+        matches.push(...EXAMPLE_BRANCH_PATTERNS);
+    } else {
+        const exampleStartsWith = EXAMPLE_BRANCH_PATTERNS.filter((pattern) => pattern.toLowerCase().startsWith(value));
+        const exampleIncludes = EXAMPLE_BRANCH_PATTERNS.filter(
+            (pattern) => !pattern.toLowerCase().startsWith(value) && pattern.toLowerCase().includes(value),
+        );
+        matches.push(...exampleStartsWith, ...exampleIncludes);
+    }
+
+    if (matches.length === 0 || (matches.length === 1 && matches[0] === '__EXAMPLES_SEPARATOR__')) {
+        hideAutoCompleteDropdown();
+        return;
+    }
+
+    showBranchPatternAutoCompleteDropdown(input, matches.slice(0, 50));
+}
+
+function showBranchPatternAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]) {
+    hideAutoCompleteDropdown(); // Hide any existing dropdown
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'color-autocomplete-dropdown'; // Reuse existing styles
+    dropdown.setAttribute('role', 'listbox');
+    dropdown.setAttribute('aria-label', 'Branch pattern suggestions');
+
+    let selectableIndex = 0;
+    suggestions.forEach((suggestion, index) => {
+        // Handle Examples separator
+        if (suggestion === '__EXAMPLES_SEPARATOR__') {
+            const separator = document.createElement('div');
+            separator.className = 'color-autocomplete-separator';
+            separator.textContent = 'Examples';
+            dropdown.appendChild(separator);
+            return;
+        }
+
+        const item = document.createElement('div');
+        item.className = 'color-autocomplete-item';
+        item.textContent = suggestion;
+        item.dataset.value = suggestion;
+        item.dataset.index = selectableIndex.toString();
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', 'false');
+
+        item.addEventListener('click', () => {
+            selectBranchPatternSuggestion(input, suggestion);
+        });
+
+        item.addEventListener('mouseenter', () => {
+            selectedSuggestionIndex = selectableIndex;
+            updateAutoCompleteSelection();
+        });
+
+        dropdown.appendChild(item);
+        selectableIndex++;
+    });
+
+    document.body.appendChild(dropdown);
+
+    // Position the dropdown below the input
+    const rect = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = rect.bottom + 'px';
+    dropdown.style.minWidth = rect.width + 'px';
+
+    autoCompleteDropdown = dropdown;
+    activeAutoCompleteInput = input;
+    selectedSuggestionIndex = -1;
+
+    // Set up keyboard navigation
+    input.addEventListener('keydown', handleAutoCompleteKeydown);
+}
+
+function selectBranchPatternSuggestion(input: HTMLInputElement, pattern: string) {
+    input.value = pattern;
 
     // Trigger the input event to update the configuration
     input.dispatchEvent(new Event('input', { bubbles: true }));
