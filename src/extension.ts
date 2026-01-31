@@ -1598,6 +1598,7 @@ async function doit(reason: string) {
     }
 
     // If branch color is specified (but no branch profile), override activity bar
+    // Note: When using profiles, we don't apply the activityBarColorKnob
     if (branchColor && !branchProfileName && repoProfileName) {
         outputChannel.appendLine(`  Branch rule color overrides activity bar: ${branchColor.hex()}`);
 
@@ -1606,14 +1607,14 @@ async function doit(reason: string) {
         let activityBarColor: Color = Color('#ffffff');
 
         if (theme === ColorThemeKind.Dark) {
-            activityBarColor = branchColor.lighten(activityBarColorKnob);
+            activityBarColor = branchColor;
             if (branchColor.isDark()) {
                 titleBarTextColor = getColorWithLuminosity(branchColor, 0.95, 1);
             } else {
                 titleBarTextColor = getColorWithLuminosity(branchColor, 0, 0.01);
             }
         } else if (theme === ColorThemeKind.Light) {
-            activityBarColor = branchColor.darken(activityBarColorKnob);
+            activityBarColor = branchColor;
             if (branchColor.isDark()) {
                 titleBarTextColor = getColorWithLuminosity(branchColor, 0.95, 1);
             } else {
