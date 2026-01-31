@@ -1456,6 +1456,62 @@ button:focus {
     background: var(--vscode-list-activeSelectionBackground);
 }
 
+/* Palette Toast */
+.palette-toast {
+    position: absolute;
+    right: 100%;
+    top: -12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--vscode-editor-background);
+    border: 1px solid;
+    border-radius: 3px;
+    margin-right: 12px;
+    animation: slideIn 0.3s ease-out;
+    white-space: nowrap;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.palette-toast-message {
+    font-size: 13px;
+    color: var(--vscode-foreground);
+}
+
+.palette-toast-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.palette-toast-btn {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 2px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.palette-toast-btn:hover {
+    filter: brightness(1.1);
+}
+
+.palette-toast-btn:active {
+    filter: brightness(0.9);
+}
+
 /* Palette Editor */
 .palette-grid {
     display: flex;

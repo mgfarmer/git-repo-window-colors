@@ -578,6 +578,9 @@ window.addEventListener('message', (event) => {
                 confirmDeleteProfile(message.data.profileName);
             }
             break;
+        case 'paletteGenerated':
+            handlePaletteGenerated(message.data);
+            break;
     }
 });
 
@@ -4569,6 +4572,9 @@ function setupPaletteGenerator() {
     });
 }
 
+// Store previous palette for undo functionality
+let previousPalette: any = null;
+
 /**
  * Generates a pleasing color palette and updates the current profile
  */
@@ -4585,6 +4591,9 @@ function generatePalette(algorithm: string) {
         return;
     }
 
+    // Store current palette for undo
+    previousPalette = JSON.parse(JSON.stringify(profile.palette));
+
     // Send message to extension to generate palette
     vscode.postMessage({
         command: 'generatePalette',
@@ -4596,6 +4605,88 @@ function generatePalette(algorithm: string) {
             },
         },
     });
+}
+
+/**
+ * Handles the paletteGenerated message from the extension
+ */
+function handlePaletteGenerated(data: { advancedProfiles: any; generatedPalette: any; profileName: string }) {
+    // Update current config with the new profiles
+    currentConfig.advancedProfiles = data.advancedProfiles;
+
+    // Show the toast with generated palette styling
+    showPaletteToast(data.generatedPalette);
+
+    // Re-render the profile editor to show the new palette
+    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+        renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+    }
+}
+
+/**
+ * Shows the palette toast notification with styling from generated palette
+ */
+function showPaletteToast(generatedPalette: any) {
+    const toast = document.getElementById('paletteToast');
+    const acceptBtn = document.getElementById('paletteToastAccept');
+    const undoBtn = document.getElementById('paletteToastUndo');
+
+    if (!toast || !acceptBtn || !undoBtn) {
+        return;
+    }
+
+    // Style the toast border with tertiary background
+    toast.style.borderColor = generatedPalette.tertiaryActiveBg;
+
+    // Style Accept button with primary colors
+    acceptBtn.style.backgroundColor = generatedPalette.primaryActiveBg;
+    acceptBtn.style.color = generatedPalette.primaryActiveFg;
+
+    // Style Undo button with secondary colors
+    undoBtn.style.backgroundColor = generatedPalette.secondaryActiveBg;
+    undoBtn.style.color = generatedPalette.secondaryActiveFg;
+
+    // Show the toast
+    toast.style.display = 'flex';
+}
+
+/**
+ * Hides the palette toast notification
+ */
+function hidePaletteToast() {
+    const toast = document.getElementById('paletteToast');
+    if (toast) {
+        toast.style.display = 'none';
+    }
+}
+
+/**
+ * Sets up the palette toast event handlers
+ */
+function setupPaletteToast() {
+    const acceptBtn = document.getElementById('paletteToastAccept');
+    const undoBtn = document.getElementById('paletteToastUndo');
+
+    if (acceptBtn) {
+        acceptBtn.addEventListener('click', () => {
+            // Accept the changes - just hide the toast
+            hidePaletteToast();
+            previousPalette = null;
+        });
+    }
+
+    if (undoBtn) {
+        undoBtn.addEventListener('click', () => {
+            // Restore the previous palette
+            if (previousPalette && selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                currentConfig.advancedProfiles[selectedProfileName].palette = previousPalette;
+                saveProfiles();
+                renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+                previousPalette = null;
+            }
+            hidePaletteToast();
+        });
+    }
 }
 
 function renderProfileEditor(name: string, profile: AdvancedProfile) {
@@ -4620,6 +4711,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
     // Wire up palette generator
     setupPaletteGenerator();
+    setupPaletteToast();
 
     // Palette Editor
     const paletteGrid = document.getElementById('paletteEditor');

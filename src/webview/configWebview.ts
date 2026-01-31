@@ -790,10 +790,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             profiles[profileName] = profile;
             await this._updateConfiguration({ advancedProfiles: profiles });
 
-            // Send the updated config back to the webview
-            this._sendConfigurationToWebview();
-
-            vscode.window.showInformationMessage(`Palette generated successfully for "${profileName}"`);
+            // Send the updated profile back to the webview with generated palette for toast styling
+            this._panel.webview.postMessage({
+                command: 'paletteGenerated',
+                data: {
+                    advancedProfiles: profiles,
+                    generatedPalette: generatedPalette,
+                    profileName: profileName,
+                },
+            });
         } catch (error) {
             console.error('Failed to generate palette:', error);
             vscode.window.showErrorMessage(`Failed to generate palette: ${error}`);
@@ -1072,6 +1077,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                         </span>
                                     </h3>
                                     <div class="palette-generator-container">
+                                        <div id="paletteToast" class="palette-toast" style="display: none;">
+                                            <span class="palette-toast-message">Palette generated</span>
+                                            <div class="palette-toast-actions">
+                                                <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
+                                                <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
+                                            </div>
+                                        </div>
                                         <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" title="Generate palette colors from Primary Active Background using color theory algorithms" aria-label="Generate Pleasing Palette from Primary Active Background">
                                             <span class="codicon codicon-wand"></span>
                                             <span class="codicon codicon-chevron-down"></span>
