@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
 import { generatePalette, PaletteAlgorithm } from '../paletteGenerator';
+import { getRepoRuleErrors, getBranchRuleErrors, validateRules } from '../extension';
 //import { outputChannel } from '../extension';
 
 // Build-time configuration for color picker type
@@ -198,6 +199,24 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const advancedProfiles = this._getAdvancedProfiles();
         const workspaceInfo = this._getWorkspaceInfo();
 
+        // Trigger validation to populate error maps
+        validateRules();
+
+        // Get validation errors from extension
+        const repoRuleErrors = getRepoRuleErrors();
+        const branchRuleErrors = getBranchRuleErrors();
+
+        // Convert error maps to plain objects for JSON serialization
+        const repoRuleErrorsObj: { [index: number]: string } = {};
+        repoRuleErrors.forEach((msg, index) => {
+            repoRuleErrorsObj[index] = msg;
+        });
+
+        const branchRuleErrorsObj: { [index: number]: string } = {};
+        branchRuleErrors.forEach((msg, index) => {
+            branchRuleErrorsObj[index] = msg;
+        });
+
         // Get currently applied color customizations
         const colorCustomizations = vscode.workspace.getConfiguration('workbench').get('colorCustomizations', {});
 
@@ -221,6 +240,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             ...this.currentConfig,
             workspaceInfo,
             colorCustomizations,
+            validationErrors: {
+                repoRules: repoRuleErrorsObj,
+                branchRules: branchRuleErrorsObj,
+            },
             matchingIndexes: {
                 repoRule: matchingRepoRuleIndex,
                 branchRule: matchingBranchRuleIndex,
@@ -916,7 +939,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         <body>
             <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
                 <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
-                <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles (Advanced)</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
                 <button type="button" class="help-button-global" data-action="openContextualHelp" title="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
             </div>

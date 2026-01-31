@@ -20,6 +20,10 @@ const vscode = acquireVsCodeApi();
 let currentConfig: any = null;
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
+let validationErrors: { repoRules: { [index: number]: string }; branchRules: { [index: number]: string } } = {
+    repoRules: {},
+    branchRules: {},
+};
 let selectedMappingTab: string | null = null; // Track which mapping tab is active
 let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
 let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
@@ -642,6 +646,13 @@ function handleConfigurationData(data: any) {
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
+
+    // Store validation errors if present
+    if (data.validationErrors) {
+        validationErrors = data.validationErrors;
+    } else {
+        validationErrors = { repoRules: {}, branchRules: {} };
+    }
 
     // Synchronize profileName fields for backward compatibility
     // If primaryColor/branchColor/color matches a profile but profileName is not set, set it
@@ -1379,6 +1390,12 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         const row = tbody.insertRow();
         row.className = 'rule-row';
 
+        // Add error class if this rule has a validation error
+        if (validationErrors.repoRules[index]) {
+            row.classList.add('has-error');
+            row.title = `Error: ${validationErrors.repoRules[index]}`;
+        }
+
         // Add selected class if this is the selected rule
         if (selectedRepoRuleIndex === index) {
             row.classList.add('selected-rule');
@@ -1516,6 +1533,12 @@ function renderBranchRules(rules: any[], matchingIndex?: number, isGlobalMode: b
     rules.forEach((rule, index) => {
         const row = tbody.insertRow();
         row.className = 'rule-row';
+
+        // Add error class if this rule has a validation error (for global branch rules)
+        if (isGlobalMode && validationErrors.branchRules[index]) {
+            row.classList.add('has-error');
+            row.title = `Error: ${validationErrors.branchRules[index]}`;
+        }
 
         // Add selected class if this is the selected rule
         if (selectedBranchRuleIndex === index) {

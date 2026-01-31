@@ -10,6 +10,32 @@ import { ConfigWebviewProvider } from './webview/configWebview';
 
 let currentBranch: undefined | string = undefined;
 
+// Track validation errors for rules (index -> error message)
+let repoRuleErrors: Map<number, string> = new Map();
+let branchRuleErrors: Map<number, string> = new Map();
+
+/**
+ * Get current repo rule validation errors
+ */
+export function getRepoRuleErrors(): Map<number, string> {
+    return new Map(repoRuleErrors);
+}
+
+/**
+ * Get current branch rule validation errors
+ */
+export function getBranchRuleErrors(): Map<number, string> {
+    return new Map(branchRuleErrors);
+}
+
+/**
+ * Trigger validation of rules to populate error maps
+ */
+export function validateRules(): void {
+    getRepoConfigList(true);
+    getBranchData(true);
+}
+
 type RepoConfig = {
     repoQualifier: string;
     defaultBranch: string | undefined;
@@ -860,6 +886,9 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
     const result = new Array<RepoConfig>();
     const isActive = vscode.window.state.active;
 
+    // Clear previous repo rule errors
+    repoRuleErrors.clear();
+
     // Get advanced profiles (get once before loop)
     const advancedProfiles =
         (workspace.getConfiguration('windowColors').get('advancedProfiles', {}) as { [key: string]: any }) || {};
@@ -883,10 +912,13 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
 
             // Validate if needed
             if (validate && isActive) {
+                let errorMsg = '';
                 if (!repoConfig.repoQualifier || !repoConfig.primaryColor) {
-                    const msg = 'Repository rule missing required fields (repoQualifier or primaryColor)';
-                    vscode.window.showErrorMessage(msg);
-                    outputChannel.appendLine(msg);
+                    errorMsg = 'Repository rule missing required fields (repoQualifier or primaryColor)';
+                    repoRuleErrors.set(result.length, errorMsg);
+                    outputChannel.appendLine(errorMsg);
+                    // Add to result anyway so it can be displayed in UI with error indication
+                    result.push(repoConfig);
                     continue;
                 }
 
@@ -896,9 +928,11 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                     try {
                         Color(repoConfig.primaryColor);
                     } catch (error) {
-                        const msg = `Invalid primary color: ${repoConfig.primaryColor}`;
-                        vscode.window.showErrorMessage(msg);
-                        outputChannel.appendLine(msg);
+                        errorMsg = `Invalid primary color: ${repoConfig.primaryColor}`;
+                        repoRuleErrors.set(result.length, errorMsg);
+                        outputChannel.appendLine(errorMsg);
+                        // Add to result anyway so it can be displayed in UI with error indication
+                        result.push(repoConfig);
                         continue;
                     }
                 }
@@ -909,9 +943,11 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                         try {
                             Color(repoConfig.branchColor);
                         } catch (error) {
-                            const msg = `Invalid branch color: ${repoConfig.branchColor}`;
-                            vscode.window.showErrorMessage(msg);
-                            outputChannel.appendLine(msg);
+                            errorMsg = `Invalid branch color: ${repoConfig.branchColor}`;
+                            repoRuleErrors.set(result.length, errorMsg);
+                            outputChannel.appendLine(errorMsg);
+                            // Add to result anyway so it can be displayed in UI with error indication
+                            result.push(repoConfig);
                             continue;
                         }
                     }
@@ -951,7 +987,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
             if (validate && isActive && parts.length < 2) {
                 // Invalid entry
                 const msg = 'Setting `' + setting + "': missing a color specifier";
-                vscode.window.showErrorMessage(msg);
+                repoRuleErrors.set(result.length, msg);
                 outputChannel.appendLine(msg);
                 error = true;
                 continue;
@@ -985,7 +1021,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                 bColor = colorParts[1].trim();
                 if (validate && isActive && defBranch === undefined) {
                     const msg = 'Setting `' + setting + "': specifies a branch color, but not a default branch.";
-                    vscode.window.showErrorMessage(msg);
+                    repoRuleErrors.set(result.length, msg);
                     outputChannel.appendLine(msg);
                     error = true;
                 }
@@ -1017,7 +1053,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
             }
             if (validate && isActive && colorMessage != '') {
                 const msg = 'Setting `' + setting + '`: ' + colorMessage;
-                vscode.window.showErrorMessage(msg);
+                repoRuleErrors.set(result.length, msg);
                 outputChannel.appendLine(msg);
                 error = true;
             }
@@ -1045,6 +1081,12 @@ function getBranchData(validate: boolean = false): Map<string, string> {
 
     const result = new Map<string, string>();
 
+    // Clear previous branch rule errors
+    branchRuleErrors.clear();
+
+    // Track current index for error mapping
+    let currentIndex = 0;
+
     // Get advanced profiles once before the loop
     const advancedProfiles = workspace
         .getConfiguration('windowColors')
@@ -1057,6 +1099,7 @@ function getBranchData(validate: boolean = false): Map<string, string> {
         if (typeof setting === 'object' && setting !== null) {
             // Skip disabled rules
             if (setting.enabled === false) {
+                currentIndex++;
                 continue;
             }
 
@@ -1070,8 +1113,9 @@ function getBranchData(validate: boolean = false): Map<string, string> {
                             Color(setting.color);
                         } catch (error) {
                             const msg = `Invalid color in branch rule (${setting.pattern}): ${setting.color}`;
-                            vscode.window.showErrorMessage(msg);
+                            branchRuleErrors.set(currentIndex, msg);
                             outputChannel.appendLine(msg);
+                            currentIndex++;
                             continue;
                         }
                     }
@@ -1079,6 +1123,7 @@ function getBranchData(validate: boolean = false): Map<string, string> {
 
                 result.set(setting.pattern, setting.color);
             }
+            currentIndex++;
             continue;
         }
 
@@ -1108,8 +1153,9 @@ function getBranchData(validate: boolean = false): Map<string, string> {
             if (validate && parts.length < 2) {
                 // Invalid entry
                 const msg = 'Setting `' + setting + "': missing a color specifier";
-                vscode.window.showErrorMessage(msg);
+                branchRuleErrors.set(currentIndex, msg);
                 outputChannel.appendLine(msg);
+                currentIndex++;
                 continue;
             }
 
@@ -1132,11 +1178,14 @@ function getBranchData(validate: boolean = false): Map<string, string> {
 
             if (validate && colorMessage != '') {
                 const msg = 'Setting `' + setting + '`: ' + colorMessage;
-                vscode.window.showErrorMessage(msg);
+                branchRuleErrors.set(currentIndex, msg);
                 outputChannel.appendLine(msg);
             }
 
             result.set(branchName, branchColor);
+            currentIndex++;
+        } else {
+            currentIndex++;
         }
     }
 
@@ -1259,14 +1308,25 @@ async function doit(reason: string) {
         }
     } else if (repoConfigList !== undefined) {
         let item: RepoConfig;
+        let ruleIndex = 0;
         for (item of repoConfigList) {
             // Skip disabled rules
             if (item.enabled === false) {
+                ruleIndex++;
                 continue;
             }
 
             if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
                 matchedRepoConfig = item;
+
+                // Check if this matched rule has an error
+                if (repoRuleErrors.has(ruleIndex)) {
+                    const errorMsg = repoRuleErrors.get(ruleIndex);
+                    outputChannel.appendLine(`  ERROR: Matched repo rule has validation error: ${errorMsg}`);
+                    vscode.window.showErrorMessage(
+                        `Git Repo Window Colors: The matched repository rule has an error: ${errorMsg}`,
+                    );
+                }
 
                 // If profileName is explicitly set, use it and don't try to parse primaryColor as a color
                 if (item.profileName) {
@@ -1310,6 +1370,7 @@ async function doit(reason: string) {
 
                 break;
             }
+            ruleIndex++;
         }
 
         if (!matchedRepoConfig) {
