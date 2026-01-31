@@ -49,7 +49,8 @@ export interface WebviewMessage {
         | 'previewRepoRule'
         | 'previewBranchRule'
         | 'clearPreview'
-        | 'generatePalette';
+        | 'generatePalette'
+        | 'toggleStarredKey';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -78,5 +79,6 @@ export interface WebviewMessage {
             primaryBg: string;
             algorithm: string;
         };
+        mappingKey?: string;
     };
 }

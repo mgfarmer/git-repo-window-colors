@@ -131,11 +131,33 @@
                     <td>Enable or disable this rule without deleting it</td>
                 </tr>
                 <tr>
+
                     <td><strong>🗙</strong> (Delete)</td>
                     <td>Delete this rule permanently</td>
                 </tr>
             </tbody>
         </table>
+
+        <h3>Rule Selection and Preview</h3>
+        <p>
+            The Rules interface provides visual feedback about which rules are active and allows you to preview rules:
+        </p>
+        <ul>
+            <li><strong>Selection highlighting:</strong> Repository rules that match the current workspace are highlighted with a colored border and background. Branch rules that match the current branch are also highlighted.</li>
+            <li><strong>Branch rule display:</strong> When you select a repository rule (by clicking on it), its associated branch rules are displayed below it, making it easy to see and manage all rules for that repository.</li>
+            <li><strong>Preview mode:</strong> Enable the "Preview Selected Repo Rule" option in Other Settings to preview colors when you select a rule. With this enabled:
+                <ul>
+                    <li>Clicking on any repository rule will temporarily apply its colors so you can see how they look</li>
+                    <li>Clicking on a branch rule will temporarily apply that branch rule's colors</li>
+                    <li>Click outside the rules or select a different rule to preview another color scheme</li>
+                    <li>This lets you test how rules will look before enabling them or compare different color options</li>
+                </ul>
+            </li>
+            <li><strong>Global vs. Local branch rules:</strong> Repository rules can use global branch rules (shared across all repos) or local branch rules (specific to that repository). Use the "Use Global Branch Rules" toggle to switch between modes.</li>
+        </ul>
+        <div class="tip">
+            <strong>Preview Tip:</strong> The preview feature is great for testing color schemes without committing to them. Enable it in Other Settings, then click through your rules to see how each one looks in real-time.
+        </div>
 
         <h3>Rule Matching</h3>
         <p>
@@ -212,8 +234,18 @@
             <li><strong>Color swatch:</strong> Click to open the native color picker</li>
             <li><strong>🎲 (Random):</strong> Generate a random theme-appropriate color</li>
             <li><strong>Text input:</strong> Type colors manually (hex, RGB, names, or profile names)</li>
-            <li><strong>Autocomplete:</strong> In the Primary Color field, start typing to see matching profile names and recent colors</li>
+            <li><strong>Autocomplete dropdown:</strong> Start typing in any color field to see a dropdown with:
+                <ul>
+                    <li><strong>Matching profiles:</strong> Profiles whose names match what you're typing</li>
+                    <li><strong>Recent colors:</strong> Colors you've used recently</li>
+                    <li><strong>HTML color names:</strong> Named colors like "blue", "coral", etc.</li>
+                </ul>
+            </li>
+            <li><strong>Keyboard navigation:</strong> Use ↑/↓ arrows to navigate the dropdown, Enter to select, Esc to close</li>
         </ul>
+        <div class="tip">
+            <strong>Quick Selection:</strong> The autocomplete dropdown appears in both repository and branch rule color fields. Just start typing and select from the list—no need to type the full profile name or color value.
+        </div>
 
         <h3>Choosing Between Simple Colors and Profiles</h3>
         <p>

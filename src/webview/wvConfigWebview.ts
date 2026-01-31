@@ -18,6 +18,7 @@ declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extensi
 
 const vscode = acquireVsCodeApi();
 let currentConfig: any = null;
+let starredKeys: string[] = [];
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
 let validationErrors: { repoRules: { [index: number]: string }; branchRules: { [index: number]: string } } = {
@@ -638,6 +639,16 @@ window.addEventListener('message', (event) => {
         case 'paletteGenerated':
             handlePaletteGenerated(message.data);
             break;
+        case 'starredKeysUpdated':
+            if (message.data && message.data.starredKeys) {
+                starredKeys = message.data.starredKeys;
+                // Re-render profile editor to update star icons
+                const selectedProfileName = (document.getElementById('profileNameInput') as HTMLInputElement)?.value;
+                if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                    renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+                }
+            }
+            break;
     }
 });
 
@@ -646,6 +657,11 @@ function handleConfigurationData(data: any) {
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
+
+    // Extract starred keys if present
+    if (data.starredKeys) {
+        starredKeys = data.starredKeys;
+    }
 
     // Store validation errors if present
     if (data.validationErrors) {
@@ -755,6 +771,13 @@ function handleDeleteConfirmed(data: any) {
     } else {
         console.log('Rule deletion was cancelled');
     }
+}
+
+function toggleStarredKey(mappingKey: string): void {
+    vscode.postMessage({
+        command: 'toggleStarredKey',
+        data: { mappingKey },
+    });
 }
 
 function handleGettingStartedHelpContent(data: { content: string }) {
@@ -2131,7 +2154,27 @@ function renderColorReport(config: any) {
     // Add preview indicator if preview mode is active
     let previewIndicator = '';
     if (previewMode) {
-        if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
+        const previewParts: string[] = [];
+
+        // Check if we're previewing a repo rule (and it's not the currently matched rule)
+        const isPreviewingDifferentRepoRule =
+            selectedRepoRuleIndex !== null &&
+            selectedRepoRuleIndex !== -1 &&
+            config.repoRules?.[selectedRepoRuleIndex] &&
+            selectedRepoRuleIndex !== config.matchingIndexes?.repoRule;
+
+        if (isPreviewingDifferentRepoRule) {
+            const repoRule = config.repoRules[selectedRepoRuleIndex];
+            previewParts.push(`Repository rule: "<strong>${escapeHtml(repoRule.repoQualifier)}</strong>"`);
+        }
+
+        // Check if we're previewing a branch rule (and it's not the currently matched rule)
+        const isPreviewingDifferentBranchRule =
+            selectedBranchRuleIndex !== null &&
+            selectedBranchRuleIndex !== -1 &&
+            selectedBranchRuleIndex !== config.matchingIndexes?.branchRule;
+
+        if (isPreviewingDifferentBranchRule) {
             // Determine if we're previewing global or local branch rule
             const selectedRule = config.repoRules?.[selectedRepoRuleIndex];
             const useGlobal = selectedRule?.useGlobalBranchRules !== false;
@@ -2142,30 +2185,23 @@ function renderColorReport(config: any) {
                 const ruleSource = useGlobal
                     ? 'Global'
                     : `Local (${escapeHtml(selectedRule?.repoQualifier || 'repo')})`;
-                previewIndicator = `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                previewParts.push(
+                    `<strong>${ruleSource}</strong> branch rule: "<strong>${escapeHtml(branchRule.pattern)}</strong>"`,
+                );
+            }
+        }
+
+        // Generate preview indicator if we have any preview parts
+        if (previewParts.length > 0) {
+            previewIndicator = `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span class="codicon codicon-preview" style="font-size: 16px; color: var(--vscode-editorInfo-foreground);"></span>
                     <strong>PREVIEW MODE</strong>
                 </div>
                 <div style="margin-top: 8px; font-size: 12px;">
-                    Previewing colors from <strong>${ruleSource}</strong> branch rule: "<strong>${escapeHtml(branchRule.pattern)}</strong>"
+                    Previewing colors from ${previewParts.join(' and ')}
                 </div>
             </div>`;
-            }
-        } else if (
-            selectedRepoRuleIndex !== null &&
-            selectedRepoRuleIndex !== -1 &&
-            config.repoRules?.[selectedRepoRuleIndex]
-        ) {
-            previewIndicator = `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="codicon codicon-preview" style="font-size: 16px; color: var(--vscode-editorInfo-foreground);"></span>
-                <strong>PREVIEW MODE</strong>
-            </div>
-            <div style="margin-top: 8px; font-size: 12px;">
-                Previewing colors from repository rule: "<strong>${escapeHtml(config.repoRules[selectedRepoRuleIndex].repoQualifier)}</strong>"
-            </div>
-        </div>`;
         }
     }
 
@@ -5264,12 +5300,22 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             return coloredKeys;
         };
 
-        // Create array of all tabs (regular sections + Colored)
-        const allTabs = [...Object.keys(SECTION_DEFINITIONS), 'Colored'];
+        // Helper function to build the "Starred" tab content
+        const buildStarredTabContent = (): string[] => {
+            return starredKeys;
+        };
+
+        // Create array of all tabs (regular sections + Colored + Starred)
+        const allTabs = [...Object.keys(SECTION_DEFINITIONS), 'Colored', 'Starred'];
 
         allTabs.forEach((sectionName) => {
             // Determine keys for this tab
-            const keys = sectionName === 'Colored' ? buildColoredTabContent() : SECTION_DEFINITIONS[sectionName];
+            const keys =
+                sectionName === 'Colored'
+                    ? buildColoredTabContent()
+                    : sectionName === 'Starred'
+                      ? buildStarredTabContent()
+                      : SECTION_DEFINITIONS[sectionName];
 
             // Count active mappings in this section
             const activeCount = countActiveMappings(profile, keys);
@@ -5283,6 +5329,9 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             if (sectionName === 'Colored') {
                 tabText.textContent = '\u26a1 ' + sectionName;
                 tabText.style.fontStyle = 'italic';
+            } else if (sectionName === 'Starred') {
+                tabText.textContent = '\u2605 ' + sectionName; // ★ star symbol
+                tabText.style.fontStyle = 'italic';
             } else {
                 tabText.textContent = sectionName;
             }
@@ -5292,7 +5341,41 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             if (activeCount > 0) {
                 const badge = document.createElement('span');
                 badge.className = 'mapping-tab-badge';
-                badge.textContent = activeCount.toString();
+
+                // For Starred tab, make badge yellow if any starred keys are not colored
+                let isStarredWithUncolored = false;
+                if (sectionName === 'Starred') {
+                    const uncoloredCount = keys.length - activeCount;
+                    if (uncoloredCount > 0) {
+                        isStarredWithUncolored = true;
+                        badge.style.backgroundColor = '#ccaa00'; // Yellow
+                        badge.style.color = '#000000'; // Black text for contrast
+                        badge.title = `${activeCount} colored, ${uncoloredCount} not colored`;
+
+                        // Add warning icon
+                        const warningIcon = document.createElement('span');
+                        warningIcon.className = 'codicon codicon-warning';
+                        warningIcon.style.marginRight = '4px';
+                        badge.appendChild(warningIcon);
+
+                        // Show "colored/uncolored" format
+                        const badgeText = document.createTextNode(`${activeCount}/${uncoloredCount}`);
+                        badge.appendChild(badgeText);
+                    } else {
+                        // All starred keys are colored
+                        badge.title = `${activeCount} colored`;
+                    }
+                } else {
+                    // Tooltip for regular tabs
+                    badge.title = `${activeCount} element${activeCount === 1 ? '' : 's'} colored`;
+                }
+
+                // Add normal badge text if not a starred tab with uncolored items
+                if (!isStarredWithUncolored) {
+                    const badgeText = document.createTextNode(activeCount.toString());
+                    badge.appendChild(badgeText);
+                }
+
                 tabBtn.appendChild(badge);
             }
             tabBtn.style.padding = '5px 10px';
@@ -5313,10 +5396,14 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Track the selected tab
                 selectedMappingTab = sectionName;
 
-                // Special handling for Colored tab - rebuild content
-                if (sectionName === 'Colored') {
-                    // Clean up mappings that are explicitly set to 'none'
-                    if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                // Special handling for Colored and Starred tabs - rebuild content
+                if (sectionName === 'Colored' || sectionName === 'Starred') {
+                    // For Colored tab, clean up mappings that are explicitly set to 'none'
+                    if (
+                        sectionName === 'Colored' &&
+                        selectedProfileName &&
+                        currentConfig?.advancedProfiles?.[selectedProfileName]
+                    ) {
                         const mappings = currentConfig.advancedProfiles[selectedProfileName].mappings;
                         Object.keys(mappings).forEach((key) => {
                             const value = mappings[key];
@@ -5339,7 +5426,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     tabBtn.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
                     tabBtn.style.fontWeight = 'bold';
 
-                    // Trigger re-render to rebuild Colored tab content
+                    // Trigger re-render to rebuild tab content
                     if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
                         renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
                     }
@@ -5389,11 +5476,39 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 grid.appendChild(emptyMsg);
             }
 
+            // Special handling for empty Starred tab
+            if (sectionName === 'Starred' && keys.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.textContent =
+                    'No starred keys yet. Click the star icon next to any mapping key to add it here.';
+                emptyMsg.style.gridColumn = '1 / -1';
+                emptyMsg.style.padding = '20px';
+                emptyMsg.style.textAlign = 'center';
+                emptyMsg.style.color = 'var(--vscode-descriptionForeground)';
+                emptyMsg.style.fontStyle = 'italic';
+                grid.appendChild(emptyMsg);
+            }
+
             keys.forEach((key: string) => {
                 const row = document.createElement('div');
                 row.style.display = 'flex';
                 row.style.alignItems = 'center';
                 row.style.gap = '8px';
+
+                // Add star icon
+                const starIcon = document.createElement('span');
+                const isStarred = starredKeys.includes(key);
+                starIcon.className = `codicon ${isStarred ? 'codicon-star-full' : 'codicon-star-empty'}`;
+                starIcon.style.cursor = 'pointer';
+                starIcon.style.color = isStarred
+                    ? 'var(--vscode-icon-foreground)'
+                    : 'var(--vscode-descriptionForeground)';
+                starIcon.title = isStarred ? 'Unstar this key' : 'Star this key';
+                starIcon.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleStarredKey(key);
+                };
 
                 const label = document.createElement('label');
                 label.textContent = THEME_KEY_LABELS[key] || key;
@@ -6012,6 +6127,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 };
                 opacitySlider.onchange = updateMapping;
 
+                row.appendChild(starIcon);
                 row.appendChild(label);
                 row.appendChild(dropdownContainer);
                 row.appendChild(opacityContainer);

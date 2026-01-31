@@ -185,6 +185,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'generatePalette':
                 await this._handlePaletteGeneration(message.data.paletteData!);
                 break;
+            case 'toggleStarredKey':
+                await this._handleToggleStarredKey(message.data.mappingKey!);
+                break;
         }
     }
 
@@ -198,6 +201,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const otherSettings = this._getOtherSettings();
         const advancedProfiles = this._getAdvancedProfiles();
         const workspaceInfo = this._getWorkspaceInfo();
+        const starredKeys = this._getStarredKeys();
 
         // Trigger validation to populate error maps
         validateRules();
@@ -240,6 +244,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             ...this.currentConfig,
             workspaceInfo,
             colorCustomizations,
+            starredKeys,
             validationErrors: {
                 repoRules: repoRuleErrorsObj,
                 branchRules: branchRuleErrorsObj,
@@ -459,6 +464,33 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _getAdvancedProfiles(): { [key: string]: AdvancedProfile } {
         const config = vscode.workspace.getConfiguration('windowColors');
         return config.get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+    }
+
+    private _getStarredKeys(): string[] {
+        return this._context.globalState.get<string[]>('grwc.starredKeys', []);
+    }
+
+    private async _handleToggleStarredKey(mappingKey: string): Promise<void> {
+        const starredKeys = this._getStarredKeys();
+        const index = starredKeys.indexOf(mappingKey);
+
+        if (index > -1) {
+            // Key is already starred, unstar it
+            starredKeys.splice(index, 1);
+        } else {
+            // Key is not starred, star it
+            starredKeys.push(mappingKey);
+        }
+
+        await this._context.globalState.update('grwc.starredKeys', starredKeys);
+
+        // Send updated starred keys back to webview
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'starredKeysUpdated',
+                data: { starredKeys },
+            });
+        }
     }
 
     private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string } {
