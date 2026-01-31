@@ -3767,6 +3767,79 @@ const PALETTE_SLOT_LABELS: Record<string, string> = {
     quaternaryFg: 'Quaternary Foreground',
 };
 
+/**
+ * Human-readable labels for VS Code theme color keys
+ */
+const THEME_KEY_LABELS: Record<string, string> = {
+    // Title Bar
+    'titleBar.activeBackground': 'Title Bar: Active Background',
+    'titleBar.activeForeground': 'Title Bar: Active Foreground',
+    'titleBar.inactiveBackground': 'Title Bar: Inactive Background',
+    'titleBar.inactiveForeground': 'Title Bar: Inactive Foreground',
+    'titleBar.border': 'Title Bar: Border',
+
+    // Activity Bar
+    'activityBar.background': 'Activity Bar: Background',
+    'activityBar.foreground': 'Activity Bar: Foreground',
+    'activityBar.inactiveForeground': 'Activity Bar: Inactive Foreground',
+    'activityBar.border': 'Activity Bar: Border',
+
+    // Status Bar
+    'statusBar.background': 'Status Bar: Background',
+    'statusBar.foreground': 'Status Bar: Foreground',
+    'statusBar.border': 'Status Bar: Border',
+
+    // Tabs & Breadcrumbs
+    'tab.activeBackground': 'Tab: Active Background',
+    'tab.activeForeground': 'Tab: Active Foreground',
+    'tab.inactiveBackground': 'Tab: Inactive Background',
+    'tab.inactiveForeground': 'Tab: Inactive Foreground',
+    'tab.hoverBackground': 'Tab: Hover Background',
+    'tab.unfocusedHoverBackground': 'Tab: Unfocused Hover Background',
+    'tab.activeBorder': 'Tab: Active Border',
+    'editorGroupHeader.tabsBackground': 'Editor Group Header: Tabs Background',
+    'breadcrumb.background': 'Breadcrumb: Background',
+    'breadcrumb.foreground': 'Breadcrumb: Foreground',
+
+    // Command Center
+    'commandCenter.background': 'Command Center: Background',
+    'commandCenter.foreground': 'Command Center: Foreground',
+    'commandCenter.activeBackground': 'Command Center: Active Background',
+    'commandCenter.activeForeground': 'Command Center: Active Foreground',
+
+    // Terminal
+    'terminal.background': 'Terminal: Background',
+    'terminal.foreground': 'Terminal: Foreground',
+
+    // Lists & Panels
+    'panel.background': 'Panel: Background',
+    'panel.border': 'Panel: Border',
+    'panelTitle.activeForeground': 'Panel Title: Active Foreground',
+    'panelTitle.inactiveForeground': 'Panel Title: Inactive Foreground',
+    'panelTitle.activeBorder': 'Panel Title: Active Border',
+    'list.activeSelectionBackground': 'List: Active Selection Background',
+    'list.activeSelectionForeground': 'List: Active Selection Foreground',
+    'list.inactiveSelectionBackground': 'List: Inactive Selection Background',
+    'list.inactiveSelectionForeground': 'List: Inactive Selection Foreground',
+    'list.focusOutline': 'List: Focus Outline',
+    'list.hoverBackground': 'List: Hover Background',
+    'list.hoverForeground': 'List: Hover Foreground',
+    'badge.background': 'Badge: Background',
+    'badge.foreground': 'Badge: Foreground',
+    'panelTitleBadge.background': 'Panel Title Badge: Background',
+    'panelTitleBadge.foreground': 'Panel Title Badge: Foreground',
+    'input.background': 'Input: Background',
+    'input.foreground': 'Input: Foreground',
+    'input.border': 'Input: Border',
+    'input.placeholderForeground': 'Input: Placeholder Foreground',
+    focusBorder: 'Focus Border',
+
+    // Side Bar
+    'sideBar.background': 'Side Bar: Background',
+    'sideBar.foreground': 'Side Bar: Foreground',
+    'sideBar.border': 'Side Bar: Border',
+};
+
 // Explicit ordering for palette slots to ensure consistent display order
 // Order: Primary (Active Fg, Active Bg, Inactive Fg, Inactive Bg),
 //        Secondary (same pattern), Tertiary (Fg, Bg), Quaternary (Fg, Bg)
@@ -4993,7 +5066,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 row.style.gap = '8px';
 
                 const label = document.createElement('label');
-                label.textContent = key;
+                label.textContent = THEME_KEY_LABELS[key] || key;
                 label.style.fontSize = '12px';
                 label.style.color = 'var(--vscode-foreground)';
                 label.style.minWidth = '200px';
