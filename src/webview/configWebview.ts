@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
+import { generatePalette, PaletteAlgorithm } from '../paletteGenerator';
 //import { outputChannel } from '../extension';
 
 // Build-time configuration for color picker type
@@ -163,6 +164,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'clearPreview':
                 this._previewRepoRuleIndex = null;
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview');
+                break;
+            case 'generatePalette':
+                await this._handlePaletteGeneration(message.data.paletteData!);
                 break;
         }
     }
@@ -725,6 +729,77 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _handlePaletteGeneration(paletteData: {
+        profileName: string;
+        primaryBg: string;
+        algorithm: string;
+    }): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const { profileName, primaryBg, algorithm } = paletteData;
+
+            // Generate the palette using the palette generator
+            const generatedPalette = generatePalette(primaryBg, algorithm as PaletteAlgorithm);
+
+            // Get the current profiles
+            const profiles = this._getAdvancedProfiles();
+            const profile = profiles[profileName];
+
+            if (!profile) {
+                vscode.window.showErrorMessage(`Profile "${profileName}" not found`);
+                return;
+            }
+
+            // Update the profile's palette with the generated colors
+            profile.palette.primaryActiveBg = { source: 'fixed', value: generatedPalette.primaryActiveBg, opacity: 1 };
+            profile.palette.primaryActiveFg = { source: 'fixed', value: generatedPalette.primaryActiveFg, opacity: 1 };
+            profile.palette.primaryInactiveBg = {
+                source: 'fixed',
+                value: generatedPalette.primaryInactiveBg,
+                opacity: 1,
+            };
+            profile.palette.primaryInactiveFg = { source: 'fixed', value: generatedPalette.primaryInactiveFg };
+
+            profile.palette.secondaryActiveBg = {
+                source: 'fixed',
+                value: generatedPalette.secondaryActiveBg,
+                opacity: 1,
+            };
+            profile.palette.secondaryActiveFg = {
+                source: 'fixed',
+                value: generatedPalette.secondaryActiveFg,
+                opacity: 1,
+            };
+            profile.palette.secondaryInactiveBg = {
+                source: 'fixed',
+                value: generatedPalette.secondaryInactiveBg,
+                opacity: 1,
+            };
+            profile.palette.secondaryInactiveFg = { source: 'fixed', value: generatedPalette.secondaryInactiveFg };
+
+            profile.palette.tertiaryBg = { source: 'fixed', value: generatedPalette.tertiaryActiveBg, opacity: 1 };
+            profile.palette.tertiaryFg = { source: 'fixed', value: generatedPalette.tertiaryActiveFg, opacity: 1 };
+
+            profile.palette.quaternaryBg = { source: 'fixed', value: generatedPalette.quaternaryActiveBg, opacity: 1 };
+            profile.palette.quaternaryFg = { source: 'fixed', value: generatedPalette.quaternaryActiveFg, opacity: 1 };
+
+            // Save the updated profiles
+            profiles[profileName] = profile;
+            await this._updateConfiguration({ advancedProfiles: profiles });
+
+            // Send the updated config back to the webview
+            this._sendConfigurationToWebview();
+
+            vscode.window.showInformationMessage(`Palette generated successfully for "${profileName}"`);
+        } catch (error) {
+            console.error('Failed to generate palette:', error);
+            vscode.window.showErrorMessage(`Failed to generate palette: ${error}`);
+        }
+    }
+
     private _openColorPicker(colorPickerData: any): void {
         // Skip VS Code color picker if using native HTML color picker
         if (USE_NATIVE_COLOR_PICKER) {
@@ -987,14 +1062,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             </div>
                             
                             <div class="palette-editor-section">
-                                <h3>Reference Palette
-                                    <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help"><span class="codicon codicon-info"></span>
-                                        <span class="tooltiptext">
-                                            <strong>Reference Palette</strong><br>
-                                            Define reference colors that can be used in the mappings.<br><br>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                    <h3 style="margin: 0;">Reference Palette
+                                        <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help"><span class="codicon codicon-info"></span>
+                                            <span class="tooltiptext">
+                                                <strong>Reference Palette</strong><br>
+                                                Define reference colors that can be used in the mappings.<br><br>
+                                            </span>
                                         </span>
-                                    </span>
-                                </h3>
+                                    </h3>
+                                    <div class="palette-generator-container">
+                                        <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" title="Generate palette colors from Primary Active Background using color theory algorithms" aria-label="Generate Pleasing Palette from Primary Active Background">
+                                            <span class="codicon codicon-wand"></span>
+                                            <span class="codicon codicon-chevron-down"></span>
+                                        </button>
+                                        <div class="palette-generator-dropdown" id="paletteGeneratorDropdown" style="display: none;">
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="balanced">Balanced Tetradic</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="monochromatic">Monochromatic</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="bold-contrast">Bold Contrast</button>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div id="paletteEditor" class="palette-grid">
                                     <!-- Grid of palette slots -->
                                 </div>

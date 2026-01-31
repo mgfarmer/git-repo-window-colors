@@ -4533,6 +4533,71 @@ function countTotalActiveMappings(profile: AdvancedProfile): number {
     return total;
 }
 
+/**
+ * Sets up the palette generator wand button and dropdown menu
+ */
+function setupPaletteGenerator() {
+    const generatorBtn = document.getElementById('paletteGeneratorBtn');
+    const dropdown = document.getElementById('paletteGeneratorDropdown');
+
+    if (!generatorBtn || !dropdown) return;
+
+    // Toggle dropdown on button click
+    generatorBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isVisible = dropdown.style.display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!generatorBtn.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    // Handle algorithm selection
+    const algorithmOptions = dropdown.querySelectorAll('.palette-algorithm-option');
+    algorithmOptions.forEach((option) => {
+        option.addEventListener('click', (e) => {
+            const algorithm = (e.target as HTMLElement).getAttribute('data-algorithm');
+            if (algorithm && selectedProfileName) {
+                generatePalette(algorithm);
+                dropdown.style.display = 'none';
+            }
+        });
+    });
+}
+
+/**
+ * Generates a pleasing color palette and updates the current profile
+ */
+function generatePalette(algorithm: string) {
+    if (!selectedProfileName || !currentConfig.advancedProfiles[selectedProfileName]) {
+        return;
+    }
+
+    const profile = currentConfig.advancedProfiles[selectedProfileName];
+    const primaryBg = profile.palette.primaryActiveBg?.value;
+
+    if (!primaryBg) {
+        console.warn('Cannot generate palette: No primary background color defined');
+        return;
+    }
+
+    // Send message to extension to generate palette
+    vscode.postMessage({
+        command: 'generatePalette',
+        data: {
+            paletteData: {
+                profileName: selectedProfileName,
+                primaryBg: primaryBg,
+                algorithm: algorithm,
+            },
+        },
+    });
+}
+
 function renderProfileEditor(name: string, profile: AdvancedProfile) {
     // Name Input
     const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
@@ -4552,6 +4617,9 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
     if (duplicateBtn) {
         duplicateBtn.onclick = () => duplicateProfile(name);
     }
+
+    // Wire up palette generator
+    setupPaletteGenerator();
 
     // Palette Editor
     const paletteGrid = document.getElementById('paletteEditor');
@@ -4685,22 +4753,15 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             const coloredKeys: string[] = [];
             if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
                 const mappings = currentConfig.advancedProfiles[selectedProfileName].mappings;
-                // Gather all keys from all sections that have a mapping (not 'none')
+                // Gather all keys from all sections that have a mapping defined (including 'none')
+                // The Colored tab should show all elements the user has explicitly configured
                 Object.keys(SECTION_DEFINITIONS).forEach((sectionName) => {
                     const sectionKeys = SECTION_DEFINITIONS[sectionName];
                     sectionKeys.forEach((key) => {
                         const mappingValue = mappings[key];
-                        if (mappingValue) {
-                            // Has a mapping (either string or object with slot)
-                            if (typeof mappingValue === 'string' && mappingValue !== 'none') {
-                                coloredKeys.push(key);
-                            } else if (
-                                typeof mappingValue === 'object' &&
-                                mappingValue.slot &&
-                                mappingValue.slot !== 'none'
-                            ) {
-                                coloredKeys.push(key);
-                            }
+                        // Include any key that has a defined mapping (even if it's 'none')
+                        if (mappingValue !== undefined) {
+                            coloredKeys.push(key);
                         }
                     });
                 });
@@ -4759,6 +4820,19 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Special handling for Colored tab - rebuild content
                 if (sectionName === 'Colored') {
+                    // Clean up mappings that are explicitly set to 'none'
+                    if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                        const mappings = currentConfig.advancedProfiles[selectedProfileName].mappings;
+                        Object.keys(mappings).forEach((key) => {
+                            const value = mappings[key];
+                            const slot = typeof value === 'string' ? value : value?.slot;
+                            if (slot === 'none') {
+                                delete mappings[key];
+                            }
+                        });
+                        saveProfiles();
+                    }
+
                     // Deactivate all
                     Array.from(tabsHeader.children).forEach((c: any) => {
                         c.style.borderBottomColor = 'transparent';
@@ -5301,7 +5375,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         const newOpacity = parseInt(opacitySlider.value) / 100;
 
                         if (newSlot === 'none') {
-                            delete currentConfig.advancedProfiles[selectedProfileName].mappings[key];
+                            // Store 'none' explicitly to keep it in the Colored tab
+                            currentConfig.advancedProfiles[selectedProfileName].mappings[key] = 'none';
                         } else if (newSlot === '__fixed__') {
                             // Store fixed color
                             const mappingData: MappingValue = {

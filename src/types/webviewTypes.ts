@@ -47,7 +47,8 @@ export interface WebviewMessage {
         | 'updateAdvancedProfiles'
         | 'requestHelp'
         | 'previewRepoRule'
-        | 'clearPreview';
+        | 'clearPreview'
+        | 'generatePalette';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -71,5 +72,10 @@ export interface WebviewMessage {
         };
         helpType?: string;
         content?: string;
+        paletteData?: {
+            profileName: string;
+            primaryBg: string;
+            algorithm: string;
+        };
     };
 }
