@@ -370,6 +370,94 @@ function isThemeDark(): boolean {
     return true; // Default to dark mode assumption
 }
 
+// Count how many profiles are in use and check if any are used
+function getProfileUsageInfo(): {
+    inUse: boolean;
+    count: number;
+    profileNames: Set<string>;
+    repoRuleCount: number;
+    branchRuleCount: number;
+} {
+    const result = {
+        inUse: false,
+        count: 0,
+        profileNames: new Set<string>(),
+        repoRuleCount: 0,
+        branchRuleCount: 0,
+    };
+
+    if (!currentConfig) return result;
+
+    const advancedProfiles = currentConfig.advancedProfiles || {};
+    const allProfileNames = Object.keys(advancedProfiles);
+
+    if (allProfileNames.length === 0) return result;
+
+    // Check repo rules
+    if (currentConfig.repoRules) {
+        for (const rule of currentConfig.repoRules) {
+            let ruleUsesProfile = false;
+
+            // Check explicit profileName field
+            if (rule.profileName && advancedProfiles[rule.profileName]) {
+                result.profileNames.add(rule.profileName);
+                ruleUsesProfile = true;
+            }
+            // Check if primaryColor is actually a profile name
+            if (rule.primaryColor && advancedProfiles[rule.primaryColor]) {
+                result.profileNames.add(rule.primaryColor);
+                ruleUsesProfile = true;
+            }
+            // Check if branchColor is actually a profile name
+            if (rule.branchColor && advancedProfiles[rule.branchColor]) {
+                result.profileNames.add(rule.branchColor);
+                ruleUsesProfile = true;
+            }
+            // Check local branch rules
+            if (rule.branchRules) {
+                for (const branchRule of rule.branchRules) {
+                    if (branchRule.profileName && advancedProfiles[branchRule.profileName]) {
+                        result.profileNames.add(branchRule.profileName);
+                        ruleUsesProfile = true;
+                    }
+                    if (branchRule.color && advancedProfiles[branchRule.color]) {
+                        result.profileNames.add(branchRule.color);
+                        ruleUsesProfile = true;
+                    }
+                }
+            }
+
+            if (ruleUsesProfile) {
+                result.repoRuleCount++;
+            }
+        }
+    }
+
+    // Check global branch rules
+    if (currentConfig.branchRules) {
+        for (const rule of currentConfig.branchRules) {
+            let ruleUsesProfile = false;
+
+            if (rule.profileName && advancedProfiles[rule.profileName]) {
+                result.profileNames.add(rule.profileName);
+                ruleUsesProfile = true;
+            }
+            if (rule.color && advancedProfiles[rule.color]) {
+                result.profileNames.add(rule.color);
+                ruleUsesProfile = true;
+            }
+
+            if (ruleUsesProfile) {
+                result.branchRuleCount++;
+            }
+        }
+    }
+
+    result.count = result.profileNames.size;
+    result.inUse = result.count > 0;
+    return result;
+}
+
 function getThemeAppropriateColor(): string {
     const isDark = isThemeDark();
 
@@ -1615,13 +1703,28 @@ function renderOtherSettings(settings: any) {
                             <input type="checkbox" 
                                    id="enable-profiles-advanced"
                                    ${settings.enableProfilesAdvanced ? 'checked' : ''}
+                                   ${getProfileUsageInfo().inUse ? 'disabled' : ''}
                                    data-action="updateOtherSetting('enableProfilesAdvanced', this.checked)"
                                    data-extra-action="updateProfilesTabVisibility">
-                            Enable Profiles (Advanced)
+                            Enable Profiles ${(() => {
+                                const info = getProfileUsageInfo();
+                                if (info.count === 0) return '';
+                                const parts = [];
+                                if (info.repoRuleCount > 0)
+                                    parts.push(`${info.repoRuleCount} repo rule${info.repoRuleCount !== 1 ? 's' : ''}`);
+                                if (info.branchRuleCount > 0)
+                                    parts.push(
+                                        `${info.branchRuleCount} branch rule${info.branchRuleCount !== 1 ? 's' : ''}`,
+                                    );
+                                return `<i>(${info.count} profile${info.count !== 1 ? 's' : ''} used in ${parts.join(' and ')})</i>`;
+                            })()}
                         </label>
                         <span class="tooltiptext" role="tooltip">
-                            Enable the advanced Profiles feature, which allows you to define reusable color palettes and map them to specific UI elements. 
-                            When enabled, the Profiles tab will appear in the main navigation.
+                            ${
+                                getProfileUsageInfo().inUse
+                                    ? 'Profiles are currently in use by one or more rules. Remove all profile references from your repository and branch rules to disable this feature.'
+                                    : 'Enable the advanced Profiles feature, which allows you to define reusable color palettes and map them to specific UI elements. When enabled, the Profiles tab will appear in the main navigation.'
+                            }
                         </span>
                     </div>
                 </div>
