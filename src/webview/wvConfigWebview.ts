@@ -22,6 +22,7 @@ let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
 let selectedMappingTab: string | null = null; // Track which mapping tab is active
 let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
+let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
 let previewMode: boolean = false; // Track if preview mode is enabled
 
 // Load checkbox states from localStorage with defaults
@@ -961,6 +962,17 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle branch rule selection radio button
+    if (target.classList.contains('branch-select-radio')) {
+        const action = target.getAttribute('data-action');
+        const match = action?.match(/selectBranchRule\((\d+)\)/);
+        if (match) {
+            const index = parseInt(match[1]);
+            selectBranchRule(index);
+        }
+        return;
+    }
+
     // Handle color swatches
     if (target.classList.contains('color-swatch')) {
         const action = target.getAttribute('data-action');
@@ -1429,6 +1441,7 @@ function renderBranchRules(rules: any[], matchingIndex?: number, isGlobalMode: b
     const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
     const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
+        <th scope="col" class="select-column">Select</th>
         <th scope="col">Actions</th>
         <th scope="col">Branch Pattern</th>
         <th scope="col">Color${colorSuffix}</th>
@@ -1439,6 +1452,16 @@ function renderBranchRules(rules: any[], matchingIndex?: number, isGlobalMode: b
     rules.forEach((rule, index) => {
         const row = tbody.insertRow();
         row.className = 'rule-row';
+
+        // Add selected class if this is the selected rule
+        if (selectedBranchRuleIndex === index) {
+            row.classList.add('selected-rule');
+        }
+
+        // Add preview-active class if preview mode is on and this is the selected rule
+        if (previewMode && selectedBranchRuleIndex === index) {
+            row.classList.add('preview-active');
+        }
 
         // Highlight matched rule
         if (matchingIndex !== undefined && index === matchingIndex) {
@@ -1456,10 +1479,43 @@ function renderBranchRules(rules: any[], matchingIndex?: number, isGlobalMode: b
 
     container.innerHTML = '';
     container.appendChild(table);
+
+    // Initialize selection if needed (only for the first render or when switching repos)
+    // Check if we need to initialize selectedBranchRuleIndex
+    if (selectedBranchRuleIndex === -1 && rules.length > 0) {
+        // Prefer matched branch rule, then first enabled rule, then first rule
+        if (
+            matchingIndex !== undefined &&
+            matchingIndex !== null &&
+            matchingIndex >= 0 &&
+            matchingIndex < rules.length
+        ) {
+            selectedBranchRuleIndex = matchingIndex;
+        } else {
+            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
+            selectedBranchRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
+        }
+
+        // Trigger re-render to show the selection
+        if (currentConfig && selectedRepoRuleIndex >= 0) {
+            renderBranchRulesForSelectedRepo();
+        }
+    }
 }
 
 function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): string {
+    const isSelected = selectedBranchRuleIndex === index;
+
     return `
+        <td class="select-cell">
+            <input type="radio" 
+                   name="selected-branch-rule" 
+                   class="branch-select-radio" 
+                   id="branch-select-${index}"
+                   ${isSelected ? 'checked' : ''}
+                   data-action="selectBranchRule(${index})"
+                   aria-label="Select branch rule ${index + 1} for preview">
+        </td>
         <td class="reorder-controls">
             ${createReorderControlsHTML(index, 'branch', totalCount, rule)}
         </td>
@@ -1986,18 +2042,45 @@ function renderColorReport(config: any) {
     }
 
     // Add preview indicator if preview mode is active
-    const previewIndicator =
-        previewMode && selectedRepoRuleIndex !== null && config.repoRules?.[selectedRepoRuleIndex]
-            ? `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+    let previewIndicator = '';
+    if (previewMode) {
+        if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
+            // Determine if we're previewing global or local branch rule
+            const selectedRule = config.repoRules?.[selectedRepoRuleIndex];
+            const useGlobal = selectedRule?.useGlobalBranchRules !== false;
+            const branchRules = useGlobal ? config.branchRules : selectedRule?.branchRules || [];
+            const branchRule = branchRules?.[selectedBranchRuleIndex];
+
+            if (branchRule) {
+                const ruleSource = useGlobal
+                    ? 'Global'
+                    : `Local (${escapeHtml(selectedRule?.repoQualifier || 'repo')})`;
+                previewIndicator = `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="codicon codicon-preview" style="font-size: 16px; color: var(--vscode-editorInfo-foreground);"></span>
+                    <strong>PREVIEW MODE</strong>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px;">
+                    Previewing colors from <strong>${ruleSource}</strong> branch rule: "<strong>${escapeHtml(branchRule.pattern)}</strong>"
+                </div>
+            </div>`;
+            }
+        } else if (
+            selectedRepoRuleIndex !== null &&
+            selectedRepoRuleIndex !== -1 &&
+            config.repoRules?.[selectedRepoRuleIndex]
+        ) {
+            previewIndicator = `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span class="codicon codicon-preview" style="font-size: 16px; color: var(--vscode-editorInfo-foreground);"></span>
                 <strong>PREVIEW MODE</strong>
             </div>
             <div style="margin-top: 8px; font-size: 12px;">
-                Previewing colors from rule: "<strong>${escapeHtml(config.repoRules[selectedRepoRuleIndex].repoQualifier)}</strong>"
+                Previewing colors from repository rule: "<strong>${escapeHtml(config.repoRules[selectedRepoRuleIndex].repoQualifier)}</strong>"
             </div>
-        </div>`
-            : '';
+        </div>`;
+        }
+    }
 
     const tableHTML = `
         ${previewIndicator}
@@ -2058,7 +2141,20 @@ function handlePreviewModeChange() {
 
     if (previewMode) {
         // If enabling preview and a rule is selected, send preview message
-        if (selectedRepoRuleIndex !== null) {
+        // Prioritize branch rule if selected, otherwise use repo rule
+        if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
+            const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
+            const useGlobal = selectedRule?.useGlobalBranchRules !== false;
+
+            vscode.postMessage({
+                command: 'previewBranchRule',
+                data: {
+                    index: selectedBranchRuleIndex,
+                    isGlobal: useGlobal,
+                    repoIndex: useGlobal ? undefined : selectedRepoRuleIndex,
+                },
+            });
+        } else if (selectedRepoRuleIndex !== null && selectedRepoRuleIndex !== -1) {
             vscode.postMessage({
                 command: 'previewRepoRule',
                 data: { index: selectedRepoRuleIndex },
@@ -2071,9 +2167,10 @@ function handlePreviewModeChange() {
         });
     }
 
-    // Re-render repo rules to update visual feedback
+    // Re-render both repo and branch rules to update visual feedback
     if (currentConfig) {
         renderRepoRules(currentConfig.repoRules);
+        renderBranchRulesForSelectedRepo();
     }
 }
 
@@ -2187,6 +2284,9 @@ function selectRepoRule(index: number) {
 
     selectedRepoRuleIndex = index;
 
+    // Reset branch rule selection when switching repos so it reinitializes
+    selectedBranchRuleIndex = -1;
+
     // If preview mode is enabled, send preview command
     if (previewMode) {
         vscode.postMessage({
@@ -2202,6 +2302,32 @@ function selectRepoRule(index: number) {
     renderBranchRulesForSelectedRepo();
 }
 
+function selectBranchRule(index: number) {
+    // Determine if we're selecting from global or local branch rules
+    const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
+    const useGlobal = selectedRule?.useGlobalBranchRules !== false;
+    const branchRules = useGlobal ? currentConfig?.branchRules : selectedRule?.branchRules || [];
+
+    if (!branchRules?.[index]) return;
+
+    selectedBranchRuleIndex = index;
+
+    // If preview mode is enabled, send preview command with context
+    if (previewMode) {
+        vscode.postMessage({
+            command: 'previewBranchRule',
+            data: {
+                index,
+                isGlobal: useGlobal,
+                repoIndex: useGlobal ? undefined : selectedRepoRuleIndex,
+            },
+        });
+    }
+
+    // Re-render branch rules to update selected state and preview styling
+    renderBranchRulesForSelectedRepo();
+}
+
 function changeBranchMode(index: number, useGlobal: boolean) {
     if (!currentConfig?.repoRules?.[index]) return;
 
@@ -2210,6 +2336,11 @@ function changeBranchMode(index: number, useGlobal: boolean) {
     // Initialize local branch rules array if switching to local mode
     if (!useGlobal && !currentConfig.repoRules[index].branchRules) {
         currentConfig.repoRules[index].branchRules = [];
+    }
+
+    // Reset branch rule selection when changing modes so it reinitializes
+    if (selectedRepoRuleIndex === index) {
+        selectedBranchRuleIndex = -1;
     }
 
     // Re-render repo rules to update the dropdown display

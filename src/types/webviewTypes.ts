@@ -47,6 +47,7 @@ export interface WebviewMessage {
         | 'updateAdvancedProfiles'
         | 'requestHelp'
         | 'previewRepoRule'
+        | 'previewBranchRule'
         | 'clearPreview'
         | 'generatePalette';
     data: {

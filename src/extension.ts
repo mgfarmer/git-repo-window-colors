@@ -1345,6 +1345,68 @@ async function doit(reason: string) {
     let branchMatch = false;
     let hasLocalBranchRulesConfigured = false;
 
+    // Check for branch rule preview mode
+    const previewBranchContext = configProvider?.getPreviewBranchRuleContext();
+
+    if (previewBranchContext !== null && previewBranchContext !== undefined) {
+        outputChannel.appendLine('  [PREVIEW MODE] Using branch rule at index ' + previewBranchContext.index);
+        outputChannel.appendLine('  [PREVIEW MODE] Is global: ' + previewBranchContext.isGlobal);
+
+        let previewRule: { pattern: string; color: string; enabled?: boolean } | undefined;
+
+        if (previewBranchContext.isGlobal) {
+            // Get global branch rule
+            const branchRulesList = Array.from(branchMap.entries());
+            if (branchRulesList[previewBranchContext.index]) {
+                const [pattern, color] = branchRulesList[previewBranchContext.index];
+                previewRule = { pattern, color };
+            }
+        } else {
+            // Get local branch rule from specific repo
+            if (
+                previewBranchContext.repoIndex !== undefined &&
+                repoConfigList &&
+                repoConfigList[previewBranchContext.repoIndex]
+            ) {
+                const repo = repoConfigList[previewBranchContext.repoIndex];
+                if (repo.branchRules && repo.branchRules[previewBranchContext.index]) {
+                    previewRule = repo.branchRules[previewBranchContext.index];
+                }
+            }
+        }
+
+        if (previewRule) {
+            outputChannel.appendLine('  [PREVIEW MODE] Branch rule: "' + previewRule.pattern + '"');
+
+            // Check if this is a profile name
+            const advancedProfiles = workspace
+                .getConfiguration('windowColors')
+                .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+            const profileName = extractProfileName(previewRule.color, advancedProfiles);
+
+            if (profileName) {
+                // It's a profile - resolve it
+                outputChannel.appendLine('  [PREVIEW MODE] Using Profile: ' + profileName);
+                if (!matchedRepoConfig) {
+                    matchedRepoConfig = {
+                        repoQualifier: '',
+                        defaultBranch: undefined,
+                        primaryColor: '',
+                        branchColor: undefined,
+                        branchProfileName: profileName,
+                    };
+                } else {
+                    matchedRepoConfig.branchProfileName = profileName;
+                }
+            } else {
+                // It's a color
+                branchColor = Color(previewRule.color);
+                outputChannel.appendLine('  [PREVIEW MODE] Using color: ' + branchColor.hex());
+            }
+            branchMatch = true;
+        }
+    }
+
     // Check if matched repo has local branch rules
     if (
         matchedRepoConfig &&

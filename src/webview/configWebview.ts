@@ -38,6 +38,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private currentConfig: any = null;
     private _configurationListener: vscode.Disposable | undefined;
     private _previewRepoRuleIndex: number | null = null;
+    private _previewBranchRuleContext: { index: number; isGlobal: boolean; repoIndex?: number } | null = null;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
@@ -62,6 +63,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     public getPreviewRepoRuleIndex(): number | null {
         return this._previewRepoRuleIndex;
+    }
+
+    public getPreviewBranchRuleContext(): { index: number; isGlobal: boolean; repoIndex?: number } | null {
+        return this._previewBranchRuleContext;
     }
 
     public showAndAddRepoRule(extensionUri: vscode.Uri, repoQualifier: string, primaryColor: string = ''): void {
@@ -159,10 +164,21 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'previewRepoRule':
                 this._previewRepoRuleIndex = (message.data as any).index;
+                this._previewBranchRuleContext = null; // Clear branch rule preview when previewing repo rule
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode');
+                break;
+            case 'previewBranchRule':
+                this._previewBranchRuleContext = {
+                    index: (message.data as any).index,
+                    isGlobal: (message.data as any).isGlobal,
+                    repoIndex: (message.data as any).repoIndex,
+                };
+                this._previewRepoRuleIndex = null; // Clear repo rule preview when previewing branch rule
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode');
                 break;
             case 'clearPreview':
                 this._previewRepoRuleIndex = null;
+                this._previewBranchRuleContext = null;
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview');
                 break;
             case 'generatePalette':

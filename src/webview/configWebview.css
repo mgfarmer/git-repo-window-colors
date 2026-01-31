@@ -223,7 +223,8 @@ h2 {
     padding: 4px !important;
 }
 
-.repo-select-radio {
+.repo-select-radio,
+.branch-select-radio {
     width: 18px;
     height: 18px;
     cursor: pointer;
@@ -231,7 +232,8 @@ h2 {
     accent-color: var(--vscode-focusBorder, #007acc);
 }
 
-.repo-select-radio:hover {
+.repo-select-radio:hover,
+.branch-select-radio:hover {
     transform: scale(1.1);
 }
 
