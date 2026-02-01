@@ -167,9 +167,7 @@ h2 {
 }
 .rules-table
     tr.matched-rule
-    td:not(.reorder-controls):not(.color-cell):not(.repo-rule-cell):not(.branch-column):not(.select-cell):not(
-        .branch-mode-cell
-    ) {
+    td:not(.reorder-controls):not(.color-cell):not(.repo-rule-cell):not(.select-cell):not(.branch-mode-cell) {
     background-color: var(--vscode-diffEditor-insertedTextBackground, rgba(0, 255, 0, 0.1));
 }
 /* Add matched rule overlay with checkmark icon */

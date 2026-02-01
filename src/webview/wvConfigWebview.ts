@@ -682,12 +682,6 @@ function handleConfigurationData(data: any) {
                 needsUpdate = true;
             }
 
-            // Check branchColor
-            if (rule.branchColor && !rule.branchProfileName && currentConfig.advancedProfiles[rule.branchColor]) {
-                rule.branchProfileName = rule.branchColor;
-                needsUpdate = true;
-            }
-
             // Check local branch rules
             if (rule.branchRules) {
                 for (const branchRule of rule.branchRules) {
@@ -1203,9 +1197,7 @@ function handleDocumentChange(event: Event) {
 
         // Handle extra actions
         const extraAction = target.getAttribute('data-extra-action');
-        if (extraAction === 'updateBranchColumnVisibility') {
-            updateBranchColumnVisibility();
-        } else if (extraAction === 'handlePreviewModeChange') {
+        if (extraAction === 'handlePreviewModeChange') {
             handlePreviewModeChange();
         }
 
@@ -1402,8 +1394,6 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
         <th scope="col">Primary Color${colorSuffix}</th>
-        <th scope="col" class="branch-column">Default Branch</th>
-        <th scope="col" class="branch-column">Branch Color${colorSuffix}</th>
         <th scope="col" class="branch-mode-column">Branch Mode</th>
     `;
 
@@ -1446,9 +1436,6 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
 
     container.innerHTML = '';
     container.appendChild(table);
-
-    // Update branch column visibility
-    updateBranchColumnVisibility();
 
     // Initialize selection if needed
     if (selectedRepoRuleIndex === -1 && rules.length > 0) {
@@ -1496,18 +1483,6 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
         </td>
         <td class="color-cell">
             ${createColorInputHTML(rule.primaryColor || '', 'repo', index, 'primaryColor')}
-        </td>
-        <td class="branch-column">
-            <input type="text" 
-                   class="rule-input" 
-                   id="repo-branch-${index}"
-                   value="${escapeHtml(rule.defaultBranch || '')}" 
-                   placeholder="e.g., main, master"
-                   aria-label="Default branch for rule ${index + 1}"
-                   data-action="updateRepoRule(${index}, 'defaultBranch', this.value)">
-        </td>
-        <td class="color-cell branch-column">
-            ${createColorInputHTML(rule.branchColor || '', 'repo', index, 'branchColor')}
         </td>
         <td class="branch-mode-cell">
             <select class="branch-mode-select" 
@@ -1813,26 +1788,6 @@ function renderOtherSettings(settings: any) {
                                 Provided for fine-tuning the look and feel.
                             </span>
                         </div>
-                        <div class="setting-item range-slider tooltip">
-                            <label for="branch-hue-rotation">Branch Hue Rotation:</label>
-                            <div class="range-controls">
-                                <input type="range" 
-                                       id="branch-hue-rotation" 
-                                       min="-179" 
-                                       max="179" 
-                                       value="${settings.automaticBranchIndicatorColorKnob || 60}"
-                                       data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
-                                       aria-label="Branch hue rotation from -179 to +179 degrees">
-                                <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
-                            </div>
-                            <span class="tooltiptext" role="tooltip">
-                                Automatically shift the hue of branch indicator colors. This creates visual variation 
-                                for branch-specific coloring when a default branch is specified and no explicit branch color is defined. 
-                                A value of 180 means
-                                opposite colors, while 60 or -60 gives a nice complementary colors. Or use anything you like!
-                                Note: This setting does not apply to discrete branch rules. 
-                            </span>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1907,11 +1862,9 @@ function renderOtherSettings(settings: any) {
 
 // Store references to handlers so we can remove them
 let activityBarKnobHandler: ((this: HTMLInputElement, ev: Event) => any) | null = null;
-let branchHueRotationHandler: ((this: HTMLInputElement, ev: Event) => any) | null = null;
 
 function setupRangeInputUpdates() {
     const activityBarKnob = document.getElementById('activity-bar-knob') as HTMLInputElement;
-    const branchHueRotation = document.getElementById('branch-hue-rotation') as HTMLInputElement;
 
     if (activityBarKnob) {
         // Remove old listener if exists
@@ -1924,19 +1877,6 @@ function setupRangeInputUpdates() {
             if (valueSpan) valueSpan.textContent = this.value;
         };
         activityBarKnob.addEventListener('input', activityBarKnobHandler);
-    }
-
-    if (branchHueRotation) {
-        // Remove old listener if exists
-        if (branchHueRotationHandler) {
-            branchHueRotation.removeEventListener('input', branchHueRotationHandler);
-        }
-        // Create and add new listener
-        branchHueRotationHandler = function () {
-            const valueSpan = document.getElementById('branch-hue-rotation-value');
-            if (valueSpan) valueSpan.textContent = this.value + '°';
-        };
-        branchHueRotation.addEventListener('input', branchHueRotationHandler);
     }
 }
 
@@ -1974,20 +1914,31 @@ function renderColorReport(config: any) {
         'statusBar.foreground',
     ];
 
-    // Get matching rules
-    const matchedRepoRule =
-        config.matchingIndexes?.repoRule >= 0 ? config.repoRules?.[config.matchingIndexes.repoRule] : null;
+    // Use preview indexes (which are always set - they match the matching indexes when not actively previewing)
+    const repoRuleIndex = config.previewRepoRuleIndex ?? -1;
+    const matchedRepoRule = repoRuleIndex >= 0 ? config.repoRules?.[repoRuleIndex] : null;
 
-    // Determine if we should use a local or global branch rule
-    const isLocalBranchRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+    // Determine which branch rule to use from preview context
+    let branchRuleIndex = -1;
+    let isLocalBranchRule = false;
+    let repoIndexForBranchRule = -1;
+
+    if (config.previewBranchRuleContext) {
+        branchRuleIndex = config.previewBranchRuleContext.index;
+        isLocalBranchRule = !config.previewBranchRuleContext.isGlobal;
+        repoIndexForBranchRule = config.previewBranchRuleContext.repoIndex ?? -1;
+    }
+
     let matchedBranchRule = null;
-
-    if (isLocalBranchRule && matchedRepoRule?.branchRules && config.matchingIndexes?.branchRule >= 0) {
-        // Use local branch rule from the matched repo
-        matchedBranchRule = matchedRepoRule.branchRules[config.matchingIndexes.branchRule];
-    } else if (config.matchingIndexes?.branchRule >= 0) {
+    if (isLocalBranchRule && repoIndexForBranchRule >= 0) {
+        // Use local branch rule from the specified repo
+        const repoForBranchRule = config.repoRules?.[repoIndexForBranchRule];
+        if (repoForBranchRule?.branchRules && branchRuleIndex >= 0) {
+            matchedBranchRule = repoForBranchRule.branchRules[branchRuleIndex];
+        }
+    } else if (branchRuleIndex >= 0) {
         // Use global branch rule
-        matchedBranchRule = config.branchRules?.[config.matchingIndexes.branchRule];
+        matchedBranchRule = config.branchRules?.[branchRuleIndex];
     }
 
     // Helper function to determine source for each theme key
@@ -1999,11 +1950,10 @@ function renderColorReport(config: any) {
         if (isActivityBarKey && matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
             // Include repo index if this is a local branch rule
-            const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
-            const ruleTypeLabel = isLocalRule ? 'Local Branch Rule' : 'Global Branch Rule';
-            const gotoData = isLocalRule
-                ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
-                : `branch:${config.matchingIndexes.branchRule}`;
+            const ruleTypeLabel = isLocalBranchRule ? 'Local Branch Rule' : 'Global Branch Rule';
+            const gotoData = isLocalBranchRule
+                ? `branch:${branchRuleIndex}:${repoIndexForBranchRule}`
+                : `branch:${branchRuleIndex}`;
 
             // Check if using a profile
             if (matchedBranchRule.profileName) {
@@ -2024,7 +1974,7 @@ function renderColorReport(config: any) {
 
         if (matchedRepoRule) {
             const qualifier = escapeHtml(matchedRepoRule.repoQualifier);
-            const gotoData = `repo:${config.matchingIndexes.repoRule}`;
+            const gotoData = `repo:${repoRuleIndex}`;
             // For repo rules, check if using a profile
             if (matchedRepoRule.profileName) {
                 const profileName = matchedRepoRule.profileName;
@@ -2044,11 +1994,10 @@ function renderColorReport(config: any) {
         if (matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
             // Include repo index if this is a local branch rule
-            const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
-            const ruleTypeLabel = isLocalRule ? 'Local Branch Rule' : 'Global Branch Rule';
-            const gotoData = isLocalRule
-                ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
-                : `branch:${config.matchingIndexes.branchRule}`;
+            const ruleTypeLabel = isLocalBranchRule ? 'Local Branch Rule' : 'Global Branch Rule';
+            const gotoData = isLocalBranchRule
+                ? `branch:${branchRuleIndex}:${repoIndexForBranchRule}`
+                : `branch:${branchRuleIndex}`;
 
             // Check if using a profile
             if (matchedBranchRule.profileName) {
@@ -2151,40 +2100,35 @@ function renderColorReport(config: any) {
         return;
     }
 
-    // Add preview indicator if preview mode is active
+    // Add preview indicator if preview mode checkbox is checked
     let previewIndicator = '';
+
     if (previewMode) {
         const previewParts: string[] = [];
 
-        // Check if we're previewing a repo rule (and it's not the currently matched rule)
-        const isPreviewingDifferentRepoRule =
-            selectedRepoRuleIndex !== null &&
-            selectedRepoRuleIndex !== -1 &&
-            config.repoRules?.[selectedRepoRuleIndex] &&
-            selectedRepoRuleIndex !== config.matchingIndexes?.repoRule;
-
-        if (isPreviewingDifferentRepoRule) {
-            const repoRule = config.repoRules[selectedRepoRuleIndex];
+        // Show the selected repo rule
+        if (
+            config.previewRepoRuleIndex !== null &&
+            config.previewRepoRuleIndex !== undefined &&
+            config.repoRules?.[config.previewRepoRuleIndex]
+        ) {
+            const repoRule = config.repoRules[config.previewRepoRuleIndex];
             previewParts.push(`Repository rule: "<strong>${escapeHtml(repoRule.repoQualifier)}</strong>"`);
         }
 
-        // Check if we're previewing a branch rule (and it's not the currently matched rule)
-        const isPreviewingDifferentBranchRule =
-            selectedBranchRuleIndex !== null &&
-            selectedBranchRuleIndex !== -1 &&
-            selectedBranchRuleIndex !== config.matchingIndexes?.branchRule;
-
-        if (isPreviewingDifferentBranchRule) {
-            // Determine if we're previewing global or local branch rule
-            const selectedRule = config.repoRules?.[selectedRepoRuleIndex];
-            const useGlobal = selectedRule?.useGlobalBranchRules !== false;
-            const branchRules = useGlobal ? config.branchRules : selectedRule?.branchRules || [];
-            const branchRule = branchRules?.[selectedBranchRuleIndex];
+        // Show the selected branch rule
+        if (config.previewBranchRuleContext) {
+            // Determine if it's a global or local branch rule
+            const branchContext = config.previewBranchRuleContext;
+            const branchRules = branchContext.isGlobal
+                ? config.branchRules
+                : config.repoRules?.[branchContext.repoIndex || 0]?.branchRules || [];
+            const branchRule = branchRules?.[branchContext.index];
 
             if (branchRule) {
-                const ruleSource = useGlobal
+                const ruleSource = branchContext.isGlobal
                     ? 'Global'
-                    : `Local (${escapeHtml(selectedRule?.repoQualifier || 'repo')})`;
+                    : `Local (${escapeHtml(config.repoRules?.[branchContext.repoIndex || 0]?.repoQualifier || 'repo')})`;
                 previewParts.push(
                     `<strong>${ruleSource}</strong> branch rule: "<strong>${escapeHtml(branchRule.pattern)}</strong>"`,
                 );
@@ -2199,7 +2143,7 @@ function renderColorReport(config: any) {
                     <strong>PREVIEW MODE</strong>
                 </div>
                 <div style="margin-top: 8px; font-size: 12px;">
-                    Previewing colors from ${previewParts.join(' and ')}
+                    Showing colors from ${previewParts.join(' and ')}
                 </div>
             </div>`;
         }
@@ -2228,15 +2172,6 @@ function renderColorReport(config: any) {
     console.log('[DEBUG] Table HTML length:', tableHTML.length);
     container.innerHTML = tableHTML;
     console.log('[DEBUG] innerHTML set, container.children.length:', container.children.length);
-}
-
-function updateBranchColumnVisibility() {
-    const showBranchColumns = (document.getElementById('show-branch-columns') as HTMLInputElement)?.checked ?? true;
-    const branchColumns = document.querySelectorAll('.branch-column');
-
-    branchColumns.forEach((column) => {
-        (column as HTMLElement).style.display = showBranchColumns ? '' : 'none';
-    });
 }
 
 function updateProfilesTabVisibility() {
@@ -2310,9 +2245,7 @@ function addRepoRule() {
 
     const newRule = {
         repoQualifier: currentRepoName,
-        defaultBranch: '',
         primaryColor: getThemeAppropriateColor(),
-        branchColor: '',
     };
 
     // Always append new rules to the end for predictable behavior
@@ -2410,7 +2343,7 @@ function selectRepoRule(index: number) {
     // Reset branch rule selection when switching repos so it reinitializes
     selectedBranchRuleIndex = -1;
 
-    // If preview mode is enabled, send preview command
+    // Send preview command only if preview mode is enabled
     if (previewMode) {
         vscode.postMessage({
             command: 'previewRepoRule',
@@ -2435,7 +2368,7 @@ function selectBranchRule(index: number) {
 
     selectedBranchRuleIndex = index;
 
-    // If preview mode is enabled, send preview command with context
+    // Send preview command only if preview mode is enabled
     if (previewMode) {
         vscode.postMessage({
             command: 'previewBranchRule',
@@ -2689,13 +2622,6 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
             // If primaryColor is not a profile, clear profileName
             delete rules[index].profileName;
         }
-
-        if (field === 'branchColor' && value && currentConfig.advancedProfiles?.[value]) {
-            rules[index].branchProfileName = value;
-        } else if (field === 'branchColor') {
-            // If branchColor is not a profile, clear branchProfileName
-            delete rules[index].branchProfileName;
-        }
     } else if (ruleType === 'branch') {
         // Determine if we're updating global or local branch rules
         if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
@@ -2803,8 +2729,6 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
         // Clear profile fields when generating a random color
         if (field === 'primaryColor') {
             delete rules[index].profileName;
-        } else if (field === 'branchColor') {
-            delete rules[index].branchProfileName;
         }
     } else if (ruleType === 'branch') {
         // Determine if we're updating global or local branch rules

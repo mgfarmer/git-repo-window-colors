@@ -79,13 +79,13 @@
                 "properties": {
                     "windowColors.repoConfigurationList": {
                         "order": 1,
-                        "markdownDescription": "Repository-specific color rules. Each rule can be defined as a JSON object with properties `repoQualifier` (required), `primaryColor` (required), `defaultBranch`, `branchColor`, `profileName`, and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"repoQualifier\": \"myrepo\",\n  \"primaryColor\": \"blue\",\n  \"defaultBranch\": \"main\",\n  \"branchColor\": \"green\",\n  \"enabled\": true\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]` (e.g., `myrepo:blue` or `myrepo/main:blue/green`)\n\nThe `repoQualifier` is matched against the repository URL from `git config --get remote.origin.url`. The first matching rule is used. Colors can be CSS color names, hex values, or profile names. See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).",
+                        "markdownDescription": "Repository-specific color rules. Each rule can be defined as a JSON object with properties `repoQualifier` (required), `primaryColor` (required), `profileName`, and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"repoQualifier\": \"myrepo\",\n  \"primaryColor\": \"blue\",\n  \"enabled\": true,\n  \"branchRules\": [\n    {\"pattern\": \"^main$\", \"color\": \"green\"}\n  ]\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<repo-qualifier>:<primary-color>` (e.g., `myrepo:blue`)\n\nThe `repoQualifier` is matched against the repository URL from `git config --get remote.origin.url`. The first matching rule is used. Colors can be CSS color names, hex values, or profile names. See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).",
                         "type": "array",
                         "items": {
                             "anyOf": [
                                 {
                                     "type": "string",
-                                    "description": "Legacy format: <repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]"
+                                    "description": "Legacy format: <repo-qualifier>:<primary-color>"
                                 },
                                 {
                                     "type": "object",
@@ -94,17 +94,9 @@
                                             "type": "string",
                                             "description": "Repository identifier (matched against git remote URL)"
                                         },
-                                        "defaultBranch": {
-                                            "type": "string",
-                                            "description": "Default branch name (e.g., 'main', 'master')"
-                                        },
                                         "primaryColor": {
                                             "type": "string",
                                             "description": "Primary color for title bar and activity bar (CSS color or profile name)"
-                                        },
-                                        "branchColor": {
-                                            "type": "string",
-                                            "description": "Color when not on default branch (CSS color or profile name)"
                                         },
                                         "profileName": {
                                             "type": "string",
@@ -114,6 +106,10 @@
                                             "type": "boolean",
                                             "default": true,
                                             "description": "Whether this rule is enabled"
+                                        },
+                                        "branchRules": {
+                                            "type": "array",
+                                            "description": "Local branch rules for this repository"
                                         },
                                         "useGlobalBranchRules": {
                                             "type": "boolean",
@@ -137,14 +133,6 @@
                         "default": "true",
                         "description": "When no rules match, remove any colors that were set by this extension.  This is useful if you want to use the default colors for a repo that is not in the list. If this is unchecked, then you will need to remove any managed colors manually.",
                         "scope": "application"
-                    },
-                    "windowColors.invertBranchColorLogic": {
-                        "order": 3,
-                        "type": "boolean",
-                        "default": "false",
-                        "description": "DEPRECATED: This option will be removed soon. Use Local Branch Rules instead. Previously inverted branch color logic to use the branch color when working in the default branch.",
-                        "scope": "application",
-                        "deprecationMessage": "This setting is deprecated and will be removed in a future version. Please use Local Branch Rules instead."
                     },
                     "windowColors.branchConfigurationList": {
                         "order": 4,
@@ -224,23 +212,6 @@
                         "default": "false",
                         "description": "In addition to the Activity Bar, apply the branch color to the editor tabs and status bar",
                         "scope": "application"
-                    },
-                    "windowColors.automaticBranchIndicatorColorKnob": {
-                        "order": 24,
-                        "type": "number",
-                        "maximum": 359,
-                        "minimum": -359,
-                        "default": 60,
-                        "description": "When repository settings does not spcify a branch color, use this knob to control the hue rotation of the repository color to automatically set the branch color.  Smaller values will be similar to the repository color.  A value of 180 is the 'opposite' of the repository color on the color wheel.",
-                        "scope": "application"
-                    },
-                    "windowColors.showBranchColumns": {
-                        "order": 25,
-                        "type": "boolean",
-                        "default": false,
-                        "description": "DEPRECATED: This option will be removed soon. Use Local Branch Rules instead. Previously showed the Default Branch and Branch Color columns in the Repository Rules table.",
-                        "scope": "application",
-                        "deprecationMessage": "This setting is deprecated and will be removed in a future version. Please use Local Branch Rules instead."
                     },
                     "windowColors.showStatusIconWhenNoRuleMatches": {
                         "order": 26,

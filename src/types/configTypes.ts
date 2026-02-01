@@ -10,10 +10,6 @@ export interface RepoConfigRule {
     repoQualifier: string;
     /** Primary color for title bar and activity bar (CSS color or profile name) */
     primaryColor: string;
-    /** Default branch name (e.g., 'main', 'master') */
-    defaultBranch?: string;
-    /** Color when not on default branch (CSS color or profile name) */
-    branchColor?: string;
     /** Advanced profile name to use */
     profileName?: string;
     /** Whether this rule is enabled (default: true) */

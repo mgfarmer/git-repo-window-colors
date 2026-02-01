@@ -165,8 +165,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'previewRepoRule':
                 this._previewRepoRuleIndex = (message.data as any).index;
-                this._previewBranchRuleContext = null; // Clear branch rule preview when previewing repo rule
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode');
+                // Pass preview mode as true
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
+                // Refresh config to get updated colorCustomizations after preview is applied
+                this._sendConfigurationToWebview();
                 break;
             case 'previewBranchRule':
                 this._previewBranchRuleContext = {
@@ -174,13 +176,16 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     isGlobal: (message.data as any).isGlobal,
                     repoIndex: (message.data as any).repoIndex,
                 };
-                this._previewRepoRuleIndex = null; // Clear repo rule preview when previewing branch rule
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode');
+                // Pass preview mode as true
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
+                // Refresh config to get updated colorCustomizations after preview is applied
+                this._sendConfigurationToWebview();
                 break;
             case 'clearPreview':
-                this._previewRepoRuleIndex = null;
-                this._previewBranchRuleContext = null;
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview');
+                // Pass preview mode as false to use matching rules
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview', false);
+                // Refresh config to get updated colorCustomizations after preview is cleared
+                this._sendConfigurationToWebview();
                 break;
             case 'generatePalette':
                 await this._handlePaletteGeneration(message.data.paletteData!);
@@ -240,6 +245,26 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             advancedProfiles,
         };
 
+        // If preview indexes are not set, initialize them to the matching indexes
+        if (this._previewRepoRuleIndex === null && matchingRepoRuleIndex >= 0) {
+            this._previewRepoRuleIndex = matchingRepoRuleIndex;
+        }
+
+        const repoIndexForBranchRule = this._getRepoIndexForBranchRule(
+            repoRules,
+            matchingRepoRuleIndex,
+            matchingBranchRuleIndex,
+            workspaceInfo.currentBranch,
+        );
+
+        if (this._previewBranchRuleContext === null && matchingBranchRuleIndex >= 0) {
+            this._previewBranchRuleContext = {
+                index: matchingBranchRuleIndex,
+                isGlobal: repoIndexForBranchRule < 0,
+                repoIndex: repoIndexForBranchRule >= 0 ? repoIndexForBranchRule : undefined,
+            };
+        }
+
         const msgData = {
             ...this.currentConfig,
             workspaceInfo,
@@ -252,13 +277,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             matchingIndexes: {
                 repoRule: matchingRepoRuleIndex,
                 branchRule: matchingBranchRuleIndex,
-                repoIndexForBranchRule: this._getRepoIndexForBranchRule(
-                    repoRules,
-                    matchingRepoRuleIndex,
-                    matchingBranchRuleIndex,
-                    workspaceInfo.currentBranch,
-                ),
+                repoIndexForBranchRule,
             },
+            previewRepoRuleIndex: this._previewRepoRuleIndex,
+            previewBranchRuleContext: this._previewBranchRuleContext,
         };
 
         //console.log('[DEBUG] Sending configuration to webview: ', msgData);
@@ -278,13 +300,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             .map((rule) => this._parseRepoRule(rule))
             .filter((rule) => rule !== null) as RepoRule[];
 
-        // Migrate old configs: if primaryColor/branchColor matches a profile but profileName is not set, set it
+        // Migrate old configs: if primaryColor matches a profile but profileName is not set, set it
         for (const rule of rules) {
             if (rule.primaryColor && !rule.profileName && advancedProfiles[rule.primaryColor]) {
                 rule.profileName = rule.primaryColor;
-            }
-            if (rule.branchColor && !rule.branchProfileName && advancedProfiles[rule.branchColor]) {
-                rule.branchProfileName = rule.branchColor;
             }
 
             // Migrate branch rules
@@ -353,21 +372,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 return null;
             }
 
-            // Parse repo section: repo-qualifier[|default-branch]
-            const repoPipeIndex = repoSection.indexOf('|');
-            const repoQualifier = repoPipeIndex === -1 ? repoSection : repoSection.substring(0, repoPipeIndex);
-            const defaultBranch = repoPipeIndex === -1 ? undefined : repoSection.substring(repoPipeIndex + 1);
+            // Parse repo section: repo-qualifier
+            const repoQualifier = repoSection.trim();
 
-            // Parse color section: primary-color[|branch-color]
-            const colorPipeIndex = colorSection.indexOf('|');
-            const primaryColor = colorPipeIndex === -1 ? colorSection : colorSection.substring(0, colorPipeIndex);
-            const branchColor = colorPipeIndex === -1 ? undefined : colorSection.substring(colorPipeIndex + 1);
+            // Parse color section: primary-color
+            const primaryColor = colorSection.trim();
 
             return {
                 repoQualifier: repoQualifier.trim(),
-                defaultBranch: defaultBranch ? defaultBranch.trim() : undefined,
-                primaryColor: primaryColor.trim(),
-                branchColor: branchColor ? branchColor.trim() : undefined,
+                primaryColor: primaryColor,
                 enabled: true,
                 useGlobalBranchRules: true,
             };
@@ -446,14 +459,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         return {
             removeManagedColors: config.get<boolean>('removeManagedColors', true),
-            invertBranchColorLogic: config.get<boolean>('invertBranchColorLogic', false),
             colorInactiveTitlebar: config.get<boolean>('colorInactiveTitlebar', true),
             colorEditorTabs: config.get<boolean>('colorEditorTabs', false),
             colorStatusBar: config.get<boolean>('colorStatusBar', false),
             applyBranchColorToTabsAndStatusBar: config.get<boolean>('applyBranchColorToTabsAndStatusBar', false),
             activityBarColorKnob: config.get<number>('activityBarColorKnob', 0),
-            automaticBranchIndicatorColorKnob: config.get<number>('automaticBranchIndicatorColorKnob', 60),
-            showBranchColumns: config.get<boolean>('showBranchColumns', true),
             showStatusIconWhenNoRuleMatches: config.get<boolean>('showStatusIconWhenNoRuleMatches', true),
             askToColorizeRepoWhenOpened: config.get<boolean>('askToColorizeRepoWhenOpened', true),
             enableProfilesAdvanced: config.get<boolean>('enableProfilesAdvanced', false),
@@ -995,10 +1005,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                             <strong>Repository Rules</strong><br>
                                             Configure colors for specific repositories. Rules are matched in order from top to bottom.<br><br>
                                             <strong>Repository Qualifier:</strong> Part of your repo URL (e.g., "myrepo", "github.com/user/repo")<br>
-                                            <strong>Default Branch:</strong> Optional. Specify main branch name for branch-specific coloring<br>
                                             <strong>Primary Color:</strong> Main window color for this repository<br>
-                                            <strong>Branch Color:</strong> Optional. Color used when not on the default branch<br><br>
-                                            <strong>Note:</strong> Branch-related columns (Default Branch, Branch Color) can be hidden using the setting in Other Settings.
+                                            <strong>Branch Mode:</strong> Choose between Global or Local branch rules for this repository
                                         </span>
                                     </button>
                                 </h2>

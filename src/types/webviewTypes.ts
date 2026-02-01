@@ -2,11 +2,8 @@ import { AdvancedProfileMap } from './advancedModeTypes';
 
 export interface RepoRule {
     repoQualifier: string;
-    defaultBranch?: string;
     primaryColor: string;
-    branchColor?: string;
     profileName?: string;
-    branchProfileName?: string;
     enabled?: boolean;
     branchRules?: BranchRule[];
     useGlobalBranchRules?: boolean;
@@ -21,14 +18,11 @@ export interface BranchRule {
 
 export interface OtherSettings {
     removeManagedColors: boolean;
-    invertBranchColorLogic: boolean;
     colorInactiveTitlebar: boolean;
     colorEditorTabs: boolean;
     colorStatusBar: boolean;
     applyBranchColorToTabsAndStatusBar: boolean;
     activityBarColorKnob: number;
-    automaticBranchIndicatorColorKnob: number;
-    showBranchColumns: boolean;
     showStatusIconWhenNoRuleMatches: boolean;
     askToColorizeRepoWhenOpened: boolean;
     enableProfilesAdvanced: boolean;

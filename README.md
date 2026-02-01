@@ -79,9 +79,7 @@ Configure colors for specific repositories. Rules are matched in priority order:
 
 - **Repository Qualifier:** Part of your repo URL (e.g., `my-project`, `github.com/company/app`)
 - **Primary Color:** Main window color for this repository (can be a simple color OR a profile name)
-- **Branch Color:** [Optional/Legacy] different color for non-default (or default) branches (can be a simple color OR a profile name)
-- **Default Branch:** [Optional/Legacy] Specify your preferred main branch name for branch-specific coloring.
-- **Branch Rules:** Check out the Branch Rules section below for a more powerful branch coloring system.
+- **Branch Rules:** Configure local or global branch rules for branch-specific coloring (see Branch Rules section below)
 
 ### Branch Rules (Advanced Feature)
 
@@ -205,7 +203,6 @@ When both are specified, the branch profile **overrides** colors from the reposi
 You can mix and match simple colors with profiles:
 
 - **Repo Color + Branch Profile** ✅ Base colors use simple color logic, branch profile overlays specific elements
-- **Repo Profile + Branch Color** ✅ Profile uses the branch color in its palette slots
 - **Repo Profile + Branch Profile** ✅ Branch profile overrides specific colors from repo profile
 - **Simple Colors Only** ✅ Traditional mode, works exactly as before
 
