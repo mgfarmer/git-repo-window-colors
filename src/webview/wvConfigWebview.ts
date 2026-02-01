@@ -2392,6 +2392,9 @@ function selectRepoRule(index: number) {
     // Reset branch rule selection when switching repos so it reinitializes
     selectedBranchRuleIndex = -1;
 
+    // Clear any regex validation errors when switching rules
+    clearRegexValidationError();
+
     // Send preview command only if preview mode is enabled
     if (previewMode) {
         vscode.postMessage({
@@ -2419,6 +2422,9 @@ function selectBranchRule(index: number) {
     if (!branchRules?.[index]) return;
 
     selectedBranchRuleIndex = index;
+
+    // Clear any regex validation errors when switching rules
+    clearRegexValidationError();
 
     // Send preview command only if preview mode is enabled
     if (previewMode) {
