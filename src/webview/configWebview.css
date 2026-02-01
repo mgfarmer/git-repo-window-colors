@@ -38,6 +38,49 @@ body {
     margin: 0;
     padding: 20px;
 }
+
+/* Preview Mode Toast */
+.preview-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    padding: 12px 20px;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: none;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    border: 2px solid;
+}
+
+.preview-toast.visible {
+    display: flex;
+}
+
+.preview-toast-text {
+    color: inherit;
+}
+
+.preview-toast-reset-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: inherit;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.preview-toast-reset-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
 .config-container {
     display: flex;
     flex-direction: column;

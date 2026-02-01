@@ -898,6 +898,13 @@ function renderConfiguration(config: any) {
     renderWorkspaceInfo(config.workspaceInfo);
     renderColorReport(config);
 
+    // Show/hide preview toast based on preview mode
+    if (previewMode) {
+        showPreviewToast();
+    } else {
+        hidePreviewToast();
+    }
+
     // Update profiles tab visibility based on settings
     updateProfilesTabVisibility();
 
@@ -1083,6 +1090,12 @@ function handleDocumentClick(event: Event) {
 
     if (target.getAttribute('data-action') === 'addBranchRule') {
         addBranchRule();
+        return;
+    }
+
+    // Handle preview toast reset button
+    if (target.getAttribute('data-action') === 'resetToMatchingRules') {
+        resetToMatchingRules();
         return;
     }
 
@@ -2262,6 +2275,9 @@ function handlePreviewModeChange() {
                 },
             });
         }
+
+        // Show preview toast
+        showPreviewToast();
     } else {
         // If disabling preview, send clear message with preview disabled flag
         vscode.postMessage({
@@ -2270,6 +2286,9 @@ function handlePreviewModeChange() {
                 previewEnabled: false,
             },
         });
+
+        // Hide preview toast
+        hidePreviewToast();
     }
 
     // Re-render both repo and branch rules to update visual feedback
@@ -2408,6 +2427,11 @@ function selectRepoRule(index: number) {
 
     // Re-render other settings to update disabled state of color options
     renderOtherSettings(currentConfig.otherSettings);
+
+    // Update toast if preview mode is enabled
+    if (previewMode) {
+        showPreviewToast();
+    }
 
     // Render branch rules for the selected repo
     renderBranchRulesForSelectedRepo();
@@ -3753,6 +3777,227 @@ function clearRegexValidationError() {
     branchInputs.forEach((input) => {
         input.classList.remove('regex-error');
     });
+}
+
+// Preview Toast Functions
+function showPreviewToast() {
+    console.log('[showPreviewToast] CALLED');
+    const toast = document.getElementById('preview-toast');
+    const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
+    if (!toast) return;
+
+    console.log('[showPreviewToast] Toast element found');
+
+    // Only show if actually previewing (selected indexes don't match the matching indexes)
+    const isActuallyPreviewing =
+        selectedRepoRuleIndex !== currentConfig?.matchingIndexes?.repoRule ||
+        selectedBranchRuleIndex !== currentConfig?.matchingIndexes?.branchRule;
+
+    console.log(
+        '[showPreviewToast] isActuallyPreviewing:',
+        isActuallyPreviewing,
+        'selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+        'matchingRepoRule:',
+        currentConfig?.matchingIndexes?.repoRule,
+        'selectedBranchRuleIndex:',
+        selectedBranchRuleIndex,
+        'matchingBranchRule:',
+        currentConfig?.matchingIndexes?.branchRule,
+    );
+
+    if (!isActuallyPreviewing) {
+        hidePreviewToast();
+        return;
+    }
+
+    // Get the selected repo rule
+    const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
+    if (!selectedRule) return;
+
+    console.log('[showPreviewToast] selectedRule:', selectedRule);
+
+    // Check if this rule uses a profile (not virtual)
+    const profileName = selectedRule.profileName || selectedRule.primaryColor;
+    const profile = currentConfig?.advancedProfiles?.[profileName];
+
+    console.log('[showPreviewToast] profileName:', profileName, 'profile:', profile);
+
+    let primaryColor = selectedRule.primaryColor;
+    let secondaryBgColor = null;
+    let secondaryFgColor = null;
+
+    if (profile && !profile.virtual && profile.palette) {
+        console.log('[showPreviewToast] Using profile palette:', profile.palette);
+
+        // Resolve primary color from palette
+        const primaryActiveBg = profile.palette.primaryActiveBg;
+        if (primaryActiveBg) {
+            console.log('[showPreviewToast] primaryActiveBg slot:', primaryActiveBg);
+            const resolvedPrimary = resolveColorFromSlot(primaryActiveBg, selectedRule);
+            console.log('[showPreviewToast] resolved primary color:', resolvedPrimary);
+            if (resolvedPrimary) {
+                primaryColor = resolvedPrimary;
+            }
+        }
+
+        // Try to find secondary colors in the palette
+        const secondaryActiveBg = profile.palette.secondaryActiveBg;
+        const secondaryActiveFg = profile.palette.secondaryActiveFg;
+
+        console.log('[showPreviewToast] secondaryActiveBg slot:', secondaryActiveBg);
+        console.log('[showPreviewToast] secondaryActiveFg slot:', secondaryActiveFg);
+
+        if (secondaryActiveBg) {
+            secondaryBgColor = resolveColorFromSlot(secondaryActiveBg, selectedRule);
+            console.log('[showPreviewToast] resolved secondary bg:', secondaryBgColor);
+        }
+        if (secondaryActiveFg) {
+            secondaryFgColor = resolveColorFromSlot(secondaryActiveFg, selectedRule);
+            console.log('[showPreviewToast] resolved secondary fg:', secondaryFgColor);
+        }
+    }
+
+    console.log(
+        '[showPreviewToast] Final colors - primary:',
+        primaryColor,
+        'secondaryBg:',
+        secondaryBgColor,
+        'secondaryFg:',
+        secondaryFgColor,
+    );
+
+    // Apply the primary color to toast
+    if (primaryColor) {
+        toast.style.backgroundColor = primaryColor;
+        toast.style.borderColor = primaryColor;
+        toast.style.color = getContrastingTextColor(primaryColor);
+    }
+
+    // Apply secondary colors to reset button if available
+    if (resetBtn) {
+        if (secondaryBgColor && secondaryFgColor) {
+            resetBtn.style.backgroundColor = secondaryBgColor;
+            resetBtn.style.color = secondaryFgColor;
+            resetBtn.style.borderColor = secondaryFgColor;
+        } else {
+            // Fallback to default semi-transparent styling
+            resetBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+            resetBtn.style.color = 'inherit';
+            resetBtn.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+        }
+    }
+
+    toast.classList.add('visible');
+}
+
+// Helper to resolve a color from a palette slot definition
+function resolveColorFromSlot(slot: any, rule: any): string | null {
+    if (!slot) return null;
+
+    console.log('[resolveColorFromSlot] slot:', slot, 'rule:', rule);
+
+    // If slot is a direct color string
+    if (typeof slot === 'string') {
+        console.log('[resolveColorFromSlot] Direct string:', slot);
+        return slot;
+    }
+
+    // If slot is an object
+    if (typeof slot === 'object') {
+        // Check for fixed source with value
+        if (slot.source === 'fixed' && slot.value) {
+            console.log('[resolveColorFromSlot] Fixed value:', slot.value);
+            return slot.value;
+        }
+
+        // Check for direct color property
+        if (slot.color) {
+            console.log('[resolveColorFromSlot] Has color property:', slot.color);
+            return slot.color;
+        }
+
+        // Check for source-based definitions
+        if (slot.source === 'repoColor' && rule.primaryColor) {
+            console.log('[resolveColorFromSlot] Using repoColor:', rule.primaryColor);
+            return rule.primaryColor;
+        }
+        if (slot.source === 'branchColor' && rule.branchColor) {
+            console.log('[resolveColorFromSlot] Using branchColor:', rule.branchColor);
+            return rule.branchColor;
+        }
+
+        // If has value property (alternative format)
+        if (slot.value) {
+            console.log('[resolveColorFromSlot] Using value property:', slot.value);
+            return slot.value;
+        }
+
+        // If no source but has modifiers, might need base color
+        // For now, we can't resolve these without the full palette generator
+        console.log('[resolveColorFromSlot] Cannot resolve slot with modifiers only');
+    }
+
+    console.log('[resolveColorFromSlot] Returning null');
+    return null;
+}
+
+function hidePreviewToast() {
+    const toast = document.getElementById('preview-toast');
+    if (!toast) return;
+    toast.classList.remove('visible');
+}
+
+function resetToMatchingRules() {
+    // Turn off preview mode
+    const checkbox = document.getElementById('preview-selected-repo-rule') as HTMLInputElement;
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    previewMode = false;
+
+    // Select the matching repo rule if available
+    if (currentConfig?.matchingIndexes?.repoRule !== undefined && currentConfig?.matchingIndexes?.repoRule >= 0) {
+        selectRepoRule(currentConfig.matchingIndexes.repoRule);
+    }
+
+    // Select the matching branch rule if available
+    if (currentConfig?.matchingIndexes?.branchRule !== undefined && currentConfig?.matchingIndexes?.branchRule >= 0) {
+        selectedBranchRuleIndex = currentConfig.matchingIndexes.branchRule;
+    }
+
+    // Send clear preview message
+    vscode.postMessage({
+        command: 'clearPreview',
+        data: {
+            previewEnabled: false,
+        },
+    });
+
+    // Hide toast
+    hidePreviewToast();
+
+    // Re-render
+    if (currentConfig) {
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+        renderBranchRulesForSelectedRepo();
+    }
+}
+
+// Helper to determine if a color is light or dark for text contrast
+function getContrastingTextColor(color: string): string {
+    // Simple approach: try to determine if color is light or dark
+    // For hex colors
+    if (color.startsWith('#')) {
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b = parseInt(hex.substr(4, 2), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness > 155 ? '#000000' : '#ffffff';
+    }
+    // For named colors or rgb(), default to white text
+    return '#ffffff';
 }
 
 // Color Auto-complete Functions

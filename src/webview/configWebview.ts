@@ -1008,6 +1008,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <link href="${helpCssUri}" rel="stylesheet">
         </head>
         <body>
+            <!-- Preview Mode Toast -->
+            <div id="preview-toast" class="preview-toast" role="status" aria-live="polite">
+                <span class="preview-toast-text">PREVIEW MODE</span>
+                <button class="preview-toast-reset-btn" data-action="resetToMatchingRules">reset</button>
+            </div>
+            
             <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
                 <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
