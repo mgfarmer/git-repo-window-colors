@@ -75,6 +75,22 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         return this._previewModeEnabled;
     }
 
+    private async _waitForColorCustomizationsUpdate(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const disposable = vscode.workspace.onDidChangeConfiguration((event) => {
+                if (event.affectsConfiguration('workbench.colorCustomizations')) {
+                    disposable.dispose();
+                    resolve();
+                }
+            });
+            // Timeout after 1 second in case the event doesn't fire
+            setTimeout(() => {
+                disposable.dispose();
+                resolve();
+            }, 1000);
+        });
+    }
+
     public showAndAddRepoRule(extensionUri: vscode.Uri, repoQualifier: string, primaryColor: string = ''): void {
         // First, show the webview
         this.show(extensionUri);
@@ -173,7 +189,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
-                // Refresh config to get updated colorCustomizations after preview is applied
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
                 this._sendConfigurationToWebview();
                 break;
             case 'previewBranchRule':
@@ -185,14 +202,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
-                // Refresh config to get updated colorCustomizations after preview is applied
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
                 this._sendConfigurationToWebview();
                 break;
             case 'clearPreview':
                 this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
                 // Pass preview mode as false to use matching rules
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview', false);
-                // Refresh config to get updated colorCustomizations after preview is cleared
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
                 this._sendConfigurationToWebview();
                 break;
             case 'generatePalette':
