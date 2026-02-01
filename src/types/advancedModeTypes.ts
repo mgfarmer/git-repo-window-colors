@@ -43,6 +43,7 @@ export interface SectionMappings {
 export interface AdvancedProfile {
     palette: Palette;
     mappings: SectionMappings;
+    virtual?: boolean; // True for temporary profiles created for simple color rules
 }
 
 export type AdvancedProfileMap = {

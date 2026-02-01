@@ -235,7 +235,11 @@ function createRepoTempProfile(repoColor: Color): AdvancedProfile {
             mappings['statusBar.background'] = doColorEditorTabs ? 'tabInactiveBg' : 'statusBarBg';
         }
 
-        const profile: AdvancedProfile = { palette, mappings };
+        const profile: AdvancedProfile = {
+            palette,
+            mappings,
+            virtual: true, // Mark as virtual - created for simple color rules
+        };
 
         // Cache it
         simpleModeProfileCache.set(cacheKey, profile);
@@ -269,6 +273,7 @@ function createRepoTempProfile(repoColor: Color): AdvancedProfile {
                 'titleBar.activeBackground': 'primaryActiveBg',
                 'titleBar.activeForeground': 'primaryActiveFg',
             },
+            virtual: true, // Mark fallback profile as virtual
         };
     }
 }
@@ -314,7 +319,11 @@ function createBranchTempProfile(branchColor: Color): AdvancedProfile {
             'activityBar.foreground': 'activityBarFg',
         };
 
-        const profile: AdvancedProfile = { palette, mappings };
+        const profile: AdvancedProfile = {
+            palette,
+            mappings,
+            virtual: true, // Mark as virtual - created for simple color rules
+        };
 
         // Cache it
         simpleModeProfileCache.set(cacheKey, profile);
@@ -348,6 +357,7 @@ function createBranchTempProfile(branchColor: Color): AdvancedProfile {
                 'activityBar.background': 'primaryActiveBg',
                 'activityBar.foreground': 'primaryActiveFg',
             },
+            virtual: true, // Mark fallback profile as virtual
         };
     }
 }

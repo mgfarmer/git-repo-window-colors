@@ -1721,20 +1721,57 @@ function renderOtherSettings(settings: any) {
     const container = document.getElementById('otherSettingsContent');
     if (!container) return;
 
+    // Check if the selected repo rule is using a non-virtual profile
+    const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+
+    // Only disable controls if using an actual user-defined profile (not a virtual one)
+    // Virtual profiles are temporary profiles created for simple color rules
+    let isProfileRule = false;
+    if (profilesEnabled && selectedRule?.profileName) {
+        const profile = currentConfig?.advancedProfiles?.[selectedRule.profileName];
+        isProfileRule = profile && !profile.virtual;
+    } else if (profilesEnabled && selectedRule?.primaryColor) {
+        const profile = currentConfig?.advancedProfiles?.[selectedRule.primaryColor];
+        isProfileRule = profile && !profile.virtual;
+    }
+
+    const disabledAttr = isProfileRule ? 'disabled' : '';
+    const disabledClass = isProfileRule ? 'disabled' : '';
+    const profileNote = isProfileRule ? ' <strong>The currently selected rule is using a profile.</strong>' : '';
+
+    console.log(
+        '[renderOtherSettings] selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+        'selectedRule:',
+        selectedRule,
+        'profilesEnabled:',
+        profilesEnabled,
+        'isProfileRule:',
+        isProfileRule,
+        'primaryColor:',
+        selectedRule?.primaryColor,
+        'profileName:',
+        selectedRule?.profileName,
+        'advancedProfiles:',
+        Object.keys(currentConfig?.advancedProfiles || {}),
+    );
+
     container.innerHTML = `
         <div class="settings-sections">
             <div class="settings-section">
                 <h3>Color Options</h3>
                 <div class="section-help" style="margin-bottom: 10px;">
-                    <strong>Note:</strong> These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration.
+                    <strong>Note:</strong> These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration.${profileNote}
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div class="settings-grid">
-                        <div class="setting-item tooltip">
+                        <div class="setting-item tooltip ${disabledClass}">
                             <label>
                                 <input type="checkbox" 
                                        id="color-status-bar"
                                        ${settings.colorStatusBar ? 'checked' : ''}
+                                       ${disabledAttr}
                                        data-action="updateOtherSetting('colorStatusBar', this.checked)">
                                 Color Status Bar
                             </label>
@@ -1743,11 +1780,12 @@ function renderOtherSettings(settings: any) {
                                 This give the repository color more prominence.
                             </span>
                         </div>
-                        <div class="setting-item tooltip">
+                        <div class="setting-item tooltip ${disabledClass}">
                             <label>
                                 <input type="checkbox" 
                                        id="color-editor-tabs"
                                        ${settings.colorEditorTabs ? 'checked' : ''}
+                                       ${disabledAttr}
                                        data-action="updateOtherSetting('colorEditorTabs', this.checked)">
                                 Color Editor Tabs
                             </label>
@@ -1755,11 +1793,12 @@ function renderOtherSettings(settings: any) {
                                 Apply repository colors to editor tabs. This give the repository color more prominence.
                             </span>
                         </div>
-                        <div class="setting-item tooltip">
+                        <div class="setting-item tooltip ${disabledClass}">
                             <label>
                                 <input type="checkbox" 
                                        id="color-inactive-titlebar"
                                        ${settings.colorInactiveTitlebar ? 'checked' : ''}
+                                       ${disabledAttr}
                                        data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
                                 Color Inactive Title Bar
                             </label>
@@ -1770,7 +1809,7 @@ function renderOtherSettings(settings: any) {
                         </div>
                     </div>
                     <div class="settings-grid">
-                        <div class="setting-item range-slider tooltip">
+                        <div class="setting-item range-slider tooltip ${disabledClass}">
                             <label for="activity-bar-knob">Color Knob:</label>
                             <div class="range-controls">
                                 <input type="range" 
@@ -1778,6 +1817,7 @@ function renderOtherSettings(settings: any) {
                                        min="-10" 
                                        max="10" 
                                        value="${settings.activityBarColorKnob || 0}"
+                                       ${disabledAttr}
                                        data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
                                        aria-label="Color adjustment from -10 to +10">
                                 <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
@@ -2345,6 +2385,8 @@ function updateBranchRule(index: number, field: string, value: string) {
 function selectRepoRule(index: number) {
     if (!currentConfig?.repoRules?.[index]) return;
 
+    console.log('[selectRepoRule] Selecting repo rule index:', index, 'rule:', currentConfig.repoRules[index]);
+
     selectedRepoRuleIndex = index;
 
     // Reset branch rule selection when switching repos so it reinitializes
@@ -2354,12 +2396,15 @@ function selectRepoRule(index: number) {
     if (previewMode) {
         vscode.postMessage({
             command: 'previewRepoRule',
-            data: { index },
+            data: { index, previewEnabled: true },
         });
     }
 
     // Re-render repo rules to update selected state and preview styling
     renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+
+    // Re-render other settings to update disabled state of color options
+    renderOtherSettings(currentConfig.otherSettings);
 
     // Render branch rules for the selected repo
     renderBranchRulesForSelectedRepo();
@@ -2617,6 +2662,19 @@ function copyBranchRulesFrom(sourceType: 'global' | 'repo', sourceIndex: number)
 function updateColorRule(ruleType: string, index: number, field: string, value: string) {
     if (!currentConfig) return;
 
+    console.log(
+        '[updateColorRule] ruleType:',
+        ruleType,
+        'index:',
+        index,
+        'field:',
+        field,
+        'value:',
+        value,
+        'selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+    );
+
     if (ruleType === 'repo') {
         const rules = currentConfig.repoRules;
         if (!rules?.[index]) return;
@@ -2674,6 +2732,11 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 
     // Update color swatch if present
     updateColorSwatch(ruleType, index, field, value);
+
+    // If we updated a repo rule's primary color, re-render other settings to update disabled state
+    if (ruleType === 'repo' && field === 'primaryColor' && index === selectedRepoRuleIndex) {
+        renderOtherSettings(currentConfig.otherSettings);
+    }
 
     debounceValidateAndSend();
 }
@@ -3256,6 +3319,24 @@ function setupRepoRuleRowEvents(row: HTMLTableRowElement, index: number) {
             });
         });
     }
+
+    // Set up click events for rule and color controls to select the rule
+    const selectableControls = row.querySelectorAll('input[type="text"], input[type="color"], select');
+    selectableControls.forEach((control) => {
+        control.addEventListener('click', (e) => {
+            // Don't interfere with the control's normal function, just also select the rule
+            if (selectedRepoRuleIndex !== index) {
+                selectRepoRule(index);
+            }
+        });
+
+        // Also handle focus events (keyboard navigation)
+        control.addEventListener('focus', (e) => {
+            if (selectedRepoRuleIndex !== index) {
+                selectRepoRule(index);
+            }
+        });
+    });
 }
 
 function setupBranchRuleRowEvents(row: HTMLTableRowElement, index: number) {
@@ -3271,6 +3352,24 @@ function setupBranchRuleRowEvents(row: HTMLTableRowElement, index: number) {
             });
         });
     }
+
+    // Set up click events for rule and color controls to select the rule
+    const selectableControls = row.querySelectorAll('input[type="text"], input[type="color"], select');
+    selectableControls.forEach((control) => {
+        control.addEventListener('click', (e) => {
+            // Don't interfere with the control's normal function, just also select the rule
+            if (selectedBranchRuleIndex !== index) {
+                selectBranchRule(index);
+            }
+        });
+
+        // Also handle focus events (keyboard navigation)
+        control.addEventListener('focus', (e) => {
+            if (selectedBranchRuleIndex !== index) {
+                selectBranchRule(index);
+            }
+        });
+    });
 }
 
 // Validation functions

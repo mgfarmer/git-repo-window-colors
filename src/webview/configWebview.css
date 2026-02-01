@@ -437,6 +437,18 @@ h2 {
     opacity: 0.6;
     pointer-events: none;
 }
+
+/* Disabled setting items (when profile rules are selected) */
+.setting-item.disabled {
+    opacity: 0.5;
+}
+.setting-item.disabled label,
+.setting-item.disabled input,
+.setting-item.disabled .range-controls,
+.setting-item.disabled .value-display {
+    opacity: 0.5;
+}
+
 .eye-btn {
     background: var(--vscode-editor-background);
     color: var(--vscode-foreground);
