@@ -40,6 +40,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _configurationListener: vscode.Disposable | undefined;
     private _previewRepoRuleIndex: number | null = null;
     private _previewBranchRuleContext: { index: number; isGlobal: boolean; repoIndex?: number } | null = null;
+    private _previewModeEnabled: boolean = false;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
@@ -68,6 +69,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     public getPreviewBranchRuleContext(): { index: number; isGlobal: boolean; repoIndex?: number } | null {
         return this._previewBranchRuleContext;
+    }
+
+    public isPreviewModeEnabled(): boolean {
+        return this._previewModeEnabled;
     }
 
     public showAndAddRepoRule(extensionUri: vscode.Uri, repoQualifier: string, primaryColor: string = ''): void {
@@ -165,6 +170,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'previewRepoRule':
                 this._previewRepoRuleIndex = (message.data as any).index;
+                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
                 // Refresh config to get updated colorCustomizations after preview is applied
@@ -176,12 +182,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     isGlobal: (message.data as any).isGlobal,
                     repoIndex: (message.data as any).repoIndex,
                 };
+                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
                 // Refresh config to get updated colorCustomizations after preview is applied
                 this._sendConfigurationToWebview();
                 break;
             case 'clearPreview':
+                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
                 // Pass preview mode as false to use matching rules
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview', false);
                 // Refresh config to get updated colorCustomizations after preview is cleared

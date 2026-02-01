@@ -2210,18 +2210,25 @@ function handlePreviewModeChange() {
                     index: selectedBranchRuleIndex,
                     isGlobal: useGlobal,
                     repoIndex: useGlobal ? undefined : selectedRepoRuleIndex,
+                    previewEnabled: true,
                 },
             });
         } else if (selectedRepoRuleIndex !== null && selectedRepoRuleIndex !== -1) {
             vscode.postMessage({
                 command: 'previewRepoRule',
-                data: { index: selectedRepoRuleIndex },
+                data: {
+                    index: selectedRepoRuleIndex,
+                    previewEnabled: true,
+                },
             });
         }
     } else {
-        // If disabling preview, clear it
+        // If disabling preview, send clear message with preview disabled flag
         vscode.postMessage({
             command: 'clearPreview',
+            data: {
+                previewEnabled: false,
+            },
         });
     }
 

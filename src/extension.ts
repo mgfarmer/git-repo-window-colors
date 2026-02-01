@@ -96,15 +96,14 @@ function createRepoTempProfile(repoColor: Color): AdvancedProfile {
         const theme = window.activeColorTheme.kind;
         const isDark = theme === ColorThemeKind.Dark;
 
-        // Read settings
-        const settings = workspace.getConfiguration('gitRepoWindowColors');
+        // Read settings from windowColors namespace
+        const settings = workspace.getConfiguration('windowColors');
         const doColorInactiveTitlebar = settings.get<boolean>('colorInactiveTitlebar', true);
         const doColorEditorTabs = settings.get<boolean>('colorEditorTabs', true);
         const doColorStatusBar = settings.get<boolean>('colorStatusBar', true);
 
-        // Color knob is in windowColors namespace
-        const windowSettings = workspace.getConfiguration('windowColors');
-        let activityBarColorKnob = windowSettings.get<number>('activityBarColorKnob', 0);
+        // Color knob
+        let activityBarColorKnob = settings.get<number>('activityBarColorKnob', 0);
         if (activityBarColorKnob === undefined) {
             activityBarColorKnob = 0;
         }
@@ -1085,7 +1084,9 @@ export async function activate(context: ExtensionContext) {
                 ) {
                     clearSimpleModeProfileCache();
                 }
-                doit('settings change');
+                // Check if we should use preview mode - use the tracked checkbox state
+                const usePreview = configProvider?.isPreviewModeEnabled() ?? false;
+                doit('settings change', usePreview);
                 updateStatusBarItem(); // Update status bar when configuration changes
             }
         }),
