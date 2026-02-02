@@ -2,10 +2,15 @@
 
 > **⚠️ PRERELEASE WARNING**  
 >
-> **Prerelease versions of this extension may be unstable and may iterate rapidly.**  
+> **If you are considering switching to a prerelease version of this extension, please be aware of this:**
+>
+> **Prerelease versions of this extension may be unstable and buggy and may iterate rapidly.**
+> 
 > **It is recommended that you do NOT use the prerelease version unless you are actively engaged with the extension developer for testing purposes.**  
 >
 > **Configuration settings may NOT be preserved when switching to or between prerelease versions.  We will make our best effort to preserve configurations when upgrading to new released versions.**
+>
+> **Please export your current configuration prior to switching.**
 
 **Never lose track of which repository you're working in again.**
 
