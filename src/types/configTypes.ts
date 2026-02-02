@@ -14,10 +14,8 @@ export interface RepoConfigRule {
     profileName?: string;
     /** Whether this rule is enabled (default: true) */
     enabled?: boolean;
-    /** Local branch rules for this repository */
-    branchRules?: BranchConfigRule[];
-    /** Whether to use global branch rules (default: true) */
-    useGlobalBranchRules?: boolean;
+    /** Name of branch table to use from sharedBranchTables */
+    branchTableName?: string;
 }
 
 /**
@@ -31,6 +29,19 @@ export interface BranchConfigRule {
     /** Whether this rule is enabled (default: true) */
     enabled?: boolean;
 }
+
+/**
+ * Branch table structure containing rules and metadata
+ */
+export interface BranchTable {
+    /** Array of branch rules in this table */
+    rules: BranchConfigRule[];
+}
+
+/**
+ * Collection of shared branch tables, keyed by table name
+ */
+export type SharedBranchTables = { [tableName: string]: BranchTable };
 
 /**
  * Type that can be either a legacy string format or new JSON object format for repository rules

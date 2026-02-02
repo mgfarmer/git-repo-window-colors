@@ -470,7 +470,7 @@ h2 {
 .rule-row.disabled-rule {
     opacity: 0.4;
 }
-.rule-row.disabled-rule input,
+.rule-row.disabled-rule input:not([type='radio']),
 .rule-row.disabled-rule .color-input-wrapper {
     opacity: 0.6;
     pointer-events: none;
@@ -1655,6 +1655,65 @@ button:focus {
     z-index: 1;
 }
 
+.branch-tables-panel {
+    padding: 20px;
+    position: relative;
+    z-index: 1;
+}
+
+.branch-table-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    background-color: var(--vscode-editor-inactiveSelectionBackground);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+}
+
+.branch-table-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.branch-table-name {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.branch-table-meta {
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.9em;
+}
+
+.branch-table-badge {
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.85em;
+}
+
+.branch-table-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.branch-table-actions button {
+    padding: 4px 12px;
+    font-size: 0.9em;
+}
+
+.branch-table-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 #report-tab {
     position: relative;
 }
@@ -1973,4 +2032,49 @@ button:focus {
     max-height: 400px;
     overflow-y: auto;
     overflow-x: hidden;
+}
+
+/* Branch Table Custom Dropdown */
+.branch-table-dropdown {
+    position: relative;
+}
+
+.branch-table-dropdown .dropdown-selected {
+    cursor: pointer;
+    user-select: none;
+    border-radius: 2px;
+}
+
+.branch-table-dropdown .dropdown-selected:hover {
+    background: var(--vscode-dropdown-listBackground) !important;
+}
+
+.branch-table-dropdown .dropdown-selected:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.branch-table-dropdown .dropdown-options {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border-radius: 2px;
+}
+
+.branch-table-dropdown .dropdown-option {
+    border-radius: 0;
+}
+
+.branch-table-dropdown .dropdown-option:first-child {
+    border-radius: 2px 2px 0 0;
+}
+
+.branch-table-dropdown .dropdown-option:last-child {
+    border-radius: 0 0 2px 2px;
+}
+
+.branch-table-cell {
+    min-width: 180px;
+}
+
+.branch-table-cell .icon-button {
+    margin-left: 4px;
 }

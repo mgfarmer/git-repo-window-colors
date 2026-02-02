@@ -61,6 +61,18 @@ function initTabs() {
 }
 initTabs();
 
+// Close branch table dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    // Don't close if clicking inside a branch table dropdown
+    if (!target.closest('.branch-table-dropdown')) {
+        document.querySelectorAll('.branch-table-dropdown .dropdown-options').forEach((dropdown) => {
+            (dropdown as HTMLElement).style.display = 'none';
+            (dropdown.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
+        });
+    }
+});
+
 // HTML Color Names for auto-complete
 const HTML_COLOR_NAMES = [
     'aliceblue',
@@ -896,6 +908,7 @@ function renderConfiguration(config: any) {
     renderOtherSettings(config.otherSettings);
     renderProfiles(config.advancedProfiles);
     renderWorkspaceInfo(config.workspaceInfo);
+    renderBranchTablesTab(config);
     renderColorReport(config);
 
     // Show/hide preview toast based on preview mode
@@ -985,18 +998,27 @@ function handleDocumentClick(event: Event) {
         } else if (branchMatch) {
             const index = parseInt(branchMatch[1]);
 
-            // Check if we're deleting a local branch rule or a global one
-            const isLocalRule =
-                selectedRepoRuleIndex >= 0 &&
-                currentConfig?.repoRules?.[selectedRepoRuleIndex]?.useGlobalBranchRules === false;
+            // Get the table name from the selected repo rule
+            let tableName = '__none__';
+            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+                tableName = currentConfig.repoRules[selectedRepoRuleIndex].branchTableName || '__none__';
+            }
+            console.log(
+                '[DELETE BRANCH WEBVIEW] selectedRepoRuleIndex:',
+                selectedRepoRuleIndex,
+                'tableName:',
+                tableName,
+                'index:',
+                index,
+            );
 
+            // Get the rule from the shared table
             let rule, ruleDescription;
-            if (isLocalRule) {
-                rule = currentConfig?.repoRules?.[selectedRepoRuleIndex]?.branchRules?.[index];
+            if (tableName !== '__none__' && currentConfig?.sharedBranchTables?.[tableName]?.rules?.[index]) {
+                rule = currentConfig.sharedBranchTables[tableName].rules[index];
                 ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
             } else {
-                rule = currentConfig?.branchRules?.[index];
-                ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
+                ruleDescription = `#${index + 1}`;
             }
 
             // Send delete confirmation request to backend
@@ -1007,7 +1029,7 @@ function handleDocumentClick(event: Event) {
                         ruleType: 'branch',
                         index: index,
                         ruleDescription: ruleDescription,
-                        repoIndex: isLocalRule ? selectedRepoRuleIndex : undefined,
+                        tableName: tableName,
                     },
                 },
             });
@@ -1093,6 +1115,43 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle Create Table button
+    const createTableBtn = target.closest('.create-table-button') as HTMLElement;
+    if (createTableBtn) {
+        const action = createTableBtn.getAttribute('data-action');
+        const match = action?.match(/showCreateTableDialog\((\d+)\)/);
+        if (match) {
+            const repoRuleIndex = parseInt(match[1]);
+            showCreateTableDialog(repoRuleIndex);
+        }
+        return;
+    }
+
+    // Handle Branch Tables management buttons
+    if (target.getAttribute('onclick')?.includes('viewBranchTable')) {
+        const match = target.getAttribute('onclick')?.match(/viewBranchTable\('([^']+)'\)/);
+        if (match) {
+            viewBranchTable(match[1]);
+        }
+        return;
+    }
+
+    if (target.getAttribute('onclick')?.includes('renameBranchTableFromMgmt')) {
+        const match = target.getAttribute('onclick')?.match(/renameBranchTableFromMgmt\('([^']+)'\)/);
+        if (match) {
+            renameBranchTableFromMgmt(match[1].replace(/\\'/g, "'"));
+        }
+        return;
+    }
+
+    if (target.getAttribute('onclick')?.includes('deleteBranchTableFromMgmt')) {
+        const match = target.getAttribute('onclick')?.match(/deleteBranchTableFromMgmt\('([^']+)'\)/);
+        if (match) {
+            deleteBranchTableFromMgmt(match[1].replace(/\\'/g, "'"));
+        }
+        return;
+    }
+
     // Handle preview toast reset button
     if (target.getAttribute('data-action') === 'resetToMatchingRules') {
         resetToMatchingRules();
@@ -1106,6 +1165,8 @@ function handleDocumentClick(event: Event) {
             openHelp('rules');
         } else if (activeTab?.id === 'profiles-tab') {
             openHelp('profile');
+        } else if (activeTab?.id === 'branch-tables-tab') {
+            openHelp('rules'); // Use rules help for now, can be customized later
         } else if (activeTab?.id === 'report-tab') {
             openHelp('report');
         }
@@ -1176,7 +1237,15 @@ function handleDocumentChange(event: Event) {
         return;
     }
 
-    // Handle branch mode change
+    // Handle branch table change
+    const branchTableMatch = action.match(/changeBranchTable\((\d+), this\.value\)/);
+    if (branchTableMatch) {
+        const index = parseInt(branchTableMatch[1]);
+        changeBranchTable(index, target.value);
+        return;
+    }
+
+    // Handle branch mode change (legacy - kept for backward compatibility during migration)
     const branchModeMatch = action.match(/changeBranchMode\((\d+), this\.value\)/);
     if (branchModeMatch) {
         const index = parseInt(branchModeMatch[1]);
@@ -1407,7 +1476,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
         <th scope="col">Primary Color${colorSuffix}</th>
-        <th scope="col" class="branch-mode-column">Branch Mode</th>
+        <th scope="col" class="branch-table-column">Branch Table</th>
     `;
 
     // Create body
@@ -1445,6 +1514,23 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
 
         row.innerHTML = createRepoRuleRowHTML(rule, index, rules.length);
         setupRepoRuleRowEvents(row, index);
+
+        // Insert custom branch table dropdown
+        // '__none__' = explicitly No Branch Table, missing/undefined defaults to '__none__'
+        const tableName = rule.branchTableName || '__none__';
+        console.log(
+            '[createDropdown] Rule',
+            index,
+            'branchTableName:',
+            rule.branchTableName,
+            'resolved tableName:',
+            tableName,
+        );
+        const cell = row.querySelector(`#branch-table-cell-${index}`);
+        if (cell) {
+            const dropdownContainer = createBranchTableDropdown(tableName, index);
+            cell.appendChild(dropdownContainer);
+        }
     });
 
     container.innerHTML = '';
@@ -1468,9 +1554,337 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     }
 }
 
+function createBranchTableDropdown(selectedTableName: string | null, repoRuleIndex: number): HTMLElement {
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.gap = '4px';
+    container.style.alignItems = 'center';
+    container.style.flex = '1';
+
+    if (!currentConfig?.sharedBranchTables) {
+        // Fallback to simple text
+        container.textContent = selectedTableName || 'No Branch Table';
+        return container;
+    }
+
+    const tables = currentConfig.sharedBranchTables;
+    const repoRules = currentConfig.repoRules || [];
+
+    // Calculate usage counts for each table
+    const usageCounts: { [tableName: string]: number } = {};
+    for (const tableName in tables) {
+        usageCounts[tableName] = 0;
+    }
+    for (const rule of repoRules) {
+        const tableName = rule.branchTableName;
+        // Skip undefined (No Branch Table)
+        if (tableName && usageCounts[tableName] !== undefined) {
+            usageCounts[tableName]++;
+        }
+    }
+
+    // Create custom dropdown
+    const dropdown = document.createElement('div');
+    dropdown.className = 'branch-table-dropdown';
+    dropdown.setAttribute('data-repo-index', String(repoRuleIndex));
+    dropdown.setAttribute('data-value', selectedTableName);
+    dropdown.setAttribute('tabindex', '0');
+    dropdown.setAttribute('role', 'combobox');
+    dropdown.setAttribute('aria-expanded', 'false');
+    dropdown.style.flex = '1';
+    dropdown.style.position = 'relative';
+    dropdown.style.cursor = 'pointer';
+    dropdown.style.minWidth = '120px';
+
+    // Selected value display
+    const selectedDisplay = document.createElement('div');
+    selectedDisplay.className = 'dropdown-selected';
+    selectedDisplay.style.background = 'var(--vscode-dropdown-background)';
+    selectedDisplay.style.color = 'var(--vscode-dropdown-foreground)';
+    selectedDisplay.style.border = '1px solid var(--vscode-dropdown-border)';
+    selectedDisplay.style.padding = '4px 8px';
+    selectedDisplay.style.fontSize = '12px';
+    selectedDisplay.style.display = 'flex';
+    selectedDisplay.style.alignItems = 'center';
+    selectedDisplay.style.gap = '6px';
+    selectedDisplay.style.position = 'relative';
+
+    // Arrow indicator
+    const arrow = document.createElement('span');
+    arrow.className = 'codicon codicon-chevron-down';
+    arrow.style.position = 'absolute';
+    arrow.style.right = '6px';
+    arrow.style.fontSize = '12px';
+    arrow.style.pointerEvents = 'none';
+    selectedDisplay.appendChild(arrow);
+
+    // Dropdown options container
+    const optionsContainer = document.createElement('div');
+    optionsContainer.className = 'dropdown-options';
+    optionsContainer.style.display = 'none';
+    optionsContainer.style.position = 'absolute';
+    optionsContainer.style.top = '100%';
+    optionsContainer.style.left = '0';
+    optionsContainer.style.right = '0';
+    optionsContainer.style.background = 'var(--vscode-dropdown-background)';
+    optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
+    optionsContainer.style.maxHeight = '250px';
+    optionsContainer.style.overflowY = 'auto';
+    optionsContainer.style.zIndex = '10000';
+    optionsContainer.style.marginTop = '2px';
+
+    // Build sorted list of table names
+    const tableNames = Object.keys(tables).sort((a, b) => {
+        if (a === 'Default Rules') return -1;
+        if (b === 'Default Rules') return 1;
+        return a.localeCompare(b);
+    });
+
+    // Add "No Branch Table" option first
+    const noBranchOption = document.createElement('div');
+    noBranchOption.className = 'dropdown-option';
+    noBranchOption.setAttribute('data-value', '__none__');
+    noBranchOption.style.padding = '6px 8px';
+    noBranchOption.style.cursor = 'pointer';
+    noBranchOption.style.display = 'flex';
+    noBranchOption.style.alignItems = 'center';
+    noBranchOption.style.gap = '8px';
+    noBranchOption.style.fontSize = '12px';
+
+    if (selectedTableName === '__none__') {
+        noBranchOption.style.background = 'var(--vscode-list-activeSelectionBackground)';
+        noBranchOption.style.color = 'var(--vscode-list-activeSelectionForeground)';
+    }
+
+    const noBranchIcon = document.createElement('span');
+    noBranchIcon.className = 'codicon codicon-circle-slash';
+    noBranchOption.appendChild(noBranchIcon);
+
+    const noBranchText = document.createElement('span');
+    noBranchText.textContent = 'No Branch Table';
+    noBranchOption.appendChild(noBranchText);
+
+    // Hover effect
+    noBranchOption.addEventListener('mouseenter', () => {
+        if (selectedTableName !== '__none__') {
+            noBranchOption.style.background = 'var(--vscode-list-hoverBackground)';
+        }
+    });
+    noBranchOption.addEventListener('mouseleave', () => {
+        if (selectedTableName !== '__none__') {
+            noBranchOption.style.background = '';
+        }
+    });
+
+    // Click handler
+    noBranchOption.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.setAttribute('data-value', '__none__');
+        updateSelectedDisplay('__none__');
+        optionsContainer.style.display = 'none';
+        dropdown.setAttribute('aria-expanded', 'false');
+
+        // Trigger the branch table change to __none__
+        changeBranchTable(repoRuleIndex, '__none__');
+    });
+
+    optionsContainer.appendChild(noBranchOption);
+
+    // Add separator after No Branch Table
+    const separatorTop = document.createElement('div');
+    separatorTop.style.borderTop = '1px solid var(--vscode-menu-separatorBackground)';
+    separatorTop.style.margin = '4px 0';
+    optionsContainer.appendChild(separatorTop);
+
+    // Update selected display
+    const updateSelectedDisplay = (tableName: string) => {
+        const icon = document.createElement('span');
+
+        if (tableName === '__none__') {
+            icon.className = 'codicon codicon-circle-slash';
+            const text = document.createElement('span');
+            text.textContent = 'No Branch Table';
+
+            selectedDisplay.innerHTML = '';
+            selectedDisplay.appendChild(icon);
+            selectedDisplay.appendChild(text);
+            selectedDisplay.appendChild(arrow);
+        } else {
+            icon.className = 'codicon codicon-git-branch';
+            const text = document.createElement('span');
+            const count = usageCounts[tableName] || 0;
+            const badge = count > 0 ? ` [${count}]` : '';
+            text.textContent = tableName + badge;
+
+            selectedDisplay.innerHTML = '';
+            selectedDisplay.appendChild(icon);
+            selectedDisplay.appendChild(text);
+            selectedDisplay.appendChild(arrow);
+        }
+    };
+
+    // Create option elements
+    tableNames.forEach((tableName) => {
+        const isSelected = tableName === selectedTableName;
+        const usageCount = usageCounts[tableName] || 0;
+
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'dropdown-option';
+        optionDiv.setAttribute('data-value', tableName);
+        optionDiv.style.padding = '6px 8px';
+        optionDiv.style.cursor = 'pointer';
+        optionDiv.style.display = 'flex';
+        optionDiv.style.alignItems = 'center';
+        optionDiv.style.gap = '8px';
+        optionDiv.style.fontSize = '12px';
+
+        if (isSelected) {
+            optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
+            optionDiv.style.color = 'var(--vscode-list-activeSelectionForeground)';
+        }
+
+        // Add icon
+        const icon = document.createElement('span');
+        icon.className = 'codicon codicon-git-branch';
+        optionDiv.appendChild(icon);
+
+        // Add text
+        const text = document.createElement('span');
+        text.textContent = tableName;
+        optionDiv.appendChild(text);
+
+        // Add usage badge if any
+        if (usageCount > 0) {
+            const badge = document.createElement('span');
+            badge.textContent = `[${usageCount}]`;
+            badge.style.color = 'var(--vscode-descriptionForeground)';
+            badge.style.fontSize = '11px';
+            optionDiv.appendChild(badge);
+        }
+
+        // Hover effect
+        optionDiv.addEventListener('mouseenter', () => {
+            if (!isSelected) {
+                optionDiv.style.background = 'var(--vscode-list-hoverBackground)';
+            }
+        });
+        optionDiv.addEventListener('mouseleave', () => {
+            if (!isSelected) {
+                optionDiv.style.background = '';
+            }
+        });
+
+        // Click handler
+        optionDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.setAttribute('data-value', tableName);
+            updateSelectedDisplay(tableName);
+            optionsContainer.style.display = 'none';
+            dropdown.setAttribute('aria-expanded', 'false');
+
+            // Trigger the branch table change
+            changeBranchTable(repoRuleIndex, tableName);
+        });
+
+        optionsContainer.appendChild(optionDiv);
+    });
+
+    // Add separator before "Create New Table..."
+    const separator = document.createElement('div');
+    separator.style.borderTop = '1px solid var(--vscode-menu-separatorBackground)';
+    separator.style.margin = '4px 0';
+    optionsContainer.appendChild(separator);
+
+    // Add "Create New Table..." option
+    const createOption = document.createElement('div');
+    createOption.className = 'dropdown-option';
+    createOption.style.padding = '6px 8px';
+    createOption.style.cursor = 'pointer';
+    createOption.style.display = 'flex';
+    createOption.style.alignItems = 'center';
+    createOption.style.gap = '8px';
+    createOption.style.fontSize = '12px';
+    createOption.style.fontStyle = 'italic';
+    createOption.style.color = 'var(--vscode-textLink-foreground)';
+
+    const createIcon = document.createElement('span');
+    createIcon.className = 'codicon codicon-git-branch-staged-changes';
+    createOption.appendChild(createIcon);
+
+    const createText = document.createElement('span');
+    createText.textContent = 'Create New Table...';
+    createOption.appendChild(createText);
+
+    // Hover effect for create option
+    createOption.addEventListener('mouseenter', () => {
+        createOption.style.background = 'var(--vscode-list-hoverBackground)';
+    });
+    createOption.addEventListener('mouseleave', () => {
+        createOption.style.background = '';
+    });
+
+    // Click handler for create option
+    createOption.addEventListener('click', (e) => {
+        e.stopPropagation();
+        optionsContainer.style.display = 'none';
+        dropdown.setAttribute('aria-expanded', 'false');
+        showCreateTableDialog(repoRuleIndex);
+    });
+
+    optionsContainer.appendChild(createOption);
+
+    // Toggle dropdown on click
+    selectedDisplay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = optionsContainer.style.display === 'block';
+
+        // Close all other dropdowns first
+        document.querySelectorAll('.branch-table-dropdown .dropdown-options').forEach((other) => {
+            if (other !== optionsContainer) {
+                (other as HTMLElement).style.display = 'none';
+                (other.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        if (!isOpen) {
+            // Before opening, check if we need to flip the dropdown upward
+            const dropdownRect = dropdown.getBoundingClientRect();
+            const viewportHeight = window.innerHeight;
+            const spaceBelow = viewportHeight - dropdownRect.bottom;
+            const spaceAbove = dropdownRect.top;
+            const dropdownHeight = 250; // maxHeight of options
+
+            // If not enough space below but enough above, flip it upward
+            if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+                optionsContainer.style.top = 'auto';
+                optionsContainer.style.bottom = '100%';
+                optionsContainer.style.marginTop = '0';
+                optionsContainer.style.marginBottom = '2px';
+            } else {
+                // Normal downward position
+                optionsContainer.style.top = '100%';
+                optionsContainer.style.bottom = 'auto';
+                optionsContainer.style.marginTop = '2px';
+                optionsContainer.style.marginBottom = '0';
+            }
+        }
+
+        optionsContainer.style.display = isOpen ? 'none' : 'block';
+        dropdown.setAttribute('aria-expanded', String(!isOpen));
+    });
+
+    // Initialize selected display
+    updateSelectedDisplay(selectedTableName);
+
+    dropdown.appendChild(selectedDisplay);
+    dropdown.appendChild(optionsContainer);
+    container.appendChild(dropdown);
+
+    return container;
+}
+
 function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): string {
     const isSelected = selectedRepoRuleIndex === index;
-    const useGlobal = rule.useGlobalBranchRules !== false; // Default to true
 
     return `
         <td class="select-cell">
@@ -1497,27 +1911,25 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
         <td class="color-cell">
             ${createColorInputHTML(rule.primaryColor || '', 'repo', index, 'primaryColor')}
         </td>
-        <td class="branch-mode-cell">
-            <select class="branch-mode-select" 
-                    id="branch-mode-${index}"
-                    data-action="changeBranchMode(${index}, this.value)"
-                    aria-label="Branch rule mode for ${escapeHtml(rule.repoQualifier || 'rule ' + (index + 1))}">
-                <option value="true" ${useGlobal ? 'selected' : ''}>Global</option>
-                <option value="false" ${!useGlobal ? 'selected' : ''}>Local</option>
-            </select>
+        <td class="branch-table-cell" id="branch-table-cell-${index}">
+            <!-- Custom dropdown will be inserted here -->
         </td>
     `;
 }
 
-function renderBranchRules(rules: any[], matchingIndex?: number, isGlobalMode: boolean = true, repoRuleIndex?: number) {
+function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?: number) {
     const container = document.getElementById('branchRulesContent');
     if (!container) return;
 
     if (!rules || rules.length === 0) {
         const selectedRule = repoRuleIndex !== undefined ? currentConfig?.repoRules?.[repoRuleIndex] : null;
-        const emptyMessage = !isGlobalMode
-            ? `<div class="no-rules">No local branch rules defined for "${escapeHtml(selectedRule?.repoQualifier || 'this repository')}". Click "Add" to create a rule or use "Copy From..." to import rules.</div>`
-            : '<div class="no-rules">No branch rules defined. Click "Add" to create your first rule.</div>';
+        const tableName = selectedRule?.branchTableName || '__none__';
+        let emptyMessage: string;
+        if (tableName === '__none__') {
+            emptyMessage = `<div class="no-rules">No branch table selected for this repository. Select a table from the dropdown to add branch rules.</div>`;
+        } else {
+            emptyMessage = `<div class="no-rules">No branch rules defined in table "${escapeHtml(tableName)}". Click "Add" to create a rule or use "Copy From..." to import rules.</div>`;
+        }
         container.innerHTML = emptyMessage;
         return;
     }
@@ -1545,8 +1957,9 @@ function renderBranchRules(rules: any[], matchingIndex?: number, isGlobalMode: b
         const row = tbody.insertRow();
         row.className = 'rule-row';
 
-        // Add error class if this rule has a validation error (for global branch rules)
-        if (isGlobalMode && validationErrors.branchRules[index]) {
+        // Note: Validation errors are currently stored per global branchRules array
+        // This may need updating for table-based validation in the future
+        if (validationErrors.branchRules[index]) {
             row.classList.add('has-error');
             row.title = `Error: ${validationErrors.branchRules[index]}`;
         }
@@ -1938,6 +2351,79 @@ function renderWorkspaceInfo(workspaceInfo: any) {
     // For now, it's handled by the extension itself
 }
 
+function renderBranchTablesTab(config: any) {
+    const container = document.getElementById('branch-tables-content');
+    if (!container) {
+        console.log('[DEBUG] branch-tables-content container not found');
+        return;
+    }
+
+    const sharedTables = config.sharedBranchTables || { 'Default Rules': { rules: [] } };
+    const repoRules = config.repoRules || [];
+
+    // Calculate usage counts for each table
+    const usageCounts: { [tableName: string]: number } = {};
+    for (const tableName in sharedTables) {
+        usageCounts[tableName] = 0;
+    }
+    for (const repo of repoRules) {
+        const tableName = repo.branchTableName;
+        // Skip undefined (No Branch Table)
+        if (tableName && usageCounts[tableName] !== undefined) {
+            usageCounts[tableName]++;
+        }
+    }
+
+    let html = '<div class="branch-tables-list">';
+
+    const tableNames = Object.keys(sharedTables).sort((a, b) => {
+        if (a === 'Default Rules') return -1;
+        if (b === 'Default Rules') return 1;
+        return a.localeCompare(b);
+    });
+
+    for (const tableName of tableNames) {
+        const table = sharedTables[tableName];
+        const usageCount = usageCounts[tableName] || 0;
+        const ruleCount = table.rules ? table.rules.length : 0;
+
+        html += `
+            <div class="branch-table-item">
+                <div class="branch-table-info">
+                    <div class="branch-table-name">
+                        <span class="codicon codicon-git-branch"></span>
+                        <span>${escapeHtml(tableName)}</span>
+                    </div>
+                    <div class="branch-table-meta">
+                        ${ruleCount} rule${ruleCount !== 1 ? 's' : ''} • Used by ${usageCount} repo${usageCount !== 1 ? 's' : ''}
+                    </div>
+                </div>
+                <div class="branch-table-actions">
+                    <button type="button" 
+                            onclick="viewBranchTable('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
+                            title="View and edit rules in this table">
+                        View Rules
+                    </button>
+                    <button type="button" 
+                            onclick="renameBranchTableFromMgmt('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
+                            title="Rename this table">
+                        Rename
+                    </button>
+                    <button type="button" 
+                            onclick="deleteBranchTableFromMgmt('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
+                            ${usageCount > 0 ? 'disabled' : ''}
+                            title="${usageCount > 0 ? 'Table is in use by ' + usageCount + ' repo(s)' : 'Delete this table'}">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
 function renderColorReport(config: any) {
     const container = document.getElementById('reportContent');
     if (!container) {
@@ -2255,7 +2741,7 @@ function handlePreviewModeChange() {
         // Prioritize branch rule if selected, otherwise use repo rule
         if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
             const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
-            const useGlobal = selectedRule?.useGlobalBranchRules !== false;
+            const useGlobal = !selectedRule?.branchRules;
 
             vscode.postMessage({
                 command: 'previewBranchRule',
@@ -2347,24 +2833,25 @@ function addBranchRule() {
         enabled: true,
     };
 
-    // Determine if we're in global or local mode
+    // Determine which table to add to
+    let tableName = '__none__'; // Default
     if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
         const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-        const useGlobal = selectedRule.useGlobalBranchRules !== false;
+        tableName = selectedRule.branchTableName || '__none__';
+    }
 
-        if (useGlobal) {
-            // Add to global branch rules
-            currentConfig.branchRules.push(newRule);
-        } else {
-            // Add to local branch rules for this repo
-            if (!selectedRule.branchRules) {
-                selectedRule.branchRules = [];
-            }
-            selectedRule.branchRules.push(newRule);
-        }
+    // Don't allow adding if no table is selected
+    if (tableName === '__none__') {
+        alert('Cannot add branch rule: No branch table selected for this repository. Please select a table first.');
+        return;
+    }
+
+    // Add to the table
+    if (currentConfig.sharedBranchTables && currentConfig.sharedBranchTables[tableName]) {
+        currentConfig.sharedBranchTables[tableName].rules.push(newRule);
     } else {
-        // Fallback to global
-        currentConfig.branchRules.push(newRule);
+        alert('Selected table does not exist. Please select an existing table.');
+        return;
     }
 
     sendConfiguration();
@@ -2378,24 +2865,21 @@ function updateRepoRule(index: number, field: string, value: string) {
 }
 
 function updateBranchRule(index: number, field: string, value: string) {
-    // Determine if we're updating global or local branch rules
+    // Determine which table to update
+    let tableName = '__none__'; // Default
     if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
         const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-        const useGlobal = selectedRule.useGlobalBranchRules !== false;
+        tableName = selectedRule.branchTableName || '__none__';
+    }
 
-        if (useGlobal) {
-            // Update global branch rules
-            if (!currentConfig?.branchRules?.[index]) return;
-            currentConfig.branchRules[index][field] = value;
-        } else {
-            // Update local branch rules
-            if (!selectedRule.branchRules?.[index]) return;
-            selectedRule.branchRules[index][field] = value;
-        }
-    } else {
-        // Fallback to global
-        if (!currentConfig?.branchRules?.[index]) return;
-        currentConfig.branchRules[index][field] = value;
+    // Can't update if no table selected
+    if (tableName === '__none__') {
+        return;
+    }
+
+    // Update the rule in the table
+    if (currentConfig?.sharedBranchTables?.[tableName]?.rules?.[index]) {
+        currentConfig.sharedBranchTables[tableName].rules[index][field] = value;
     }
 
     debounceValidateAndSend();
@@ -2438,10 +2922,19 @@ function selectRepoRule(index: number) {
 }
 
 function selectBranchRule(index: number) {
-    // Determine if we're selecting from global or local branch rules
-    const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
-    const useGlobal = selectedRule?.useGlobalBranchRules !== false;
-    const branchRules = useGlobal ? currentConfig?.branchRules : selectedRule?.branchRules || [];
+    // Determine which table we're selecting from
+    let tableName = '__none__'; // Default
+    if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        tableName = selectedRule.branchTableName || '__none__';
+    }
+
+    // Can't select if no table selected
+    if (tableName === '__none__') {
+        return;
+    }
+
+    const branchRules = currentConfig?.sharedBranchTables?.[tableName]?.rules || [];
 
     if (!branchRules?.[index]) return;
 
@@ -2456,8 +2949,7 @@ function selectBranchRule(index: number) {
             command: 'previewBranchRule',
             data: {
                 index,
-                isGlobal: useGlobal,
-                repoIndex: useGlobal ? undefined : selectedRepoRuleIndex,
+                tableName,
             },
         });
     }
@@ -2468,8 +2960,6 @@ function selectBranchRule(index: number) {
 
 function changeBranchMode(index: number, useGlobal: boolean) {
     if (!currentConfig?.repoRules?.[index]) return;
-
-    currentConfig.repoRules[index].useGlobalBranchRules = useGlobal;
 
     // Initialize local branch rules array if switching to local mode
     if (!useGlobal && !currentConfig.repoRules[index].branchRules) {
@@ -2492,27 +2982,189 @@ function changeBranchMode(index: number, useGlobal: boolean) {
     sendConfiguration();
 }
 
+function changeBranchTable(index: number, tableName: string) {
+    if (!currentConfig?.repoRules?.[index]) return;
+
+    console.log(
+        '[changeBranchTable] BEFORE - index:',
+        index,
+        'old value:',
+        currentConfig.repoRules[index].branchTableName,
+        'new value:',
+        tableName,
+    );
+
+    // Store '__none__' for No Branch Table, table name string for specific table
+    currentConfig.repoRules[index].branchTableName = tableName;
+
+    console.log('[changeBranchTable] AFTER - stored value:', currentConfig.repoRules[index].branchTableName);
+
+    // Reset branch rule selection when changing tables so it reinitializes
+    if (selectedRepoRuleIndex === index) {
+        selectedBranchRuleIndex = -1;
+
+        // Re-render branch rules for this repo only
+        renderBranchRulesForSelectedRepo();
+    }
+
+    // Use debounced send like other update functions to prevent race conditions
+    debounceValidateAndSend();
+}
+
+function showCreateTableDialog(repoRuleIndex: number) {
+    const tableName = prompt('Enter a name for the new branch table:');
+
+    if (!tableName) {
+        return; // User cancelled
+    }
+
+    // Validate table name
+    const trimmedName = tableName.trim();
+    if (!trimmedName) {
+        alert('Table name cannot be empty.');
+        return;
+    }
+
+    // Check if table already exists
+    if (currentConfig?.sharedBranchTables?.[trimmedName]) {
+        alert(`A table named "${trimmedName}" already exists.`);
+        return;
+    }
+
+    // Create the new table via backend command
+    vscode.postMessage({
+        command: 'createBranchTable',
+        data: { tableName: trimmedName },
+    });
+
+    // The backend will send updated config back, which will trigger a refresh
+    // For now, optimistically update the UI
+    if (currentConfig && currentConfig.sharedBranchTables) {
+        currentConfig.sharedBranchTables[trimmedName] = {
+            fixed: false,
+            rules: [],
+        };
+
+        // Update the repo rule to use the new table
+        if (currentConfig.repoRules?.[repoRuleIndex]) {
+            currentConfig.repoRules[repoRuleIndex].branchTableName = trimmedName;
+        }
+
+        // Re-render
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+        if (selectedRepoRuleIndex === repoRuleIndex) {
+            renderBranchRulesForSelectedRepo();
+        }
+    }
+}
+
+function viewBranchTable(tableName: string) {
+    // Switch to Rules tab and filter to show only repos using this table
+    const rulesTab = document.getElementById('tab-rules') as HTMLButtonElement;
+    if (rulesTab) {
+        rulesTab.click();
+    }
+
+    // TODO: Could add filtering/highlighting here to show only repos using this table
+    // For now, just switch to the Rules tab where users can see table assignments
+}
+
+function renameBranchTableFromMgmt(tableName: string) {
+    const table = currentConfig?.sharedBranchTables?.[tableName];
+    if (!table) return;
+
+    const newName = prompt(`Rename table "${tableName}" to:`, tableName);
+    if (!newName || newName === tableName) {
+        return; // User cancelled or no change
+    }
+
+    const trimmedName = newName.trim();
+    if (!trimmedName) {
+        alert('Table name cannot be empty.');
+        return;
+    }
+
+    if (currentConfig?.sharedBranchTables?.[trimmedName]) {
+        alert(`A table named "${trimmedName}" already exists.`);
+        return;
+    }
+
+    // Send rename command to backend
+    vscode.postMessage({
+        command: 'renameBranchTable',
+        data: { oldName: tableName, newName: trimmedName },
+    });
+}
+
+function deleteBranchTableFromMgmt(tableName: string) {
+    const table = currentConfig?.sharedBranchTables?.[tableName];
+    if (!table) return;
+
+    // Check usage count
+    const repos = currentConfig?.repoRules || [];
+    const usageCount = repos.filter((r: any) => r.branchTableName === tableName).length;
+
+    if (usageCount > 0) {
+        alert(
+            `Cannot delete table "${tableName}" because it is being used by ${usageCount} repo(s). Please reassign those repos to different tables first.`,
+        );
+        return;
+    }
+
+    const ruleCount = table.rules ? table.rules.length : 0;
+    const confirmMsg =
+        ruleCount > 0
+            ? `Delete table "${tableName}"? This will permanently delete ${ruleCount} branch rule(s).`
+            : `Delete table "${tableName}"?`;
+
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+
+    // Send delete command to backend
+    vscode.postMessage({
+        command: 'deleteBranchTable',
+        data: { tableName },
+    });
+}
+
 function renderBranchRulesForSelectedRepo() {
     if (!currentConfig || selectedRepoRuleIndex === -1) return;
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) return;
 
-    const useGlobal = selectedRule.useGlobalBranchRules !== false;
-    const branchRules = useGlobal ? currentConfig.branchRules : selectedRule.branchRules || [];
-    const ruleSource = useGlobal ? 'Global' : selectedRule.repoQualifier || 'Local';
+    // Get table name - default to '__none__' if not set
+    const tableName = selectedRule.branchTableName || '__none__';
+
+    // If no table selected, show empty message
+    if (!tableName || tableName === '__none__') {
+        const header = document.querySelector('#branch-rules-heading');
+        if (header) {
+            header.innerHTML = `Branch Rules - <span class="codicon codicon-circle-slash"></span> No Branch Table`;
+        }
+        // Hide the Copy From and Add buttons when no table is selected
+        updateCopyFromButton(false);
+        updateBranchAddButton(false);
+        renderBranchRules([], undefined, selectedRepoRuleIndex);
+        return;
+    }
+
+    const branchTable = currentConfig.sharedBranchTables?.[tableName];
+    const branchRules = branchTable?.rules || [];
 
     // Update section header
     const header = document.querySelector('#branch-rules-heading');
     if (header) {
         const count = branchRules?.length || 0;
-        header.textContent = `Branch Rules - ${ruleSource} (${count})`;
+        header.innerHTML = `Branch Rules - <span class="codicon codicon-git-branch"></span> ${escapeHtml(tableName)} (${count})`;
     }
 
-    // Show/hide Copy From button based on mode
-    updateCopyFromButton(!useGlobal);
+    // Show/hide Copy From button (show for all tables)
+    updateCopyFromButton(true);
+    updateBranchAddButton(true);
 
-    renderBranchRules(branchRules, currentConfig.matchingIndexes?.branchRule, useGlobal, selectedRepoRuleIndex);
+    renderBranchRules(branchRules, currentConfig.matchingIndexes?.branchRule, selectedRepoRuleIndex);
 }
 
 function updateCopyFromButton(showButton: boolean) {
@@ -2556,6 +3208,21 @@ function updateCopyFromButton(showButton: boolean) {
     copyBtn.addEventListener('click', showCopyFromMenu);
 }
 
+function updateBranchAddButton(enableButton: boolean) {
+    const addBtn = document.querySelector('.branch-add-button') as HTMLButtonElement;
+    if (!addBtn) return;
+
+    if (enableButton) {
+        addBtn.disabled = false;
+        addBtn.style.opacity = '1';
+        addBtn.title = 'Add a new branch rule';
+    } else {
+        addBtn.disabled = true;
+        addBtn.style.opacity = '0.5';
+        addBtn.title = 'Select a branch table to add rules';
+    }
+}
+
 function showCopyFromMenu(event: Event) {
     event.preventDefault();
     event.stopPropagation();
@@ -2587,7 +3254,6 @@ function showCopyFromMenu(event: Event) {
     if (currentConfig?.repoRules) {
         currentConfig.repoRules.forEach((rule, index) => {
             if (index === selectedRepoRuleIndex) return; // Skip current repo
-            if (rule.useGlobalBranchRules !== false) return; // Skip repos using global
             if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
 
             const option = document.createElement('button');
@@ -2721,7 +3387,7 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
         // Determine if we're updating global or local branch rules
         if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = selectedRule.useGlobalBranchRules !== false;
+            const useGlobal = !selectedRule.branchRules;
 
             if (useGlobal) {
                 // Update global branch rules
@@ -2834,7 +3500,7 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
         // Determine if we're updating global or local branch rules
         if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = selectedRule.useGlobalBranchRules !== false;
+            const useGlobal = !selectedRule.branchRules;
 
             if (useGlobal) {
                 // Update global branch rules
@@ -2889,13 +3555,14 @@ function moveRule(index: number, ruleType: string, direction: number) {
     if (ruleType === 'repo') {
         rules = currentConfig.repoRules;
     } else {
-        // For branch rules, check if we're in local mode
+        // For branch rules, get from the selected table
         if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = selectedRule.useGlobalBranchRules !== false;
-            rules = useGlobal ? currentConfig.branchRules : selectedRule.branchRules;
-        } else {
-            rules = currentConfig.branchRules;
+            const tableName = selectedRule.branchTableName || '__none__';
+
+            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
+                rules = currentConfig.sharedBranchTables[tableName].rules;
+            }
         }
     }
 
@@ -2944,13 +3611,14 @@ function toggleRule(index: number, ruleType: string) {
     if (ruleType === 'repo') {
         rules = currentConfig.repoRules;
     } else {
-        // For branch rules, check if we're in local mode
+        // For branch rules, get from the selected table
         if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = selectedRule.useGlobalBranchRules !== false;
-            rules = useGlobal ? currentConfig.branchRules : selectedRule.branchRules;
-        } else {
-            rules = currentConfig.branchRules;
+            const tableName = selectedRule.branchTableName || '__none__';
+
+            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
+                rules = currentConfig.sharedBranchTables[tableName].rules;
+            }
         }
     }
 

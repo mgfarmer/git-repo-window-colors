@@ -107,14 +107,13 @@
                                             "default": true,
                                             "description": "Whether this rule is enabled"
                                         },
+                                        "branchTableName": {
+                                            "type": "string",
+                                            "description": "Name of the shared branch table to use for this repository"
+                                        },
                                         "branchRules": {
                                             "type": "array",
-                                            "description": "Local branch rules for this repository"
-                                        },
-                                        "useGlobalBranchRules": {
-                                            "type": "boolean",
-                                            "default": true,
-                                            "description": "Whether this rule use the global branch rules table or has its own branch rules"
+                                            "description": "Legacy local branch rules for this repository (deprecated, use branchTableName instead)"
                                         }
                                     },
                                     "required": [
@@ -175,6 +174,47 @@
                         ],
                         "scope": "application",
                         "uniqueItems": true
+                    },
+                    "windowColors.sharedBranchTables": {
+                        "order": 5,
+                        "markdownDescription": "Shared branch rule tables that can be referenced by repository rules. Each table contains a set of branch rules that can be reused across multiple repositories.\n\n**Format:**\n```json\n{\n  \"Default Rules\": {\n    \"rules\": [\n      {\"pattern\": \"^main$\", \"color\": \"blue\", \"enabled\": true},\n      {\"pattern\": \"^feature/.*\", \"color\": \"green\", \"enabled\": true}\n    ]\n  },\n  \"Custom Table\": {\n    \"rules\": [\n      {\"pattern\": \"^dev$\", \"color\": \"orange\", \"enabled\": true}\n    ]\n  }\n}\n```\n\nRepository rules reference tables using the `branchTableName` property. Tables can be created, renamed, and deleted through the configuration UI.",
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "rules": {
+                                    "type": "array",
+                                    "description": "Array of branch rules in this table",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "pattern": {
+                                                "type": "string",
+                                                "description": "Regex pattern to match branch name"
+                                            },
+                                            "color": {
+                                                "type": "string",
+                                                "description": "Branch color (CSS color or profile name)"
+                                            },
+                                            "enabled": {
+                                                "type": "boolean",
+                                                "default": true,
+                                                "description": "Whether this rule is enabled"
+                                            }
+                                        },
+                                        "required": [
+                                            "pattern",
+                                            "color"
+                                        ]
+                                    }
+                                }
+                            },
+                            "required": [
+                                "rules"
+                            ]
+                        },
+                        "default": {},
+                        "scope": "application"
                     },
                     "windowColors.colorInactiveTitlebar": {
                         "order": 8,

@@ -41,8 +41,9 @@ type RepoConfig = {
     primaryColor: string;
     profileName?: string;
     enabled?: boolean;
+    branchTableName?: string; // Name of the shared branch table to use
+    // Legacy properties - will be migrated
     branchRules?: Array<{ pattern: string; color: string; enabled?: boolean }>;
-    useGlobalBranchRules?: boolean;
     // Transient properties set during matching and profile resolution
     branchProfileName?: string; // Profile name from branch rule matching
     profile?: AdvancedProfile; // Resolved profile (real or temporary from simple mode)
@@ -594,7 +595,6 @@ function migrateLegacyBranchRule(
 
     // Update the rule
     rule.branchRules = branchRules;
-    rule.useGlobalBranchRules = false;
 
     // Remove legacy fields
     delete rule.defaultBranch;
@@ -754,13 +754,69 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
             }
         }
 
+        // Initialize sharedBranchTables if it doesn't exist
+        const existingSharedBranchTables = config.get('sharedBranchTables', null);
+        const sharedBranchTables: { [key: string]: { rules: any[] } } = existingSharedBranchTables || {};
+
+        // Create "Default Rules" table from branchConfigurationList if it doesn't exist
+        if (!sharedBranchTables['Default Rules'] && !sharedBranchTables['Global']) {
+            sharedBranchTables['Default Rules'] = {
+                rules: migratedBranchList,
+            };
+            outputChannel.appendLine(
+                `Created "Default Rules" table from branchConfigurationList with ${migratedBranchList.length} rules`,
+            );
+        }
+
+        // Second migration pass: Convert legacy branchRules to branchTableName
+        // Migrate repos without branchTableName to use Default Rules
+        let branchTablesMigrated = 0;
+        for (const repoRule of migratedRepoList) {
+            // Check if already migrated (has branchTableName)
+            if (repoRule.branchTableName !== undefined) {
+                continue;
+            }
+
+            // No branch table specified, use Default Rules by default
+            repoRule.branchTableName = 'Default Rules';
+            branchTablesMigrated++;
+        }
+
+        if (!existingSharedBranchTables) {
+            await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+            outputChannel.appendLine(
+                `Initialized sharedBranchTables with ${Object.keys(sharedBranchTables).length} tables`,
+            );
+        } else if (branchTablesMigrated > 0) {
+            await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+            outputChannel.appendLine(
+                `Updated sharedBranchTables with ${Object.keys(sharedBranchTables).length} tables`,
+            );
+        }
+
+        // Migration: Rename "Global" table to "Default Rules" if it exists
+        if (sharedBranchTables['Global']) {
+            sharedBranchTables['Default Rules'] = sharedBranchTables['Global'];
+            delete sharedBranchTables['Global'];
+
+            // Update all repo rules that reference "Global" to use "Default Rules"
+            for (const repoRule of migratedRepoList) {
+                if (repoRule.branchTableName === 'Global') {
+                    repoRule.branchTableName = 'Default Rules';
+                }
+            }
+
+            await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+            outputChannel.appendLine('Migrated "Global" table to "Default Rules"');
+        }
+
         // Write migrated configuration
         await config.update('repoConfigurationList', migratedRepoList, vscode.ConfigurationTarget.Global);
         await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
         await context.globalState.update('configMigratedToJson', true);
 
         outputChannel.appendLine(
-            `Configuration migration completed: ${migratedRepoList.length} repo rules, ${migratedBranchList.length} branch rules`,
+            `Configuration migration completed: ${migratedRepoList.length} repo rules, ${migratedBranchList.length} branch rules, ${branchTablesMigrated} repo rules migrated to use branch tables`,
         );
 
         // Show notification if legacy branch rules were migrated
@@ -1075,6 +1131,31 @@ export async function activate(context: ExtensionContext) {
         ),
     );
 
+    // Register internal commands for branch table management
+    context.subscriptions.push(
+        vscode.commands.registerCommand('_grwc.internal.createBranchTable', (tableName: string) => {
+            return createBranchTable(tableName);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('_grwc.internal.deleteBranchTable', (tableName: string) => {
+            return deleteBranchTable(tableName);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('_grwc.internal.renameBranchTable', (oldName: string, newName: string) => {
+            return renameBranchTable(oldName, newName);
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('_grwc.internal.getBranchTableUsageCount', (tableName: string) => {
+            return getBranchTableUsageCount(tableName);
+        }),
+    );
+
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (
@@ -1309,8 +1390,8 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                 primaryColor: setting.primaryColor || '',
                 profileName: setting.profileName,
                 enabled: setting.enabled !== undefined ? setting.enabled : true,
+                branchTableName: setting.branchTableName,
                 branchRules: setting.branchRules,
-                useGlobalBranchRules: setting.useGlobalBranchRules,
             };
 
             // Validate if needed
@@ -1357,7 +1438,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                         profileName: obj.profileName,
                         enabled: obj.enabled !== undefined ? obj.enabled : true,
                         branchRules: obj.branchRules,
-                        useGlobalBranchRules: obj.useGlobalBranchRules,
+                        branchTableName: obj.branchTableName,
                     };
                     result.push(repoConfig);
                     continue;
@@ -1548,6 +1629,164 @@ function undoColors() {
     workspace.getConfiguration('workbench').update('colorCustomizations', settings, false);
 }
 
+// ========== Branch Table Management Functions ==========
+
+/**
+ * Get usage count for a branch table (number of repo rules using it)
+ */
+function getBranchTableUsageCount(tableName: string): number {
+    const config = workspace.getConfiguration('windowColors');
+    const repoRules = config.get<any[]>('repoConfigurationList', []);
+
+    let count = 0;
+    for (const rule of repoRules) {
+        if (rule.branchTableName === tableName) {
+            count++;
+        }
+    }
+    return count;
+}
+
+/**
+ * Create a new branch table with the given name
+ * Returns true if created successfully, false if name already exists
+ */
+async function createBranchTable(tableName: string): Promise<boolean> {
+    const config = workspace.getConfiguration('windowColors');
+    const sharedBranchTables = config.get<{ [key: string]: { fixed: boolean; rules: any[] } }>(
+        'sharedBranchTables',
+        {},
+    );
+
+    if (sharedBranchTables[tableName]) {
+        outputChannel.appendLine(`Cannot create table "${tableName}" - already exists`);
+        return false;
+    }
+
+    sharedBranchTables[tableName] = {
+        fixed: false,
+        rules: [],
+    };
+
+    await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+    outputChannel.appendLine(`Created new branch table: "${tableName}"`);
+    return true;
+}
+
+/**
+ * Delete a branch table and migrate all repo rules using it to Global
+ * Returns true if deleted successfully, false if table is fixed or doesn't exist
+ */
+async function deleteBranchTable(tableName: string): Promise<boolean> {
+    const config = workspace.getConfiguration('windowColors');
+    const sharedBranchTables = config.get<{ [key: string]: { fixed: boolean; rules: any[] } }>(
+        'sharedBranchTables',
+        {},
+    );
+
+    if (!sharedBranchTables[tableName]) {
+        outputChannel.appendLine(`Cannot delete table "${tableName}" - does not exist`);
+        return false;
+    }
+
+    // Migrate all repo rules using this table to Default Rules
+    const repoRules = config.get<any[]>('repoConfigurationList', []);
+    let migratedCount = 0;
+
+    for (const rule of repoRules) {
+        if (rule.branchTableName === tableName) {
+            rule.branchTableName = 'Default Rules';
+            migratedCount++;
+        }
+    }
+
+    if (migratedCount > 0) {
+        await config.update('repoConfigurationList', repoRules, vscode.ConfigurationTarget.Global);
+        outputChannel.appendLine(`Migrated ${migratedCount} repo rules from "${tableName}" to "Default Rules"`);
+    }
+
+    // Delete the table
+    delete sharedBranchTables[tableName];
+    await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+    outputChannel.appendLine(`Deleted branch table: "${tableName}"`);
+
+    return true;
+}
+
+/**
+ * Rename a branch table and update all repo rules using it
+ * Returns true if renamed successfully, false if table is fixed, doesn't exist, or newName already exists
+ */
+async function renameBranchTable(oldName: string, newName: string): Promise<boolean> {
+    const config = workspace.getConfiguration('windowColors');
+    const sharedBranchTables = config.get<{ [key: string]: { fixed: boolean; rules: any[] } }>(
+        'sharedBranchTables',
+        {},
+    );
+
+    if (!sharedBranchTables[oldName]) {
+        outputChannel.appendLine(`Cannot rename table "${oldName}" - does not exist`);
+        return false;
+    }
+
+    if (sharedBranchTables[newName]) {
+        outputChannel.appendLine(`Cannot rename table to "${newName}" - name already exists`);
+        return false;
+    }
+
+    // Update all repo rules using this table
+    const repoRules = config.get<any[]>('repoConfigurationList', []);
+    let updatedCount = 0;
+
+    for (const rule of repoRules) {
+        if (rule.branchTableName === oldName) {
+            rule.branchTableName = newName;
+            updatedCount++;
+        }
+    }
+
+    // Rename the table
+    sharedBranchTables[newName] = sharedBranchTables[oldName];
+    delete sharedBranchTables[oldName];
+
+    await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+
+    if (updatedCount > 0) {
+        await config.update('repoConfigurationList', repoRules, vscode.ConfigurationTarget.Global);
+    }
+
+    outputChannel.appendLine(
+        `Renamed branch table from "${oldName}" to "${newName}" (${updatedCount} repo rules updated)`,
+    );
+    return true;
+}
+
+/**
+ * Find the best branch table for a new repo rule
+ * Returns the table name of a selected repo rule if one exists, otherwise returns 'Default Rules'
+ */
+// Helper function for finding the best table to use for a new repo rule
+// Currently unused but kept for future feature enhancement
+/*
+function findBestTableForNewRepoRule(selectedRepoRuleIndex: number | undefined): string {
+    if (selectedRepoRuleIndex === undefined || selectedRepoRuleIndex < 0) {
+        return 'Default Rules';
+    }
+    
+    const config = workspace.getConfiguration('windowColors');
+    const repoRules = config.get<any[]>('repoConfigurationList', []);
+    
+    if (selectedRepoRuleIndex < repoRules.length) {
+        const selectedRule = repoRules[selectedRepoRuleIndex];
+        return selectedRule.branchTableName || 'Default Rules';
+    }
+    
+    return 'Default Rules';
+}
+*/
+
+// ========== End Branch Table Management Functions ==========
+
 async function doit(reason: string, usePreviewMode: boolean = false) {
     stopBranchPoll();
     outputChannel.appendLine('\nColorizer triggered by ' + reason);
@@ -1557,8 +1796,6 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     if (repoConfigList === undefined) {
         outputChannel.appendLine('  No repo settings found.  Using branch mode only.');
     }
-
-    const branchMap = getBranchData(true);
 
     let activityBarColorKnob = getNumberSetting('activityBarColorKnob');
     if (activityBarColorKnob === undefined) {
@@ -1662,7 +1899,6 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
 
     // Handle branch rules - determine which branch rule to use based on preview mode
     let branchMatch = false;
-    let hasLocalBranchRulesConfigured = false;
 
     if (usePreviewMode) {
         // Use selected branch rule from config provider
@@ -1672,29 +1908,19 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             outputChannel.appendLine(
                 '  [PREVIEW MODE] Using selected branch rule at index ' + selectedBranchContext.index,
             );
-            outputChannel.appendLine('  [PREVIEW MODE] Is global: ' + selectedBranchContext.isGlobal);
 
+            const sharedBranchTables = workspace
+                .getConfiguration('windowColors')
+                .get<{ [key: string]: { fixed: boolean; rules: any[] } }>('sharedBranchTables', {});
+
+            const tableName = selectedBranchContext.tableName;
+            outputChannel.appendLine(`  [PREVIEW MODE] Using branch table: "${tableName}"`);
+
+            const branchTable = sharedBranchTables[tableName];
             let selectedRule: { pattern: string; color: string; enabled?: boolean } | undefined;
 
-            if (selectedBranchContext.isGlobal) {
-                // Get global branch rule
-                const branchRulesList = Array.from(branchMap.entries());
-                if (branchRulesList[selectedBranchContext.index]) {
-                    const [pattern, color] = branchRulesList[selectedBranchContext.index];
-                    selectedRule = { pattern, color };
-                }
-            } else {
-                // Get local branch rule from specific repo
-                if (
-                    selectedBranchContext.repoIndex !== undefined &&
-                    repoConfigList &&
-                    repoConfigList[selectedBranchContext.repoIndex]
-                ) {
-                    const repo = repoConfigList[selectedBranchContext.repoIndex];
-                    if (repo.branchRules && repo.branchRules[selectedBranchContext.index]) {
-                        selectedRule = repo.branchRules[selectedBranchContext.index];
-                    }
-                }
+            if (branchTable && branchTable.rules && branchTable.rules[selectedBranchContext.index]) {
+                selectedRule = branchTable.rules[selectedBranchContext.index];
             }
 
             if (selectedRule) {
@@ -1733,108 +1959,74 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             }
         }
     } else {
-        // Use matching branch rules - check local then global
-        // Use matching branch rules - check local then global
-        // Check if matched repo has local branch rules
-        if (
-            matchedRepoConfig &&
-            matchedRepoConfig.useGlobalBranchRules === false &&
-            matchedRepoConfig.branchRules &&
-            matchedRepoConfig.branchRules.length > 0
-        ) {
-            hasLocalBranchRulesConfigured = true;
-            outputChannel.appendLine(
-                `  Checking local branch rules for repo (${matchedRepoConfig.branchRules.length} rules)`,
-            );
+        // Use matching branch rules - lookup from shared branch tables
+        const sharedBranchTables = workspace
+            .getConfiguration('windowColors')
+            .get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
 
-            for (const rule of matchedRepoConfig.branchRules) {
-                // Skip disabled rules
-                if (rule.enabled === false) {
-                    continue;
-                }
-
-                if (rule.pattern === '') {
-                    continue;
-                }
-
-                if (currentBranch?.match(rule.pattern)) {
-                    // Check if this is a profile name
-                    const advancedProfiles = workspace
-                        .getConfiguration('windowColors')
-                        .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
-                    const profileName = extractProfileName(rule.color, advancedProfiles);
-
-                    if (profileName && advancedProfiles[profileName]) {
-                        // It's a profile - store it
-                        outputChannel.appendLine(
-                            '  Local branch rule matched: "' + rule.pattern + '" using Profile: ' + profileName,
-                        );
-                        matchedRepoConfig.branchProfile = advancedProfiles[profileName];
-                    } else {
-                        // It's a simple color - create temporary branch profile
-                        branchColor = Color(rule.color);
-                        outputChannel.appendLine(
-                            '  Local branch rule matched: "' +
-                                rule.pattern +
-                                '" with simple color: ' +
-                                branchColor.hex(),
-                        );
-
-                        matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
-                    }
-                    branchMatch = true;
-                    break;
-                }
+        // Skip branch rule checking if branchTableName is '__none__'
+        if (matchedRepoConfig && matchedRepoConfig.branchTableName === '__none__') {
+            outputChannel.appendLine('  No branch table specified for this repository - skipping branch rules');
+        } else {
+            // Determine which table to use
+            let tableName = 'Default Rules'; // Default
+            if (matchedRepoConfig && matchedRepoConfig.branchTableName) {
+                tableName = matchedRepoConfig.branchTableName;
             }
-        } else if (matchedRepoConfig && matchedRepoConfig.useGlobalBranchRules === false) {
-            // Repo is configured to use local rules, but the array is empty or undefined
-            hasLocalBranchRulesConfigured = true;
-            outputChannel.appendLine('  Repo configured for local branch rules, but none defined');
-        }
 
-        // Only check global branch rules if local rules are not configured
-        if (!branchMatch && !hasLocalBranchRulesConfigured) {
-            for (const [branch, colorOrProfile] of branchMap) {
-                if (branch === '') {
-                    continue;
-                }
-                if (currentBranch?.match(branch)) {
-                    // Check if this is a profile name
-                    const advancedProfiles = workspace
-                        .getConfiguration('windowColors')
-                        .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
-                    const profileName = extractProfileName(colorOrProfile, advancedProfiles);
+            const branchTable = sharedBranchTables[tableName];
+            if (branchTable && branchTable.rules && branchTable.rules.length > 0) {
+                outputChannel.appendLine(
+                    `  Checking branch rules from table "${tableName}" (${branchTable.rules.length} rules)`,
+                );
 
-                    if (profileName && advancedProfiles[profileName]) {
-                        // It's a profile - store it
-                        outputChannel.appendLine(
-                            '  Global branch rule matched: "' + branch + '" using Profile: ' + profileName,
-                        );
-                        // Set the branch profile
-                        if (!matchedRepoConfig) {
-                            matchedRepoConfig = {
-                                repoQualifier: '',
-                                primaryColor: '',
-                            };
-                        }
-                        matchedRepoConfig.branchProfile = advancedProfiles[profileName];
-                    } else {
-                        // It's a simple color - create temporary branch profile
-                        branchColor = Color(colorOrProfile);
-                        outputChannel.appendLine(
-                            '  Global branch rule matched: "' + branch + '" with simple color: ' + branchColor.hex(),
-                        );
-
-                        if (!matchedRepoConfig) {
-                            matchedRepoConfig = {
-                                repoQualifier: '',
-                                primaryColor: '',
-                            };
-                        }
-                        matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                for (const rule of branchTable.rules) {
+                    // Skip disabled rules
+                    if (rule.enabled === false) {
+                        continue;
                     }
-                    branchMatch = true;
-                    break;
+
+                    if (rule.pattern === '') {
+                        continue;
+                    }
+
+                    if (currentBranch?.match(rule.pattern)) {
+                        // Check if this is a profile name
+                        const advancedProfiles = workspace
+                            .getConfiguration('windowColors')
+                            .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+                        const profileName = extractProfileName(rule.color, advancedProfiles);
+
+                        if (profileName && advancedProfiles[profileName]) {
+                            // It's a profile - store it
+                            outputChannel.appendLine(
+                                `  Branch rule matched in "${tableName}": "${rule.pattern}" using Profile: ${profileName}`,
+                            );
+                            if (!matchedRepoConfig) {
+                                matchedRepoConfig = {
+                                    repoQualifier: '',
+                                    primaryColor: '',
+                                };
+                            }
+                            matchedRepoConfig.branchProfile = advancedProfiles[profileName];
+                        } else {
+                            // It's a simple color - create temporary branch profile
+                            branchColor = Color(rule.color);
+                            outputChannel.appendLine(
+                                `  Branch rule matched in "${tableName}": "${rule.pattern}" with simple color: ${branchColor.hex()}`,
+                            );
+
+                            if (!matchedRepoConfig) {
+                                matchedRepoConfig = {
+                                    repoQualifier: '',
+                                    primaryColor: '',
+                                };
+                            }
+                            matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                        }
+                        branchMatch = true;
+                        break;
+                    }
                 }
             }
         }

@@ -39,7 +39,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private currentConfig: any = null;
     private _configurationListener: vscode.Disposable | undefined;
     private _previewRepoRuleIndex: number | null = null;
-    private _previewBranchRuleContext: { index: number; isGlobal: boolean; repoIndex?: number } | null = null;
+    private _previewBranchRuleContext: { index: number; tableName: string } | null = null;
     private _previewModeEnabled: boolean = false;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
@@ -67,7 +67,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         return this._previewRepoRuleIndex;
     }
 
-    public getPreviewBranchRuleContext(): { index: number; isGlobal: boolean; repoIndex?: number } | null {
+    public getPreviewBranchRuleContext(): { index: number; tableName: string } | null {
         return this._previewBranchRuleContext;
     }
 
@@ -196,8 +196,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'previewBranchRule':
                 this._previewBranchRuleContext = {
                     index: (message.data as any).index,
-                    isGlobal: (message.data as any).isGlobal,
-                    repoIndex: (message.data as any).repoIndex,
+                    tableName: (message.data as any).tableName || 'Default Rules',
                 };
                 this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
@@ -222,6 +221,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'toggleStarredKey':
                 await this._handleToggleStarredKey(message.data.mappingKey!);
                 break;
+            case 'createBranchTable':
+                await this._handleCreateBranchTable(message.data.tableName!);
+                break;
+            case 'deleteBranchTable':
+                await this._handleDeleteBranchTable(message.data.tableName!);
+                break;
+            case 'renameBranchTable':
+                await this._handleRenameBranchTable(message.data.oldTableName!, message.data.newTableName!);
+                break;
         }
     }
 
@@ -232,6 +240,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         const repoRules = this._getRepoRules();
         const branchRules = this._getBranchRules();
+        const sharedBranchTables = this._getSharedBranchTables();
         const otherSettings = this._getOtherSettings();
         const advancedProfiles = this._getAdvancedProfiles();
         const workspaceInfo = this._getWorkspaceInfo();
@@ -270,6 +279,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this.currentConfig = {
             repoRules,
             branchRules,
+            sharedBranchTables,
             otherSettings,
             advancedProfiles,
         };
@@ -287,10 +297,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         );
 
         if (this._previewBranchRuleContext === null && matchingBranchRuleIndex >= 0) {
+            // Determine which table the matching branch rule is in
+            let tableName = 'Default Rules';
+            if (repoIndexForBranchRule >= 0 && repoRules[repoIndexForBranchRule]) {
+                tableName = repoRules[repoIndexForBranchRule].branchTableName || 'Default Rules';
+            }
+
             this._previewBranchRuleContext = {
                 index: matchingBranchRuleIndex,
-                isGlobal: repoIndexForBranchRule < 0,
-                repoIndex: repoIndexForBranchRule >= 0 ? repoIndexForBranchRule : undefined,
+                tableName,
             };
         }
 
@@ -359,8 +374,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     branchColor: rule.branchColor,
                     profileName: rule.profileName,
                     enabled: rule.enabled !== undefined ? rule.enabled : true,
+                    branchTableName: rule.branchTableName,
                     branchRules: rule.branchRules || undefined,
-                    useGlobalBranchRules: rule.useGlobalBranchRules !== undefined ? rule.useGlobalBranchRules : true,
                 } as any;
             }
 
@@ -381,8 +396,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     branchColor: obj.branchColor,
                     profileName: obj.profileName,
                     enabled: obj.enabled !== undefined ? obj.enabled : true,
+                    branchTableName: obj.branchTableName,
                     branchRules: obj.branchRules || undefined,
-                    useGlobalBranchRules: obj.useGlobalBranchRules !== undefined ? obj.useGlobalBranchRules : true,
                 } as any;
             }
 
@@ -411,7 +426,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 repoQualifier: repoQualifier.trim(),
                 primaryColor: primaryColor,
                 enabled: true,
-                useGlobalBranchRules: true,
             };
         } catch (error) {
             console.warn('Failed to parse repo rule:', rule, error);
@@ -509,6 +523,21 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         return this._context.globalState.get<string[]>('grwc.starredKeys', []);
     }
 
+    private _getSharedBranchTables(): { [key: string]: { rules: BranchRule[] } } {
+        const config = vscode.workspace.getConfiguration('windowColors');
+        const sharedTables = config.get<{ [key: string]: { rules: BranchRule[] } } | undefined>('sharedBranchTables');
+
+        // If sharedBranchTables doesn't exist yet, create Default Rules table from branchConfigurationList
+        if (!sharedTables) {
+            const branchRules = config.get<BranchRule[]>('branchConfigurationList', []);
+            return {
+                'Default Rules': { rules: branchRules },
+            };
+        }
+
+        return sharedTables;
+    }
+
     private async _handleToggleStarredKey(mappingKey: string): Promise<void> {
         const starredKeys = this._getStarredKeys();
         const index = starredKeys.indexOf(mappingKey);
@@ -529,6 +558,57 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 command: 'starredKeysUpdated',
                 data: { starredKeys },
             });
+        }
+    }
+
+    private async _handleCreateBranchTable(tableName: string): Promise<void> {
+        const result = await vscode.commands.executeCommand('_grwc.internal.createBranchTable', tableName);
+        if (result) {
+            // Refresh webview with updated config
+            this._sendConfigurationToWebview();
+        } else {
+            vscode.window.showErrorMessage(`Failed to create branch table "${tableName}". Name may already exist.`);
+        }
+    }
+
+    private async _handleDeleteBranchTable(tableName: string): Promise<void> {
+        // Get usage count to show in confirmation
+        const usageCount = (await vscode.commands.executeCommand(
+            '_grwc.internal.getBranchTableUsageCount',
+            tableName,
+        )) as number;
+
+        if (usageCount > 0) {
+            const answer = await vscode.window.showWarningMessage(
+                `Delete branch table "${tableName}"? ${usageCount} repository ${usageCount === 1 ? 'rule' : 'rules'} will be migrated to "Default Rules".`,
+                { modal: true },
+                'Delete',
+                'Cancel',
+            );
+
+            if (answer !== 'Delete') {
+                return;
+            }
+        }
+
+        const result = await vscode.commands.executeCommand('_grwc.internal.deleteBranchTable', tableName);
+        if (result) {
+            // Refresh webview with updated config
+            this._sendConfigurationToWebview();
+        } else {
+            vscode.window.showErrorMessage(`Failed to delete branch table "${tableName}".`);
+        }
+    }
+
+    private async _handleRenameBranchTable(oldName: string, newName: string): Promise<void> {
+        const result = await vscode.commands.executeCommand('_grwc.internal.renameBranchTable', oldName, newName);
+        if (result) {
+            // Refresh webview with updated config
+            this._sendConfigurationToWebview();
+        } else {
+            vscode.window.showErrorMessage(
+                `Failed to rename branch table from "${oldName}" to "${newName}". New name may already exist or table may be fixed.`,
+            );
         }
     }
 
@@ -570,7 +650,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Check if the matched repo rule has local branch rules enabled
         if (matchingRepoRuleIndex >= 0 && matchingRepoRuleIndex < repoRules.length) {
             const repoRule = repoRules[matchingRepoRuleIndex];
-            if (repoRule.useGlobalBranchRules === false && repoRule.branchRules && repoRule.branchRules.length > 0) {
+            if (repoRule.branchRules && repoRule.branchRules.length > 0) {
                 // Check if any local branch rule matches the current branch
                 for (const rule of repoRule.branchRules) {
                     if ((rule as any).enabled === false) continue;
@@ -666,6 +746,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
             }
 
+            // Update shared branch tables
+            if (data.sharedBranchTables) {
+                updatePromises.push(config.update('sharedBranchTables', data.sharedBranchTables, true));
+            }
+
             // Update advanced profiles
             if (data.advancedProfiles) {
                 updatePromises.push(config.update('advancedProfiles', data.advancedProfiles, true));
@@ -695,8 +780,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             repoQualifier: rule.repoQualifier,
             primaryColor: rule.primaryColor,
             enabled: rule.enabled !== undefined ? rule.enabled : true,
-            useGlobalBranchRules: rule.useGlobalBranchRules !== undefined ? rule.useGlobalBranchRules : true,
         };
+
+        // branchTableName is required - default to '__none__' if not set
+        result.branchTableName = rule.branchTableName || '__none__';
 
         if (rule.defaultBranch) {
             result.defaultBranch = rule.defaultBranch;
@@ -718,9 +805,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         ruleType: 'repo' | 'branch';
         index: number;
         ruleDescription: string;
-        repoIndex?: number;
+        tableName?: string;
     }): Promise<void> {
-        const { ruleType, index, ruleDescription, repoIndex } = deleteData;
+        const { ruleType, index, ruleDescription } = deleteData;
 
         const result = await vscode.window.showWarningMessage(
             `Are you sure you want to delete the ${ruleType} rule ${ruleDescription}?`,
@@ -731,23 +818,21 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         if (result === 'Delete') {
             // Perform the deletion
             const repoRules = this._getRepoRules();
-            const branchRules = this._getBranchRules();
 
             if (ruleType === 'repo' && repoRules[index]) {
                 repoRules.splice(index, 1);
                 await this._updateConfiguration({ repoRules });
             } else if (ruleType === 'branch') {
-                // Check if this is a local branch rule (repoIndex is defined)
-                if (repoIndex !== undefined && repoRules[repoIndex]) {
-                    // Delete from local branch rules
-                    if (repoRules[repoIndex].branchRules && repoRules[repoIndex].branchRules![index]) {
-                        repoRules[repoIndex].branchRules!.splice(index, 1);
-                        await this._updateConfiguration({ repoRules });
+                // Delete from shared branch table
+                const tableName = (deleteData as any).tableName;
+                if (tableName && tableName !== '__none__') {
+                    const sharedBranchTables = this._getSharedBranchTables();
+                    if (sharedBranchTables[tableName]?.rules?.[index]) {
+                        // Create a deep copy to ensure VS Code detects the change
+                        const updatedTables = JSON.parse(JSON.stringify(sharedBranchTables));
+                        updatedTables[tableName].rules.splice(index, 1);
+                        await this._updateConfiguration({ sharedBranchTables: updatedTables });
                     }
-                } else if (branchRules[index]) {
-                    // Delete from global branch rules
-                    branchRules.splice(index, 1);
-                    await this._updateConfiguration({ branchRules });
                 }
             }
 
@@ -1017,6 +1102,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
                 <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="branch-tables-tab" id="tab-branch-tables">Branch Tables</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
                 <button type="button" class="help-button-global" data-action="openContextualHelp" title="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
             </div>
@@ -1276,6 +1362,28 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             </div>
                         </div>
                      </div>
+                </div>
+                
+                <div id="branch-tables-tab" role="tabpanel" aria-labelledby="tab-branch-tables" class="tab-content">
+                    <section class="branch-tables-panel">
+                        <div class="panel-header">
+                            <h2>Branch Tables
+                                <button class="tooltip panel-tooltip help-icon" 
+                                        type="button"
+                                        aria-label="Help for Branch Tables"
+                                        tabindex="0"><span class="codicon codicon-info"></span>
+                                    <span class="tooltiptext" role="tooltip">
+                                        <strong>Branch Tables</strong><br>
+                                        Manage shared branch rule tables. Tables can be shared across multiple repositories.
+                                        Tables that are in use cannot be deleted.
+                                    </span>
+                                </button>
+                            </h2>
+                        </div>
+                        <div id="branch-tables-content">
+                            <!-- Populated by renderBranchTablesTab() -->
+                        </div>
+                    </section>
                 </div>
                 
                 <div id="report-tab" role="tabpanel" aria-labelledby="tab-report" class="tab-content">

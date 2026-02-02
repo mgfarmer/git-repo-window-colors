@@ -1,12 +1,22 @@
 import { AdvancedProfileMap } from './advancedModeTypes';
 
+export interface BranchTable {
+    fixed: boolean;
+    rules: BranchRule[];
+}
+
+export interface SharedBranchTables {
+    [tableName: string]: BranchTable;
+}
+
 export interface RepoRule {
     repoQualifier: string;
     primaryColor: string;
     profileName?: string;
     enabled?: boolean;
+    branchTableName?: string;
+    // Legacy properties - kept for backward compatibility during migration
     branchRules?: BranchRule[];
-    useGlobalBranchRules?: boolean;
 }
 
 export interface BranchRule {
@@ -44,10 +54,14 @@ export interface WebviewMessage {
         | 'previewBranchRule'
         | 'clearPreview'
         | 'generatePalette'
-        | 'toggleStarredKey';
+        | 'toggleStarredKey'
+        | 'createBranchTable'
+        | 'deleteBranchTable'
+        | 'renameBranchTable';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
+        sharedBranchTables?: SharedBranchTables;
         otherSettings?: OtherSettings;
         advancedProfiles?: AdvancedProfileMap;
         workspaceInfo?: {
@@ -74,5 +88,9 @@ export interface WebviewMessage {
             algorithm: string;
         };
         mappingKey?: string;
+        // Branch table management data
+        tableName?: string;
+        newTableName?: string;
+        oldTableName?: string;
     };
 }
