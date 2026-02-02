@@ -335,6 +335,7 @@ h2 {
     border: 1px solid var(--vscode-panel-border);
     cursor: pointer;
     flex-shrink: 0;
+    margin-left: 4px;
 }
 .color-swatch:hover {
     border-color: var(--vscode-focusBorder);
@@ -355,6 +356,7 @@ h2 {
     background: none;
     padding: 0;
     flex-shrink: 0;
+    margin-left: 4px;
 }
 .native-color-input::-webkit-color-swatch-wrapper {
     padding: 0;
@@ -366,31 +368,6 @@ h2 {
     border-radius: 2px;
 }
 
-/* Random color button */
-.random-color-btn {
-    width: 16px;
-    height: 16px;
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 3px;
-    background: var(--vscode-editor-background);
-    color: var(--vscode-foreground);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    font-size: 10px;
-    flex-shrink: 0;
-}
-
-.random-color-btn:hover {
-    background: var(--vscode-input-background);
-    border-color: var(--vscode-focusBorder);
-}
-
-.random-color-btn:active {
-    background: var(--vscode-editor-background);
-}
 .color-input.text-input {
     flex: 1;
     min-width: 80px;

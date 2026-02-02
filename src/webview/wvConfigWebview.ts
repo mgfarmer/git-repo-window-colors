@@ -953,6 +953,7 @@ function attachEventListeners() {
 
     // Add new event listeners using event delegation
     document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('click', handleColorInputClick); // Shift-click handler for random colors
     document.addEventListener('change', handleDocumentChange);
     document.addEventListener('input', handleDocumentInput);
     document.addEventListener('keydown', handleDocumentKeydown);
@@ -1112,8 +1113,9 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
-    // Handle random color buttons
+    // Handle random color buttons - REMOVED, now using shift-click on color input
     if (target.classList.contains('random-color-btn')) {
+        // Deprecated: dice buttons have been removed
         const action = target.getAttribute('data-action');
         const match = action?.match(/generateRandomColor\('(\w+)', (\d+), '(\w+)'\)/);
         if (match) {
@@ -2077,12 +2079,9 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                        class="native-color-input" 
                        id="${ruleType}-${field}-${index}"
                        value="${hexColor}" 
+                       title="Click to use a color picker, shift-click to choose a random color"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
-                <button class="random-color-btn" 
-                        data-action="generateRandomColor('${ruleType}', ${index}, '${field}')"
-                        title="Generate random color"
-                        aria-label="Generate random color for ${ruleType} rule ${index + 1} ${field}">🎲</button>
                 <input type="text" 
                        class="color-input text-input" 
                        value="${color || ''}" 
@@ -2098,11 +2097,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                 <div class="color-swatch" 
                      style="background-color: ${convertColorToValidCSS(color) || '#4A90E2'}"
                      data-action="openColorPicker('${ruleType}', ${index}, '${field}')"
-                     title="Click to choose color"></div>
-                <button class="random-color-btn" 
-                        data-action="generateRandomColor('${ruleType}', ${index}, '${field}')"
-                        title="Generate random color"
-                        aria-label="Generate random color for ${ruleType} rule ${index + 1} ${field}">🎲</button>
+                     title="Click to use a color picker, shift-click to choose a random color"></div>
                 <input type="text" 
                        class="color-input" 
                        id="${ruleType}-${field}-${index}"
@@ -3793,6 +3788,37 @@ function syncColorInputs(ruleType: string, index: number, field: string, value: 
         // Sync from text input to color picker
         else if (event?.target === textInput) {
             updateColorSwatch(ruleType, index, field, value);
+        }
+    }
+}
+
+// Handle shift-click on color inputs to generate random colors
+function handleColorInputClick(event: MouseEvent) {
+    const target = event.target as HTMLInputElement;
+    if (!target.classList.contains('native-color-input') && !target.classList.contains('color-swatch')) {
+        return;
+    }
+
+    if (event.shiftKey) {
+        event.preventDefault();
+
+        // For repository/branch rules tables
+        const dataAction = target.getAttribute('data-action');
+        if (dataAction) {
+            const match = dataAction.match(/updateColorRule\('(\w+)', (\d+), '(\w+)',/);
+            if (match) {
+                const [, ruleType, index, field] = match;
+                generateRandomColor(ruleType, parseInt(index), field);
+                return;
+            }
+        }
+
+        // For palette editor and mappings - generate random color directly
+        const randomColor = getThemeAppropriateColor();
+        if (target.type === 'color') {
+            target.value = convertColorToHex(randomColor);
+            // Trigger change event to update associated text input
+            target.dispatchEvent(new Event('change', { bubbles: true }));
         }
     }
 }
@@ -7154,13 +7180,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 colorInput.type = 'color';
                 colorInput.className = 'native-color-input';
                 colorInput.value = convertColorToHex(currentFixedColor || '#4A90E2');
-                colorInput.title = 'Select color';
-
-                const randomBtn = document.createElement('button');
-                randomBtn.className = 'random-color-btn';
-                randomBtn.textContent = '🎲';
-                randomBtn.title = 'Generate random color';
-                randomBtn.style.flexShrink = '0';
+                colorInput.title = 'Click to use a color picker, shift-click to choose a random color';
 
                 const textInput = document.createElement('input');
                 textInput.type = 'text';
@@ -7171,7 +7191,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 textInput.style.minWidth = '50px';
                 textInput.style.maxWidth = '90px';
 
-                fixedColorPicker.appendChild(randomBtn);
                 fixedColorPicker.appendChild(colorInput);
                 fixedColorPicker.appendChild(textInput);
 
@@ -7305,14 +7324,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Fixed color picker event handlers
                 colorInput.onchange = () => {
                     textInput.value = colorInput.value;
-                    updateMapping();
-                    updateSliderGradient();
-                };
-
-                randomBtn.onclick = () => {
-                    const randomColor = getThemeAppropriateColor();
-                    textInput.value = randomColor;
-                    colorInput.value = convertColorToHex(randomColor);
                     updateMapping();
                     updateSliderGradient();
                 };
@@ -7595,25 +7606,11 @@ function createPaletteSlotElement(
     colorPicker.type = 'color';
     colorPicker.className = 'native-color-input';
     colorPicker.value = convertColorToHex(def.value || '#000000');
-    colorPicker.title = 'Select color';
+    colorPicker.title = 'Click to use a color picker, shift-click to choose a random color';
     colorPicker.onchange = () => {
         def.value = colorPicker.value;
         def.source = 'fixed';
         textInput.value = colorPicker.value;
-        onChange(def);
-    };
-
-    // Random color button
-    const randomBtn = document.createElement('button');
-    randomBtn.className = 'random-color-btn';
-    randomBtn.textContent = '🎲';
-    randomBtn.title = 'Generate random color';
-    randomBtn.onclick = () => {
-        const randomColor = getThemeAppropriateColor();
-        def.value = randomColor;
-        def.source = 'fixed';
-        colorPicker.value = convertColorToHex(randomColor);
-        textInput.value = randomColor;
         onChange(def);
     };
 
@@ -7640,7 +7637,6 @@ function createPaletteSlotElement(
     };
 
     colorContainer.appendChild(colorPicker);
-    colorContainer.appendChild(randomBtn);
     colorContainer.appendChild(textInput);
 
     row.appendChild(colorContainer);
