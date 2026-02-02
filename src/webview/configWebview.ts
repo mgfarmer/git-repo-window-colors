@@ -191,7 +191,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 if ((message.data as any).clearBranchPreview) {
                     this._previewBranchRuleContext = null;
                 }
-                console.log('[configWebview] previewRepoRule received - index:', this._previewRepoRuleIndex, 'previewEnabled:', this._previewModeEnabled, 'clearBranchPreview:', (message.data as any).clearBranchPreview);
+                console.log(
+                    '[configWebview] previewRepoRule received - index:',
+                    this._previewRepoRuleIndex,
+                    'previewEnabled:',
+                    this._previewModeEnabled,
+                    'clearBranchPreview:',
+                    (message.data as any).clearBranchPreview,
+                );
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
                 // Wait for colorCustomizations to update before refreshing
@@ -280,20 +287,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Calculate matching rule indexes using the same logic as the extension
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
-        
+
         // Get the actual branch rules from the shared table assigned to the matched repo rule
         let actualBranchRules: BranchRule[] = [];
         let repoIndexForBranchRule = -1; // Always -1 since we only use shared tables
-        
+
         if (matchingRepoRuleIndex >= 0 && matchingRepoRuleIndex < repoRules.length) {
             const matchedRepoRule = repoRules[matchingRepoRuleIndex];
             if (matchedRepoRule.branchTableName && sharedBranchTables[matchedRepoRule.branchTableName]) {
                 actualBranchRules = sharedBranchTables[matchedRepoRule.branchTableName].rules;
             }
         }
-        
+
         // Now match against the actual branch rules
-        const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(actualBranchRules, workspaceInfo.currentBranch);
+        const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(
+            actualBranchRules,
+            workspaceInfo.currentBranch,
+        );
 
         // console.log('[DEBUG] Sending matching indexes:', {
         //     repoRule: matchingRepoRuleIndex,
@@ -699,7 +709,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // If preview mode is active, re-apply the preview after configuration update
             // This ensures that color changes during preview mode are immediately reflected
             if (this._previewModeEnabled) {
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'config update during preview', true);
+                await vscode.commands.executeCommand(
+                    '_grwc.internal.applyColors',
+                    'config update during preview',
+                    true,
+                );
                 await this._waitForColorCustomizationsUpdate();
             }
         } catch (error) {
@@ -1308,19 +1322,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 <div id="branch-tables-tab" role="tabpanel" aria-labelledby="tab-branch-tables" class="tab-content">
                     <section class="branch-tables-panel">
                         <div class="panel-header">
-                            <h2>Branch Tables
-                                <button class="tooltip panel-tooltip help-icon" 
-                                        type="button"
-                                        aria-label="Help for Branch Tables"
-                                        tabindex="0"><span class="codicon codicon-info"></span>
-                                    <span class="tooltiptext" role="tooltip">
-                                        <strong>Branch Tables</strong><br>
-                                        Manage shared branch rule tables. Tables can be shared across multiple repositories.
-                                        Tables that are in use cannot be deleted.
-                                    </span>
-                                </button>
-                            </h2>
+                            <h2>Branch Tables</h2>
                         </div>
+                        <p style="margin: 0 0 1em 0; color: var(--vscode-descriptionForeground);">
+                            Manage shared branch rule tables that can be used across multiple repository rules. 
+                            Create new tables using "Create New Table" in the Branch Table dropdown on the Rules page. 
+                            Tables that are currently in use cannot be deleted.
+                        </p>
                         <div id="branch-tables-content">
                             <!-- Populated by renderBranchTablesTab() -->
                         </div>
