@@ -476,22 +476,27 @@ function getProfileUsageInfo(): {
         }
     }
 
-    // Check global branch rules
-    if (currentConfig.branchRules) {
-        for (const rule of currentConfig.branchRules) {
-            let ruleUsesProfile = false;
+    // Check shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                for (const rule of table.rules) {
+                    let ruleUsesProfile = false;
 
-            if (rule.profileName && advancedProfiles[rule.profileName]) {
-                result.profileNames.add(rule.profileName);
-                ruleUsesProfile = true;
-            }
-            if (rule.color && advancedProfiles[rule.color]) {
-                result.profileNames.add(rule.color);
-                ruleUsesProfile = true;
-            }
+                    if (rule.profileName && advancedProfiles[rule.profileName]) {
+                        result.profileNames.add(rule.profileName);
+                        ruleUsesProfile = true;
+                    }
+                    if (rule.color && advancedProfiles[rule.color]) {
+                        result.profileNames.add(rule.color);
+                        ruleUsesProfile = true;
+                    }
 
-            if (ruleUsesProfile) {
-                result.branchRuleCount++;
+                    if (ruleUsesProfile) {
+                        result.branchRuleCount++;
+                    }
+                }
             }
         }
     }
@@ -593,22 +598,14 @@ function collectUniqueBranchPatterns(): string[] {
 
     if (!currentConfig) return [];
 
-    // Collect from global branch rules
-    if (currentConfig.branchRules) {
-        for (const rule of currentConfig.branchRules) {
-            if (rule.pattern && rule.pattern.trim()) {
-                patterns.add(rule.pattern.trim());
-            }
-        }
-    }
-
-    // Collect from local branch rules in repo rules
-    if (currentConfig.repoRules) {
-        for (const repoRule of currentConfig.repoRules) {
-            if (repoRule.branchRules) {
-                for (const branchRule of repoRule.branchRules) {
-                    if (branchRule.pattern && branchRule.pattern.trim()) {
-                        patterns.add(branchRule.pattern.trim());
+    // Collect from shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                for (const rule of table.rules) {
+                    if (rule.pattern && rule.pattern.trim()) {
+                        patterns.add(rule.pattern.trim());
                     }
                 }
             }
@@ -2470,25 +2467,17 @@ function renderColorReport(config: any) {
 
     // Determine which branch rule to use from preview context
     let branchRuleIndex = -1;
-    let isLocalBranchRule = false;
-    let repoIndexForBranchRule = -1;
+    let branchTableName = '';
 
     if (config.previewBranchRuleContext) {
         branchRuleIndex = config.previewBranchRuleContext.index;
-        isLocalBranchRule = !config.previewBranchRuleContext.isGlobal;
-        repoIndexForBranchRule = config.previewBranchRuleContext.repoIndex ?? -1;
+        branchTableName = config.previewBranchRuleContext.tableName || '';
     }
 
     let matchedBranchRule = null;
-    if (isLocalBranchRule && repoIndexForBranchRule >= 0) {
-        // Use local branch rule from the specified repo
-        const repoForBranchRule = config.repoRules?.[repoIndexForBranchRule];
-        if (repoForBranchRule?.branchRules && branchRuleIndex >= 0) {
-            matchedBranchRule = repoForBranchRule.branchRules[branchRuleIndex];
-        }
-    } else if (branchRuleIndex >= 0) {
-        // Use global branch rule
-        matchedBranchRule = config.branchRules?.[branchRuleIndex];
+    if (branchRuleIndex >= 0 && branchTableName && config.sharedBranchTables?.[branchTableName]) {
+        // Get branch rule from shared table
+        matchedBranchRule = config.sharedBranchTables[branchTableName].rules[branchRuleIndex];
     }
 
     // Helper function to determine source for each theme key
@@ -2499,25 +2488,21 @@ function renderColorReport(config: any) {
 
         if (isActivityBarKey && matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
-            // Include repo index if this is a local branch rule
-            const ruleTypeLabel = isLocalBranchRule ? 'Local Branch Rule' : 'Global Branch Rule';
-            const gotoData = isLocalBranchRule
-                ? `branch:${branchRuleIndex}:${repoIndexForBranchRule}`
-                : `branch:${branchRuleIndex}`;
+            const gotoData = `branch:${branchRuleIndex}`;
 
             // Check if using a profile
             if (matchedBranchRule.profileName) {
                 const profileName = matchedBranchRule.profileName;
                 const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
                 return {
-                    description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${escapeHtml(pattern)}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${escapeHtml(pattern)}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
                     gotoData: profileGotoData,
                 };
             }
 
             const color = escapeHtml(matchedBranchRule.color);
             return {
-                description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
+                description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
             };
         }
@@ -2543,25 +2528,21 @@ function renderColorReport(config: any) {
 
         if (matchedBranchRule) {
             const pattern = escapeHtml(matchedBranchRule.pattern);
-            // Include repo index if this is a local branch rule
-            const ruleTypeLabel = isLocalBranchRule ? 'Local Branch Rule' : 'Global Branch Rule';
-            const gotoData = isLocalBranchRule
-                ? `branch:${branchRuleIndex}:${repoIndexForBranchRule}`
-                : `branch:${branchRuleIndex}`;
+            const gotoData = `branch:${branchRuleIndex}`;
 
             // Check if using a profile
             if (matchedBranchRule.profileName) {
                 const profileName = matchedBranchRule.profileName;
                 const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
                 return {
-                    description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
                     gotoData: profileGotoData,
                 };
             }
 
             const color = escapeHtml(matchedBranchRule.color);
             return {
-                description: `${ruleTypeLabel}: "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
+                description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
             };
         }
@@ -2668,19 +2649,14 @@ function renderColorReport(config: any) {
 
         // Show the selected branch rule
         if (config.previewBranchRuleContext) {
-            // Determine if it's a global or local branch rule
             const branchContext = config.previewBranchRuleContext;
-            const branchRules = branchContext.isGlobal
-                ? config.branchRules
-                : config.repoRules?.[branchContext.repoIndex || 0]?.branchRules || [];
+            const tableName = branchContext.tableName || '';
+            const branchRules = config.sharedBranchTables?.[tableName]?.rules || [];
             const branchRule = branchRules?.[branchContext.index];
 
             if (branchRule) {
-                const ruleSource = branchContext.isGlobal
-                    ? 'Global'
-                    : `Local (${escapeHtml(config.repoRules?.[branchContext.repoIndex || 0]?.repoQualifier || 'repo')})`;
                 previewParts.push(
-                    `<strong>${ruleSource}</strong> branch rule: "<strong>${escapeHtml(branchRule.pattern)}</strong>"`,
+                    `<strong>Branch Rule from "${escapeHtml(tableName)}"</strong>: "<strong>${escapeHtml(branchRule.pattern)}</strong>"`,
                 );
             }
         }

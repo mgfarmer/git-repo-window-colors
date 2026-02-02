@@ -1653,10 +1653,7 @@ function getBranchTableUsageCount(tableName: string): number {
  */
 async function createBranchTable(tableName: string): Promise<boolean> {
     const config = workspace.getConfiguration('windowColors');
-    const sharedBranchTables = config.get<{ [key: string]: { fixed: boolean; rules: any[] } }>(
-        'sharedBranchTables',
-        {},
-    );
+    const sharedBranchTables = config.get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
 
     if (sharedBranchTables[tableName]) {
         outputChannel.appendLine(`Cannot create table "${tableName}" - already exists`);
@@ -1664,7 +1661,6 @@ async function createBranchTable(tableName: string): Promise<boolean> {
     }
 
     sharedBranchTables[tableName] = {
-        fixed: false,
         rules: [],
     };
 
@@ -1679,10 +1675,7 @@ async function createBranchTable(tableName: string): Promise<boolean> {
  */
 async function deleteBranchTable(tableName: string): Promise<boolean> {
     const config = workspace.getConfiguration('windowColors');
-    const sharedBranchTables = config.get<{ [key: string]: { fixed: boolean; rules: any[] } }>(
-        'sharedBranchTables',
-        {},
-    );
+    const sharedBranchTables = config.get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
 
     if (!sharedBranchTables[tableName]) {
         outputChannel.appendLine(`Cannot delete table "${tableName}" - does not exist`);
@@ -1719,10 +1712,7 @@ async function deleteBranchTable(tableName: string): Promise<boolean> {
  */
 async function renameBranchTable(oldName: string, newName: string): Promise<boolean> {
     const config = workspace.getConfiguration('windowColors');
-    const sharedBranchTables = config.get<{ [key: string]: { fixed: boolean; rules: any[] } }>(
-        'sharedBranchTables',
-        {},
-    );
+    const sharedBranchTables = config.get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
 
     if (!sharedBranchTables[oldName]) {
         outputChannel.appendLine(`Cannot rename table "${oldName}" - does not exist`);
@@ -1911,7 +1901,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
 
             const sharedBranchTables = workspace
                 .getConfiguration('windowColors')
-                .get<{ [key: string]: { fixed: boolean; rules: any[] } }>('sharedBranchTables', {});
+                .get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
 
             const tableName = selectedBranchContext.tableName;
             outputChannel.appendLine(`  [PREVIEW MODE] Using branch table: "${tableName}"`);

@@ -239,7 +239,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         const repoRules = this._getRepoRules();
-        const branchRules = this._getBranchRules();
         const sharedBranchTables = this._getSharedBranchTables();
         const otherSettings = this._getOtherSettings();
         const advancedProfiles = this._getAdvancedProfiles();
@@ -269,16 +268,29 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Calculate matching rule indexes using the same logic as the extension
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
-        const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(branchRules, workspaceInfo.currentBranch);
+        
+        // Get the actual branch rules from the shared table assigned to the matched repo rule
+        let actualBranchRules: BranchRule[] = [];
+        let repoIndexForBranchRule = -1; // Always -1 since we only use shared tables
+        
+        if (matchingRepoRuleIndex >= 0 && matchingRepoRuleIndex < repoRules.length) {
+            const matchedRepoRule = repoRules[matchingRepoRuleIndex];
+            if (matchedRepoRule.branchTableName && sharedBranchTables[matchedRepoRule.branchTableName]) {
+                actualBranchRules = sharedBranchTables[matchedRepoRule.branchTableName].rules;
+            }
+        }
+        
+        // Now match against the actual branch rules
+        const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(actualBranchRules, workspaceInfo.currentBranch);
 
         // console.log('[DEBUG] Sending matching indexes:', {
         //     repoRule: matchingRepoRuleIndex,
         //     branchRule: matchingBranchRuleIndex,
+        //     actualBranchRulesCount: actualBranchRules.length,
         // });
 
         this.currentConfig = {
             repoRules,
-            branchRules,
             sharedBranchTables,
             otherSettings,
             advancedProfiles,
@@ -289,18 +301,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             this._previewRepoRuleIndex = matchingRepoRuleIndex;
         }
 
-        const repoIndexForBranchRule = this._getRepoIndexForBranchRule(
-            repoRules,
-            matchingRepoRuleIndex,
-            matchingBranchRuleIndex,
-            workspaceInfo.currentBranch,
-        );
-
         if (this._previewBranchRuleContext === null && matchingBranchRuleIndex >= 0) {
-            // Determine which table the matching branch rule is in
+            // Get the table name from the matched repo rule
             let tableName = 'Default Rules';
-            if (repoIndexForBranchRule >= 0 && repoRules[repoIndexForBranchRule]) {
-                tableName = repoRules[repoIndexForBranchRule].branchTableName || 'Default Rules';
+            if (matchingRepoRuleIndex >= 0 && repoRules[matchingRepoRuleIndex]) {
+                tableName = repoRules[matchingRepoRuleIndex].branchTableName || 'Default Rules';
             }
 
             this._previewBranchRuleContext = {
@@ -349,15 +354,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             if (rule.primaryColor && !rule.profileName && advancedProfiles[rule.primaryColor]) {
                 rule.profileName = rule.primaryColor;
             }
-
-            // Migrate branch rules
-            if (rule.branchRules) {
-                for (const branchRule of rule.branchRules) {
-                    if (branchRule.color && !branchRule.profileName && advancedProfiles[branchRule.color]) {
-                        branchRule.profileName = branchRule.color;
-                    }
-                }
-            }
         }
 
         return rules;
@@ -375,7 +371,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     profileName: rule.profileName,
                     enabled: rule.enabled !== undefined ? rule.enabled : true,
                     branchTableName: rule.branchTableName,
-                    branchRules: rule.branchRules || undefined,
                 } as any;
             }
 
@@ -397,7 +392,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     profileName: obj.profileName,
                     enabled: obj.enabled !== undefined ? obj.enabled : true,
                     branchTableName: obj.branchTableName,
-                    branchRules: obj.branchRules || undefined,
                 } as any;
             }
 
@@ -433,70 +427,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private _getBranchRules(): BranchRule[] {
-        const config = vscode.workspace.getConfiguration('windowColors');
-        const branchConfigList = config.get<string[]>('branchConfigurationList', []);
-        const advancedProfiles = this._getAdvancedProfiles();
-
-        const rules = branchConfigList
-            .map((rule) => this._parseBranchRule(rule))
-            .filter((rule) => rule !== null) as BranchRule[];
-
-        // Migrate old configs: if color matches a profile but profileName is not set, set it
-        for (const rule of rules) {
-            if (rule.color && !rule.profileName && advancedProfiles[rule.color]) {
-                rule.profileName = rule.color;
-            }
-        }
-
-        return rules;
-    }
-
-    private _parseBranchRule(rule: string | any): BranchRule | null {
-        try {
-            // Handle JSON object format (new format)
-            if (typeof rule === 'object' && rule !== null) {
-                return {
-                    pattern: rule.pattern || '',
-                    color: rule.color || '',
-                    enabled: rule.enabled !== undefined ? rule.enabled : true,
-                } as any;
-            }
-
-            // Handle string formats
-            if (typeof rule !== 'string') {
-                return null;
-            }
-
-            const ruleString = rule;
-
-            // Try parsing as JSON string (for backward compatibility)
-            if (ruleString.trim().startsWith('{')) {
-                const obj = JSON.parse(ruleString);
-                return {
-                    pattern: obj.pattern || '',
-                    color: obj.color || '',
-                    enabled: obj.enabled !== undefined ? obj.enabled : true,
-                } as any;
-            }
-
-            // Otherwise parse legacy string format
-            const parts = ruleString.split(':');
-            if (parts.length < 2) {
-                return null;
-            }
-
-            return {
-                pattern: parts[0].trim(),
-                color: parts[1].trim(),
-                enabled: true,
-            };
-        } catch (error) {
-            console.warn('Failed to parse branch rule:', rule, error);
-            return null;
-        }
-    }
-
     private _getOtherSettings(): OtherSettings {
         const config = vscode.workspace.getConfiguration('windowColors');
 
@@ -527,11 +457,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const config = vscode.workspace.getConfiguration('windowColors');
         const sharedTables = config.get<{ [key: string]: { rules: BranchRule[] } } | undefined>('sharedBranchTables');
 
-        // If sharedBranchTables doesn't exist yet, create Default Rules table from branchConfigurationList
-        if (!sharedTables) {
-            const branchRules = config.get<BranchRule[]>('branchConfigurationList', []);
+        // If sharedBranchTables doesn't exist, initialize with empty Default Rules table
+        if (!sharedTables || Object.keys(sharedTables).length === 0) {
             return {
-                'Default Rules': { rules: branchRules },
+                'Default Rules': { rules: [] },
             };
         }
 
@@ -658,37 +587,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         return -1;
     }
 
-    private _getRepoIndexForBranchRule(
-        repoRules: RepoRule[],
-        matchingRepoRuleIndex: number,
-        matchingBranchRuleIndex: number,
-        currentBranch: string,
-    ): number {
-        // Check if the matched repo rule has local branch rules enabled
-        if (matchingRepoRuleIndex >= 0 && matchingRepoRuleIndex < repoRules.length) {
-            const repoRule = repoRules[matchingRepoRuleIndex];
-            if (repoRule.branchRules && repoRule.branchRules.length > 0) {
-                // Check if any local branch rule matches the current branch
-                for (const rule of repoRule.branchRules) {
-                    if ((rule as any).enabled === false) continue;
-                    if (rule.pattern === '') continue;
-
-                    try {
-                        const regex = new RegExp(rule.pattern);
-                        if (regex.test(currentBranch)) {
-                            // A local branch rule matched, so return the repo index
-                            return matchingRepoRuleIndex;
-                        }
-                    } catch (error) {
-                        // Invalid regex, skip
-                    }
-                }
-            }
-        }
-        // No local branch rule matched, return -1 to indicate it's a global rule
-        return -1;
-    }
-
     private _getMatchingBranchRuleIndex(branchRules: BranchRule[], currentBranch: string): number {
         if (!branchRules || !currentBranch) {
             return -1;
@@ -810,9 +708,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
         if (rule.profileName) {
             result.profileName = rule.profileName;
-        }
-        if (rule.branchRules && rule.branchRules.length > 0) {
-            result.branchRules = rule.branchRules;
         }
 
         return result;
