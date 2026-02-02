@@ -90,6 +90,7 @@ export interface WebviewMessage {
         mappingKey?: string;
         // Branch table management data
         tableName?: string;
+        repoRuleIndex?: number;
         newTableName?: string;
         oldTableName?: string;
     };

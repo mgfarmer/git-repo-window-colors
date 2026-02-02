@@ -12,6 +12,9 @@ import {
     AdvancedProfileMap,
 } from '../types/advancedModeTypes';
 
+// Import dialog utilities
+import { showInputDialog, showMessageDialog } from './dialogUtils';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
@@ -666,6 +669,14 @@ window.addEventListener('message', (event) => {
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
+    console.log('[handleConfigurationData] Received data from backend');
+    if (data?.repoRules) {
+        console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
+        data.repoRules.forEach((rule: any, index: number) => {
+            console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
+        });
+    }
+
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
@@ -3011,49 +3022,83 @@ function changeBranchTable(index: number, tableName: string) {
     debounceValidateAndSend();
 }
 
-function showCreateTableDialog(repoRuleIndex: number) {
-    const tableName = prompt('Enter a name for the new branch table:');
+async function showCreateTableDialog(repoRuleIndex: number) {
+    console.log('[showCreateTableDialog] START - repoRuleIndex:', repoRuleIndex);
+    console.log('[showCreateTableDialog] selectedRepoRuleIndex before:', selectedRepoRuleIndex);
+
+    const tableName = await showInputDialog({
+        title: 'Create New Branch Table',
+        inputLabel: 'Table Name:',
+        inputPlaceholder: 'Enter table name',
+        confirmText: 'Create',
+        cancelText: 'Cancel',
+    });
 
     if (!tableName) {
+        console.log('[showCreateTableDialog] User cancelled');
         return; // User cancelled
     }
 
     // Validate table name
     const trimmedName = tableName.trim();
     if (!trimmedName) {
-        alert('Table name cannot be empty.');
+        await showMessageDialog({
+            title: 'Invalid Name',
+            message: 'Table name cannot be empty.',
+            confirmText: 'OK',
+        });
         return;
     }
 
     // Check if table already exists
     if (currentConfig?.sharedBranchTables?.[trimmedName]) {
-        alert(`A table named "${trimmedName}" already exists.`);
+        await showMessageDialog({
+            title: 'Table Exists',
+            message: `A table named "${trimmedName}" already exists.`,
+            confirmText: 'OK',
+        });
         return;
     }
 
     // Create the new table via backend command
+    console.log('[showCreateTableDialog] Creating table via backend:', trimmedName, 'for repo rule:', repoRuleIndex);
     vscode.postMessage({
         command: 'createBranchTable',
-        data: { tableName: trimmedName },
+        data: {
+            tableName: trimmedName,
+            repoRuleIndex: repoRuleIndex,
+        },
     });
 
     // The backend will send updated config back, which will trigger a refresh
     // For now, optimistically update the UI
     if (currentConfig && currentConfig.sharedBranchTables) {
+        console.log('[showCreateTableDialog] Optimistically updating UI');
         currentConfig.sharedBranchTables[trimmedName] = {
             rules: [],
         };
 
         // Update the repo rule to use the new table
         if (currentConfig.repoRules?.[repoRuleIndex]) {
+            console.log(
+                '[showCreateTableDialog] BEFORE - branchTableName:',
+                currentConfig.repoRules[repoRuleIndex].branchTableName,
+            );
             currentConfig.repoRules[repoRuleIndex].branchTableName = trimmedName;
+            console.log(
+                '[showCreateTableDialog] AFTER - branchTableName:',
+                currentConfig.repoRules[repoRuleIndex].branchTableName,
+            );
         }
 
-        // Re-render
-        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
-        if (selectedRepoRuleIndex === repoRuleIndex) {
-            renderBranchRulesForSelectedRepo();
-        }
+        // Select this repo rule so the Branch Rules section shows the new table
+        console.log('[showCreateTableDialog] Setting selectedRepoRuleIndex to:', repoRuleIndex);
+        selectedRepoRuleIndex = repoRuleIndex;
+
+        // Backend will update the repo rule and send back updated config
+        // No need to call debounceValidateAndSend here - backend handles it atomically
+        console.log('[showCreateTableDialog] Waiting for backend to send updated config');
+        console.log('[showCreateTableDialog] END');
     }
 }
 
@@ -3068,23 +3113,38 @@ function viewBranchTable(tableName: string) {
     // For now, just switch to the Rules tab where users can see table assignments
 }
 
-function renameBranchTableFromMgmt(tableName: string) {
+async function renameBranchTableFromMgmt(tableName: string) {
     const table = currentConfig?.sharedBranchTables?.[tableName];
     if (!table) return;
 
-    const newName = prompt(`Rename table "${tableName}" to:`, tableName);
+    const newName = await showInputDialog({
+        title: 'Rename Branch Table',
+        inputLabel: `Rename "${tableName}" to:`,
+        inputValue: tableName,
+        confirmText: 'Rename',
+        cancelText: 'Cancel',
+    });
+
     if (!newName || newName === tableName) {
         return; // User cancelled or no change
     }
 
     const trimmedName = newName.trim();
     if (!trimmedName) {
-        alert('Table name cannot be empty.');
+        await showMessageDialog({
+            title: 'Invalid Name',
+            message: 'Table name cannot be empty.',
+            confirmText: 'OK',
+        });
         return;
     }
 
     if (currentConfig?.sharedBranchTables?.[trimmedName]) {
-        alert(`A table named "${trimmedName}" already exists.`);
+        await showMessageDialog({
+            title: 'Table Exists',
+            message: `A table named "${trimmedName}" already exists.`,
+            confirmText: 'OK',
+        });
         return;
     }
 
@@ -3140,7 +3200,7 @@ function renderBranchRulesForSelectedRepo() {
     if (!tableName || tableName === '__none__') {
         const header = document.querySelector('#branch-rules-heading');
         if (header) {
-            header.innerHTML = `Branch Rules - <span class="codicon codicon-circle-slash"></span> No Branch Table`;
+            header.innerHTML = `<span class="codicon codicon-circle-slash"></span> No Branch Table`;
         }
         // Hide the Copy From and Add buttons when no table is selected
         updateCopyFromButton(false);
@@ -3171,16 +3231,16 @@ function renderBranchRulesHeader(tableName: string) {
 
     header.innerHTML = '';
 
-    // Create "Branch Rules - " text
-    const prefixText = document.createElement('span');
-    prefixText.textContent = 'Branch Rules - ';
-    header.appendChild(prefixText);
-
     // Create icon
     const icon = document.createElement('span');
     icon.className = 'codicon codicon-git-branch';
-    icon.style.marginRight = '6px';
+    icon.style.marginRight = '0px';
     header.appendChild(icon);
+
+    // Create "Branch Rules" text
+    const prefixText = document.createElement('span');
+    prefixText.textContent = 'Branch Rules: ';
+    header.appendChild(prefixText);
 
     // Create a wrapper for input and edit icon
     const inputWrapper = document.createElement('span');

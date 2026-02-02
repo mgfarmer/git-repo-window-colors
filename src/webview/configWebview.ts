@@ -222,7 +222,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 await this._handleToggleStarredKey(message.data.mappingKey!);
                 break;
             case 'createBranchTable':
-                await this._handleCreateBranchTable(message.data.tableName!);
+                await this._handleCreateBranchTable(message.data.tableName!, message.data.repoRuleIndex);
                 break;
             case 'deleteBranchTable':
                 await this._handleDeleteBranchTable(message.data.tableName!);
@@ -561,10 +561,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private async _handleCreateBranchTable(tableName: string): Promise<void> {
+    private async _handleCreateBranchTable(tableName: string, repoRuleIndex?: number): Promise<void> {
+        console.log('[Backend] _handleCreateBranchTable called with:', tableName, 'repoRuleIndex:', repoRuleIndex);
         const result = await vscode.commands.executeCommand('_grwc.internal.createBranchTable', tableName);
+        console.log('[Backend] _handleCreateBranchTable result:', result);
         if (result) {
+            // If repoRuleIndex provided, update that repo rule to use the new table
+            if (repoRuleIndex !== undefined) {
+                console.log('[Backend] Updating repo rule', repoRuleIndex, 'to use table:', tableName);
+                const config = vscode.workspace.getConfiguration('windowColors');
+                const repoRules = this._getRepoRules();
+
+                if (repoRules[repoRuleIndex]) {
+                    repoRules[repoRuleIndex].branchTableName = tableName;
+                    const formattedRules = repoRules.map((rule) => this._formatRepoRule(rule));
+                    await config.update('repoConfigurationList', formattedRules, vscode.ConfigurationTarget.Global);
+                    console.log('[Backend] Repo rule updated successfully');
+                }
+            }
+
             // Refresh webview with updated config
+            console.log('[Backend] Sending updated config to webview');
             this._sendConfigurationToWebview();
         } else {
             vscode.window.showErrorMessage(`Failed to create branch table "${tableName}". Name may already exist.`);
@@ -1104,7 +1121,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         </head>
         <body>
             <!-- Preview Mode Toast -->
-            <div id="preview-toast" class="preview-toast" role="status" aria-live="polite">
+            <div id="preview-toast" class="preview-toast" role="status" aria-live="polite" title="You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.">
                 <span class="preview-toast-text">PREVIEW MODE</span>
                 <button class="preview-toast-reset-btn" data-action="resetToMatchingRules">reset</button>
             </div>
@@ -1197,7 +1214,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     </button>
                                 </div>
                                 <div class="section-help">
-                                    Define color rules based on branch name patterns. These override repository branch rules (if used). The configured color is applied to the Activity Bar when working on a matched branch.
+                                    Define rules based on branch name patterns. A simple color is applied to the Activity Bar when working on a matched branch. A profile is applied to all configured elements.
                                 </div>
                                 <div id="branchRulesContent" role="region" aria-label="Branch rules table">
                                     <div class="placeholder" aria-live="polite">Loading branch rules...</div>
