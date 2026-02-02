@@ -1,5 +1,12 @@
 # Git Repo Window Colors
 
+> **⚠️ PRERELEASE WARNING**  
+>
+> **Prerelease versions of this extension may be unstable and may iterate rapidly.**  
+> **It is recommended that you do NOT use the prerelease version unless you are actively engaged with the extension developer for testing purposes.**  
+>
+> **Configuration settings may NOT be preserved when switching to or between prerelease versions.  We will make our best effort to preserve configurations when upgrading to new released versions.**
+
 **Never lose track of which repository you're working in again.**
 
 Transform your VS Code experience by automatically applying distinctive colors to your workspace based on the Git repository you have open. Perfect for developers juggling multiple projects, this extension provides instant visual identification across all your VS Code windows.
