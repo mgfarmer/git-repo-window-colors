@@ -2287,11 +2287,11 @@ function renderOtherSettings(settings: any) {
                                    ${settings.previewSelectedRepoRule ? 'checked' : ''}
                                    data-action="updateOtherSetting('previewSelectedRepoRule', this.checked)"
                                    data-extra-action="handlePreviewModeChange">
-                            Preview Selected Repository Rule
+                            Preview Selected Rules
                         </label>
                         <span class="tooltiptext" role="tooltip">
-                            When enabled, selecting any repository rule will preview its colors in the workspace, 
-                            regardless of whether the repository URL matches. This is useful for testing how different 
+                            When enabled, selecting any repository rule will preview its colors in the workspace 
+                            without loading a workspace that matches the previewed rule. This is useful for testing how different 
                             rules look before applying them to a specific repository.
                         </span>
                     </div>
@@ -2917,9 +2917,27 @@ function selectRepoRule(index: number) {
 
     // Send preview command only if preview mode is enabled
     if (previewMode) {
+        console.log(
+            '[selectRepoRule] Sending previewRepoRule command for index:',
+            index,
+            'rule:',
+            currentConfig.repoRules[index],
+        );
+
+        // Check if this repo has no branch table or empty branch table
+        // If so, include clearBranchPreview flag to avoid double doit() calls
+        const selectedRule = currentConfig.repoRules[index];
+        const tableName = selectedRule.branchTableName || '__none__';
+        const branchTable = currentConfig.sharedBranchTables?.[tableName];
+        const hasBranchRules = tableName !== '__none__' && branchTable?.rules && branchTable.rules.length > 0;
+
         vscode.postMessage({
             command: 'previewRepoRule',
-            data: { index, previewEnabled: true },
+            data: {
+                index,
+                previewEnabled: true,
+                clearBranchPreview: !hasBranchRules,
+            },
         });
     }
 
@@ -6347,6 +6365,10 @@ function hidePaletteToast() {
     }
 }
 
+// Store references to event handlers so they can be removed
+let paletteAcceptHandler: ((e: Event) => void) | null = null;
+let paletteUndoHandler: ((e: Event) => void) | null = null;
+
 /**
  * Sets up the palette toast event handlers
  */
@@ -6354,25 +6376,39 @@ function setupPaletteToast() {
     const acceptBtn = document.getElementById('paletteToastAccept');
     const undoBtn = document.getElementById('paletteToastUndo');
 
-    if (acceptBtn) {
-        acceptBtn.addEventListener('click', () => {
-            // Accept the changes - just hide the toast
-            hidePaletteToast();
+    // Remove old event listeners if they exist
+    if (acceptBtn && paletteAcceptHandler) {
+        acceptBtn.removeEventListener('click', paletteAcceptHandler);
+    }
+    if (undoBtn && paletteUndoHandler) {
+        undoBtn.removeEventListener('click', paletteUndoHandler);
+    }
+
+    // Create new handlers
+    paletteAcceptHandler = () => {
+        // Accept the changes - just hide the toast
+        hidePaletteToast();
+        previousPalette = null;
+    };
+
+    paletteUndoHandler = () => {
+        // Restore the previous palette
+        if (previousPalette && selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+            currentConfig.advancedProfiles[selectedProfileName].palette = previousPalette;
+            saveProfiles();
+            renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
             previousPalette = null;
-        });
+        }
+        hidePaletteToast();
+    };
+
+    // Add new event listeners
+    if (acceptBtn) {
+        acceptBtn.addEventListener('click', paletteAcceptHandler);
     }
 
     if (undoBtn) {
-        undoBtn.addEventListener('click', () => {
-            // Restore the previous palette
-            if (previousPalette && selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
-                currentConfig.advancedProfiles[selectedProfileName].palette = previousPalette;
-                saveProfiles();
-                renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
-                previousPalette = null;
-            }
-            hidePaletteToast();
-        });
+        undoBtn.addEventListener('click', paletteUndoHandler);
     }
 }
 

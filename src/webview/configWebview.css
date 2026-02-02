@@ -556,14 +556,14 @@ h2 {
 .panel-header-buttons {
     display: flex;
     align-items: center;
-    gap: 0;
+    gap: 8px;
 }
 .header-add-button {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
     padding: 6px 12px;
-    margin-right: 12px;
+    margin-right: 4px;
     border-radius: 4px;
     cursor: pointer;
     font-family: var(--vscode-font-family);
@@ -580,7 +580,6 @@ h2 {
     color: var(--vscode-button-foreground);
     border: none;
     padding: 6px 12px;
-    margin-right: 16px;
     border-radius: 4px;
     cursor: pointer;
     font-family: var(--vscode-font-family);
@@ -1463,6 +1462,7 @@ button:focus {
     font-size: 14px;
     cursor: pointer;
     padding: 4px 8px;
+    margin-right: 4px;
     border-radius: 3px;
     transition: all 0.2s;
     display: flex;

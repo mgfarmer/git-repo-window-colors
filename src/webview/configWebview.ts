@@ -187,6 +187,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'previewRepoRule':
                 this._previewRepoRuleIndex = (message.data as any).index;
                 this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
+                // Clear branch preview if requested (avoids double doit() call)
+                if ((message.data as any).clearBranchPreview) {
+                    this._previewBranchRuleContext = null;
+                }
+                console.log('[configWebview] previewRepoRule received - index:', this._previewRepoRuleIndex, 'previewEnabled:', this._previewModeEnabled, 'clearBranchPreview:', (message.data as any).clearBranchPreview);
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
                 // Wait for colorCustomizations to update before refreshing
@@ -213,6 +218,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 await this._waitForColorCustomizationsUpdate();
                 this._sendConfigurationToWebview();
                 break;
+            case 'clearBranchPreview':
+                // Clear branch preview context while keeping repo preview active
+                this._previewBranchRuleContext = null;
+                // Reapply colors with the current repo preview but no branch preview
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared branch preview', true);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
                 this._sendConfigurationToWebview();
                 break;
             case 'generatePalette':
@@ -683,6 +695,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // console.log('[DEBUG] Waiting for', updatePromises.length, 'configuration updates to complete...');
             await Promise.all(updatePromises);
             // console.log('[DEBUG] All configuration updates completed results:', promiseResult);
+
+            // If preview mode is active, re-apply the preview after configuration update
+            // This ensures that color changes during preview mode are immediately reflected
+            if (this._previewModeEnabled) {
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'config update during preview', true);
+                await this._waitForColorCustomizationsUpdate();
+            }
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);

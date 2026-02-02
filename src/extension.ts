@@ -334,6 +334,15 @@ function createBranchTempProfile(branchColor: Color): AdvancedProfile {
             `    [Branch Temp Profile] Created with ${Object.keys(palette).length} palette slots and ${Object.keys(mappings).length} mappings`,
         );
         outputChannel.appendLine(`    [Branch Temp Profile] Mappings: ${Object.keys(mappings).join(', ')}`);
+        outputChannel.appendLine(`    [Branch Temp Profile] Branch color: ${branchColor.hex()}`);
+        console.log(
+            '[createBranchTempProfile] Created profile for branch color:',
+            branchColor.hex(),
+            'palette:',
+            palette,
+            'mappings:',
+            mappings,
+        );
 
         return profile;
     } catch (error) {
@@ -1783,6 +1792,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     stopBranchPoll();
     outputChannel.appendLine('\nColorizer triggered by ' + reason);
     outputChannel.appendLine('  Preview mode enabled: ' + usePreviewMode);
+    console.log('[doit] Triggered by:', reason, 'usePreviewMode:', usePreviewMode);
 
     const repoConfigList = getRepoConfigList(true);
     if (repoConfigList === undefined) {
@@ -1809,9 +1819,11 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         // Use selected index from config provider
         const selectedIndex = configProvider?.getPreviewRepoRuleIndex();
         outputChannel.appendLine('  Selected repo rule index: ' + selectedIndex);
+        console.log('[doit] Preview mode - selectedIndex:', selectedIndex);
         if (selectedIndex !== null && selectedIndex !== undefined) {
             repoRuleIndex = selectedIndex;
             outputChannel.appendLine('  [PREVIEW MODE] Using selected rule at index ' + repoRuleIndex);
+            console.log('[doit] Using preview repo rule at index:', repoRuleIndex);
         }
     } else {
         // Use matching index - find the rule that matches the current repo
@@ -1837,6 +1849,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     if (repoRuleIndex !== undefined && repoConfigList && repoConfigList[repoRuleIndex]) {
         matchedRepoConfig = repoConfigList[repoRuleIndex];
         outputChannel.appendLine('  Rule: "' + matchedRepoConfig.repoQualifier + '"');
+        console.log('[doit] Matched repo config:', matchedRepoConfig);
 
         // Check if this rule has an error (only show for non-preview mode)
         if (!usePreviewMode && repoRuleErrors.has(repoRuleIndex)) {
@@ -1877,9 +1890,11 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                 try {
                     repoColor = Color(matchedRepoConfig.primaryColor);
                     outputChannel.appendLine('  Using simple color: ' + repoColor.hex());
+                    console.log('[doit] Creating repo temp profile for simple color:', repoColor.hex());
 
                     matchedRepoConfig.profile = createRepoTempProfile(repoColor);
                     matchedRepoConfig.isSimpleMode = true;
+                    console.log('[doit] Repo profile created:', matchedRepoConfig.profile);
                 } catch (e) {
                     outputChannel.appendLine('  Error parsing color: ' + e);
                 }
@@ -2030,6 +2045,12 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         } else {
             outputChannel.appendLine('  No branch rule matched, using repo color for branch color');
             branchColor = repoColor;
+
+            // In simple mode, create a default branch profile for activity bar coloring
+            if (matchedRepoConfig && matchedRepoConfig.isSimpleMode && branchColor) {
+                outputChannel.appendLine('  Creating default branch profile for activity bar in simple mode');
+                matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+            }
         }
     }
 
@@ -2157,6 +2178,22 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     outputChannel.appendLine(
         `  Setting ${Object.keys(newColors).filter((k) => newColors[k] !== undefined).length} color customizations`,
     );
+
+    // Log activity bar colors specifically for debugging
+    const activityBarKeys = Object.keys(finalColors).filter((k) => k.startsWith('activityBar.'));
+    if (activityBarKeys.length > 0) {
+        console.log(
+            '[doit] Activity bar colors being set:',
+            activityBarKeys.map((k) => `${k}: ${finalColors[k]}`),
+        );
+        outputChannel.appendLine(
+            '  Activity bar colors: ' + activityBarKeys.map((k) => `${k}=${finalColors[k]}`).join(', '),
+        );
+    } else {
+        console.log('[doit] WARNING: No activity bar colors in finalColors');
+        outputChannel.appendLine('  WARNING: No activity bar colors being set');
+    }
+
     workspace.getConfiguration('workbench').update('colorCustomizations', finalColors, false);
 
     outputChannel.appendLine('\nLoving this extension? https://www.buymeacoffee.com/KevinMills');

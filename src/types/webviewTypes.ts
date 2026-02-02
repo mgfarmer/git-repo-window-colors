@@ -53,6 +53,7 @@ export interface WebviewMessage {
         | 'previewRepoRule'
         | 'previewBranchRule'
         | 'clearPreview'
+        | 'clearBranchPreview'
         | 'generatePalette'
         | 'toggleStarredKey'
         | 'createBranchTable'
@@ -93,5 +94,9 @@ export interface WebviewMessage {
         repoRuleIndex?: number;
         newTableName?: string;
         oldTableName?: string;
+        // Preview mode properties
+        index?: number;
+        previewEnabled?: boolean;
+        clearBranchPreview?: boolean;
     };
 }
