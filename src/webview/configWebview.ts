@@ -1099,7 +1099,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 </button>
                             </div>
                             <div class="section-help" aria-describedby="repo-rules-heading">
-                                Define color rules for specific repositories. The <strong>FIRST MATCHING</strong> rule will be used. The qualifier is a simple substring match against the repository URL, not a regular expression.
+                                Define coloring rules for repositories. Rules are processed from top to bottom. The <strong>FIRST MATCHING</strong> rule will be used. The qualifier is a simple substring match against the repository URL, not a regular expression.
                             </div>
                             <div id="repoRulesContent" role="region" aria-label="Repository rules table">
                                 <div class="placeholder" aria-live="polite">Loading repository rules...</div>

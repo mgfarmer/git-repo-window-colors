@@ -92,7 +92,7 @@ body {
     gap: 20px;
 }
 .repo-panel {
-    flex: 1;
+    flex: 1.2;
     border: 1px solid var(--vscode-panel-border);
     padding: 0px;
     padding-top: 10px;
@@ -180,12 +180,14 @@ h2 {
     text-align: left;
     border: 1px solid var(--vscode-panel-border);
     font-size: 12px;
+    white-space: nowrap;
 }
 .rules-table td {
     padding: 4px;
     border: 1px solid var(--vscode-panel-border);
     background-color: var(--vscode-editor-background);
     vertical-align: middle;
+    white-space: nowrap;
 }
 /* Ensure all table cells have consistent background */
 .rules-table td.color-cell,
@@ -248,8 +250,8 @@ h2 {
 
 /* Select column styling */
 .select-column {
-    width: 50px;
-    min-width: 50px;
+    width: 25px;
+    min-width: 25px;
     text-align: center;
 }
 
@@ -277,6 +279,11 @@ h2 {
 .branch-mode-column {
     width: 100px;
     min-width: 100px;
+}
+
+/* Branch table column styling */
+.branch-table-column {
+    white-space: nowrap;
 }
 
 .branch-mode-cell {
@@ -1646,10 +1653,11 @@ button:focus {
     border-radius: 4px;
 }
 
-.branch-table-info {
-    display: flex;
+.branch-table-grid {
+    display: grid;
+    grid-template-columns: 10% 8% 8% 74%;
+    gap: 16px;
     align-items: center;
-    gap: 12px;
     flex: 1;
 }
 
@@ -1660,19 +1668,25 @@ button:focus {
     gap: 6px;
 }
 
-.branch-table-meta {
+.branch-table-rule-count,
+.branch-table-references {
     color: var(--vscode-descriptionForeground);
     font-size: 0.9em;
 }
 
-.branch-table-meta .repo-link {
+.branch-table-repo-list {
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.9em;
+}
+
+.branch-table-repo-list .repo-link {
     font-style: italic;
     color: var(--vscode-textLink-foreground);
     text-decoration: none;
     cursor: pointer;
 }
 
-.branch-table-meta .repo-link:hover {
+.branch-table-repo-list .repo-link:hover {
     text-decoration: underline;
     color: var(--vscode-textLink-activeForeground);
 }
@@ -2047,6 +2061,7 @@ button:focus {
 /* Branch Table Custom Dropdown */
 .branch-table-dropdown {
     position: relative;
+    margin-right: 32px;
 }
 
 .branch-table-dropdown .dropdown-selected {

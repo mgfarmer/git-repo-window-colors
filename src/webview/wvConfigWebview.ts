@@ -1493,7 +1493,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
     const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
-        <th scope="col" class="select-column">Select</th>
+        <th scope="col" class="select-column">Sel</th>
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
         <th scope="col">Primary Color${colorSuffix}</th>
@@ -1629,6 +1629,8 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     selectedDisplay.style.alignItems = 'center';
     selectedDisplay.style.gap = '6px';
     selectedDisplay.style.position = 'relative';
+    selectedDisplay.style.maxWidth = '150px';
+    selectedDisplay.style.overflow = 'hidden';
 
     // Arrow indicator
     const arrow = document.createElement('span');
@@ -1646,7 +1648,8 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     optionsContainer.style.position = 'absolute';
     optionsContainer.style.top = '100%';
     optionsContainer.style.left = '0';
-    optionsContainer.style.right = '0';
+    optionsContainer.style.minWidth = '100%';
+    optionsContainer.style.width = 'max-content';
     optionsContainer.style.background = 'var(--vscode-dropdown-background)';
     optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
     optionsContainer.style.maxHeight = '250px';
@@ -1720,11 +1723,20 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     // Update selected display
     const updateSelectedDisplay = (tableName: string) => {
         const icon = document.createElement('span');
+        icon.style.flexShrink = '0';
 
         if (tableName === '__none__') {
             icon.className = 'codicon codicon-circle-slash';
             const text = document.createElement('span');
             text.textContent = 'No Branch Table';
+            text.style.overflow = 'hidden';
+            text.style.textOverflow = 'ellipsis';
+            text.style.whiteSpace = 'nowrap';
+            text.style.paddingRight = '24px';
+            text.style.maxWidth = '150px';
+            text.style.minWidth = '0';
+            text.style.flex = '1';
+            text.title = 'No Branch Table';
 
             selectedDisplay.innerHTML = '';
             selectedDisplay.appendChild(icon);
@@ -1736,6 +1748,14 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
             const count = usageCounts[tableName] || 0;
             const badge = count > 0 ? ` [${count}]` : '';
             text.textContent = tableName + badge;
+            text.style.overflow = 'hidden';
+            text.style.textOverflow = 'ellipsis';
+            text.style.whiteSpace = 'nowrap';
+            text.style.paddingRight = '24px';
+            text.style.maxWidth = '150px';
+            text.style.minWidth = '0';
+            text.style.flex = '1';
+            text.title = tableName + badge;
 
             selectedDisplay.innerHTML = '';
             selectedDisplay.appendChild(icon);
@@ -1966,7 +1986,7 @@ function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?:
     const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
     const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
-        <th scope="col" class="select-column">Select</th>
+        <th scope="col" class="select-column">Sel</th>
         <th scope="col">Actions</th>
         <th scope="col">Branch Pattern</th>
         <th scope="col">Color${colorSuffix}</th>
@@ -2409,28 +2429,32 @@ function renderBranchTablesTab(config: any) {
         // Build the repo list HTML with bullets and clickable links
         let repoListHtml = '';
         if (repoList.length > 0) {
-            repoListHtml =
-                ' • ' +
-                repoList
-                    .map((repoInfo, index) => {
-                        const bullet =
-                            index > 0
-                                ? '<span class="codicon codicon-circle-small-filled" style="font-size: 6px; vertical-align: middle; margin: 0 4px;"></span>'
-                                : '';
-                        return `${bullet}<a href="#" class="repo-link" data-repo-index="${repoInfo.index}" style="font-style: italic; color: var(--vscode-textLink-foreground); text-decoration: none; cursor: pointer;">${escapeHtml(repoInfo.qualifier)}</a>`;
-                    })
-                    .join('');
+            repoListHtml = repoList
+                .map((repoInfo, index) => {
+                    const bullet =
+                        index > 0
+                            ? '<span class="codicon codicon-circle-small-filled" style="font-size: 6px; vertical-align: middle; margin: 0 4px;"></span>'
+                            : '';
+                    return `${bullet}<a href="#" class="repo-link" data-repo-index="${repoInfo.index}" style="font-style: italic; color: var(--vscode-textLink-foreground); text-decoration: none; cursor: pointer;">${escapeHtml(repoInfo.qualifier)}</a>`;
+                })
+                .join('');
         }
 
         html += `
             <div class="branch-table-item">
-                <div class="branch-table-info">
+                <div class="branch-table-grid">
                     <div class="branch-table-name">
                         <span class="codicon codicon-git-branch"></span>
                         <span>${escapeHtml(tableName)}</span>
                     </div>
-                    <div class="branch-table-meta">
-                        ${ruleCount} rule${ruleCount !== 1 ? 's' : ''} • Used by ${usageCount} repo rule${usageCount !== 1 ? 's' : ''}${repoListHtml}
+                    <div class="branch-table-rule-count">
+                        ${ruleCount} rule${ruleCount !== 1 ? 's' : ''}
+                    </div>
+                    <div class="branch-table-references">
+                        ${usageCount} repo rule${usageCount !== 1 ? 's' : ''}
+                    </div>
+                    <div class="branch-table-repo-list">
+                        ${repoListHtml}
                     </div>
                 </div>
                 <div class="branch-table-actions">
