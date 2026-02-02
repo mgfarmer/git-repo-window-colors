@@ -1698,9 +1698,10 @@ async function deleteBranchTable(tableName: string): Promise<boolean> {
         outputChannel.appendLine(`Migrated ${migratedCount} repo rules from "${tableName}" to "Default Rules"`);
     }
 
-    // Delete the table
-    delete sharedBranchTables[tableName];
-    await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+    // Create a deep copy to ensure VS Code detects the change
+    const updatedTables = JSON.parse(JSON.stringify(sharedBranchTables));
+    delete updatedTables[tableName];
+    await config.update('sharedBranchTables', updatedTables, vscode.ConfigurationTarget.Global);
     outputChannel.appendLine(`Deleted branch table: "${tableName}"`);
 
     return true;
@@ -1735,11 +1736,12 @@ async function renameBranchTable(oldName: string, newName: string): Promise<bool
         }
     }
 
-    // Rename the table
-    sharedBranchTables[newName] = sharedBranchTables[oldName];
-    delete sharedBranchTables[oldName];
+    // Rename the table - create deep copy to ensure VS Code detects the change
+    const updatedTables = JSON.parse(JSON.stringify(sharedBranchTables));
+    updatedTables[newName] = updatedTables[oldName];
+    delete updatedTables[oldName];
 
-    await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+    await config.update('sharedBranchTables', updatedTables, vscode.ConfigurationTarget.Global);
 
     if (updatedCount > 0) {
         await config.update('repoConfigurationList', repoRules, vscode.ConfigurationTarget.Global);

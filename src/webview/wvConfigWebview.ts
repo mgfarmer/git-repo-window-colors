@@ -981,6 +981,17 @@ function handleDocumentClick(event: Event) {
     const target = event.target as HTMLElement;
     if (!target) return;
 
+    // Handle repo rule navigation links
+    const repoLink = target.closest('.repo-link') as HTMLElement;
+    if (repoLink) {
+        event.preventDefault();
+        const index = parseInt(repoLink.getAttribute('data-repo-index') || '-1');
+        if (index >= 0) {
+            navigateToRepoRule(index);
+        }
+        return;
+    }
+
     // Handle delete buttons
     const deleteBtn = target.closest('.delete-btn') as HTMLElement;
     if (deleteBtn) {
@@ -2369,16 +2380,20 @@ function renderBranchTablesTab(config: any) {
     const sharedTables = config.sharedBranchTables || { 'Default Rules': { rules: [] } };
     const repoRules = config.repoRules || [];
 
-    // Calculate usage counts for each table
+    // Calculate usage counts and track which repos use each table
     const usageCounts: { [tableName: string]: number } = {};
+    const usedByRepos: { [tableName: string]: Array<{ qualifier: string; index: number }> } = {};
     for (const tableName in sharedTables) {
         usageCounts[tableName] = 0;
+        usedByRepos[tableName] = [];
     }
-    for (const repo of repoRules) {
+    for (let i = 0; i < repoRules.length; i++) {
+        const repo = repoRules[i];
         const tableName = repo.branchTableName;
         // Skip undefined (No Branch Table)
         if (tableName && usageCounts[tableName] !== undefined) {
             usageCounts[tableName]++;
+            usedByRepos[tableName].push({ qualifier: repo.repoQualifier, index: i });
         }
     }
 
@@ -2394,6 +2409,23 @@ function renderBranchTablesTab(config: any) {
         const table = sharedTables[tableName];
         const usageCount = usageCounts[tableName] || 0;
         const ruleCount = table.rules ? table.rules.length : 0;
+        const repoList = usedByRepos[tableName] || [];
+
+        // Build the repo list HTML with bullets and clickable links
+        let repoListHtml = '';
+        if (repoList.length > 0) {
+            repoListHtml =
+                ' • ' +
+                repoList
+                    .map((repoInfo, index) => {
+                        const bullet =
+                            index > 0
+                                ? '<span class="codicon codicon-circle-small-filled" style="font-size: 6px; vertical-align: middle; margin: 0 4px;"></span>'
+                                : '';
+                        return `${bullet}<a href="#" class="repo-link" data-repo-index="${repoInfo.index}" style="font-style: italic; color: var(--vscode-textLink-foreground); text-decoration: none; cursor: pointer;">${escapeHtml(repoInfo.qualifier)}</a>`;
+                    })
+                    .join('');
+        }
 
         html += `
             <div class="branch-table-item">
@@ -2403,24 +2435,15 @@ function renderBranchTablesTab(config: any) {
                         <span>${escapeHtml(tableName)}</span>
                     </div>
                     <div class="branch-table-meta">
-                        ${ruleCount} rule${ruleCount !== 1 ? 's' : ''} • Used by ${usageCount} repo${usageCount !== 1 ? 's' : ''}
+                        ${ruleCount} rule${ruleCount !== 1 ? 's' : ''} • Used by ${usageCount} repo rule${usageCount !== 1 ? 's' : ''}${repoListHtml}
                     </div>
                 </div>
                 <div class="branch-table-actions">
                     <button type="button" 
-                            onclick="viewBranchTable('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
-                            title="View and edit rules in this table">
-                        View Rules
-                    </button>
-                    <button type="button" 
-                            onclick="renameBranchTableFromMgmt('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
-                            title="Rename this table">
-                        Rename
-                    </button>
-                    <button type="button" 
+                            class="vscode-button secondary"
                             onclick="deleteBranchTableFromMgmt('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
                             ${usageCount > 0 ? 'disabled' : ''}
-                            title="${usageCount > 0 ? 'Table is in use by ' + usageCount + ' repo(s)' : 'Delete this table'}">
+                            title="${usageCount > 0 ? 'Table is in use by ' + usageCount + ' repo rule' + (usageCount !== 1 ? 's' : '') : 'Delete this table'}">
                         Delete
                     </button>
                 </div>
@@ -2829,7 +2852,11 @@ function addBranchRule() {
 
     // Don't allow adding if no table is selected
     if (tableName === '__none__') {
-        alert('Cannot add branch rule: No branch table selected for this repository. Please select a table first.');
+        showMessageDialog({
+            title: 'Cannot Add Rule',
+            message:
+                'Cannot add branch rule: No branch table selected for this repository. Please select a table first.',
+        });
         return;
     }
 
@@ -2837,7 +2864,10 @@ function addBranchRule() {
     if (currentConfig.sharedBranchTables && currentConfig.sharedBranchTables[tableName]) {
         currentConfig.sharedBranchTables[tableName].rules.push(newRule);
     } else {
-        alert('Selected table does not exist. Please select an existing table.');
+        showMessageDialog({
+            title: 'Table Not Found',
+            message: 'Selected table does not exist. Please select an existing table.',
+        });
         return;
     }
 
@@ -2906,6 +2936,17 @@ function selectRepoRule(index: number) {
 
     // Render branch rules for the selected repo
     renderBranchRulesForSelectedRepo();
+}
+
+function navigateToRepoRule(index: number) {
+    // Switch to the Rules tab
+    const rulesTab = document.getElementById('tab-rules');
+    if (rulesTab) {
+        rulesTab.click();
+    }
+
+    // Select the repo rule
+    selectRepoRule(index);
 }
 
 function selectBranchRule(index: number) {
@@ -3131,7 +3172,7 @@ async function renameBranchTableFromMgmt(tableName: string) {
     });
 }
 
-function deleteBranchTableFromMgmt(tableName: string) {
+async function deleteBranchTableFromMgmt(tableName: string) {
     const table = currentConfig?.sharedBranchTables?.[tableName];
     if (!table) return;
 
@@ -3140,9 +3181,10 @@ function deleteBranchTableFromMgmt(tableName: string) {
     const usageCount = repos.filter((r: any) => r.branchTableName === tableName).length;
 
     if (usageCount > 0) {
-        alert(
-            `Cannot delete table "${tableName}" because it is being used by ${usageCount} repo(s). Please reassign those repos to different tables first.`,
-        );
+        await showMessageDialog({
+            title: 'Cannot Delete Table',
+            message: `Cannot delete table "${tableName}" because it is being used by ${usageCount} repo rule${usageCount !== 1 ? 's' : ''}. Please reassign those repos to different tables first.`,
+        });
         return;
     }
 
@@ -3152,7 +3194,13 @@ function deleteBranchTableFromMgmt(tableName: string) {
             ? `Delete table "${tableName}"? This will permanently delete ${ruleCount} branch rule(s).`
             : `Delete table "${tableName}"?`;
 
-    if (!confirm(confirmMsg)) {
+    const confirmed = await showMessageDialog({
+        title: 'Confirm Deletion',
+        message: confirmMsg,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+    });
+    if (!confirmed) {
         return;
     }
 
@@ -3343,7 +3391,10 @@ function renderBranchRulesHeader(tableName: string) {
         const newName = input.value.trim();
 
         if (!newName) {
-            alert('Table name cannot be empty.');
+            showMessageDialog({
+                title: 'Invalid Name',
+                message: 'Table name cannot be empty.',
+            });
             input.value = originalName;
             return;
         }
@@ -3361,7 +3412,10 @@ function renderBranchRulesHeader(tableName: string) {
 
         // Check if new name already exists
         if (currentConfig?.sharedBranchTables?.[newName]) {
-            alert(`A table named "${newName}" already exists.`);
+            showMessageDialog({
+                title: 'Duplicate Name',
+                message: `A table named "${newName}" already exists.`,
+            });
             input.value = originalName;
             return;
         }

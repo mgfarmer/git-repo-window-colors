@@ -1023,8 +1023,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             
             <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
                 <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
-                <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="branch-tables-tab" id="tab-branch-tables">Branch Tables</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
                 <button type="button" class="help-button-global" data-action="openContextualHelp" title="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
             </div>

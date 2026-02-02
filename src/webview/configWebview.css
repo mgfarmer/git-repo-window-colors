@@ -633,9 +633,6 @@ h2 {
     text-align: center;
 }
 
-.branch-panel .panel-header {
-    padding-right: 40px;
-}
 .validation-error {
     border: 1px solid var(--vscode-errorBorder) !important;
     background-color: var(--vscode-inputValidation-errorBackground) !important;
@@ -1691,6 +1688,18 @@ button:focus {
     font-size: 0.9em;
 }
 
+.branch-table-meta .repo-link {
+    font-style: italic;
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.branch-table-meta .repo-link:hover {
+    text-decoration: underline;
+    color: var(--vscode-textLink-activeForeground);
+}
+
 .branch-table-badge {
     background-color: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
@@ -1705,8 +1714,32 @@ button:focus {
 }
 
 .branch-table-actions button {
-    padding: 4px 12px;
-    font-size: 0.9em;
+    padding: 6px 14px;
+    font-size: 13px;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.branch-table-actions .vscode-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-button-border, transparent);
+}
+
+.branch-table-actions .vscode-button:hover:not(:disabled) {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.branch-table-actions .vscode-button.secondary {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-border, transparent);
+}
+
+.branch-table-actions .vscode-button.secondary:hover:not(:disabled) {
+    background-color: var(--vscode-button-secondaryHoverBackground);
 }
 
 .branch-table-actions button:disabled {
