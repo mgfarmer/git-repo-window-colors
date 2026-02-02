@@ -92,19 +92,33 @@ body {
     gap: 20px;
 }
 .repo-panel {
-    flex: 1.2;
+    flex: 1;
     border: 1px solid var(--vscode-panel-border);
     padding: 0px;
     padding-top: 10px;
     border-radius: 4px;
     display: flex;
     flex-direction: column;
+    transition: flex 0.3s ease-in-out;
 }
 .right-column {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    min-width: 0;
+    max-width: 100%;
+    transition:
+        flex 0.3s ease-in-out,
+        min-width 0.3s ease-in-out,
+        max-width 0.3s ease-in-out,
+        width 0.3s ease-in-out;
+}
+
+.right-column.collapsed {
+    flex: 0 0 auto;
+    min-width: 50px;
+    max-width: 50px;
 }
 .branch-panel {
     flex: 1;
@@ -114,22 +128,20 @@ body {
     border-radius: 4px;
     display: flex;
     flex-direction: column;
-}
-.import-export-panel {
-    flex: 0 0 auto;
-    height: auto;
-    border: 0px solid var(--vscode-panel-border);
-    padding: 4px;
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    position: relative;
+    min-height: 400px;
+    transition:
+        flex 0.3s ease-in-out,
+        min-width 0.3s ease-in-out,
+        max-width 0.3s ease-in-out,
+        width 0.3s ease-in-out,
+        padding 0.3s ease-in-out;
+    overflow: hidden;
 }
 .import-export-buttons {
     display: flex;
     gap: 8px;
     margin: 0;
-    justify-content: flex-end;
 }
 .import-export-button {
     flex: 0 0 auto;
@@ -156,6 +168,16 @@ body {
     padding: 15px;
     border-radius: 4px;
 }
+
+.bottom-panel .panel-header {
+    padding-left: 0;
+    margin-bottom: 15px;
+}
+
+.bottom-panel .panel-header h2 {
+    margin: 0;
+}
+
 h2 {
     margin-top: 0;
     color: var(--vscode-foreground);
@@ -198,6 +220,7 @@ h2 {
 /* Add padding to color cells to prevent overlap */
 .rules-table td.color-cell {
     padding-left: 8px;
+    max-width: 150px;
 }
 
 /* Ensure input fields within table cells don't overflow */
@@ -284,6 +307,13 @@ h2 {
 /* Branch table column styling */
 .branch-table-column {
     white-space: nowrap;
+    max-width: 200px;
+    width: 200px;
+}
+
+.branch-table-cell {
+    max-width: 200px;
+    width: 200px;
 }
 
 .branch-mode-cell {
@@ -1114,6 +1144,86 @@ button:focus {
 .rule-input.regex-error {
     border-color: var(--vscode-inputValidation-errorBorder) !important;
     background-color: var(--vscode-inputValidation-errorBackground);
+}
+
+/* Ensure branch panel has relative positioning for absolute error container */
+.branch-panel {
+    position: relative;
+}
+
+/* Branch panel collapse/expand buttons */
+.branch-collapse-btn,
+.branch-expand-btn {
+    position: absolute;
+    top: 10px;
+    left: 8px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    font-size: 14px;
+    width: 24px;
+    height: 24px;
+}
+
+.branch-collapse-btn:hover,
+.branch-expand-btn:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.branch-expand-btn {
+    writing-mode: vertical-lr;
+    transform: rotate(180deg);
+}
+
+/* Collapsed state for branch panel */
+.branch-panel.collapsed {
+    flex: 0 0 auto;
+    min-width: 50px;
+    max-width: 50px;
+    width: 50px;
+    padding-left: 0;
+    padding-right: 0;
+    min-height: 400px;
+}
+
+.branch-panel.collapsed .panel-header,
+.branch-panel.collapsed .section-help,
+.branch-panel.collapsed #branchRulesContent {
+    display: none;
+}
+
+.branch-panel.collapsed .branch-collapse-btn {
+    display: none !important;
+}
+
+.branch-panel.collapsed .branch-expand-btn {
+    display: flex !important;
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.branch-panel.collapsed::after {
+    content: 'Branch Rules Table';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(180deg);
+    writing-mode: vertical-lr;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--vscode-foreground);
+    opacity: 0.8;
+    white-space: nowrap;
+    pointer-events: none;
 }
 
 /* Ensure branch panel has relative positioning for absolute error container */

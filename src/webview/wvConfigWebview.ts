@@ -976,11 +976,55 @@ function attachEventListeners() {
         }
     };
     document.addEventListener('click', handleHelpPanelLinks);
+
+    // Initialize branch panel collapse state
+    initBranchPanelState();
+}
+
+function toggleBranchPanelCollapse(collapse: boolean) {
+    const branchPanel = document.querySelector('.branch-panel');
+    const rightColumn = document.querySelector('.right-column');
+    const collapseBtn = document.querySelector('.branch-collapse-btn') as HTMLElement;
+    const expandBtn = document.querySelector('.branch-expand-btn') as HTMLElement;
+
+    if (!branchPanel || !rightColumn || !collapseBtn || !expandBtn) return;
+
+    if (collapse) {
+        branchPanel.classList.add('collapsed');
+        rightColumn.classList.add('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'false');
+        localStorage.setItem('branchPanelCollapsed', 'true');
+    } else {
+        branchPanel.classList.remove('collapsed');
+        rightColumn.classList.remove('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'true');
+        localStorage.setItem('branchPanelCollapsed', 'false');
+    }
+}
+
+function initBranchPanelState() {
+    const isCollapsed = localStorage.getItem('branchPanelCollapsed') === 'true';
+    if (isCollapsed) {
+        toggleBranchPanelCollapse(true);
+    }
 }
 
 function handleDocumentClick(event: Event) {
     const target = event.target as HTMLElement;
     if (!target) return;
+
+    // Handle branch panel collapse/expand buttons
+    const collapseBtn = target.closest('.branch-collapse-btn') as HTMLElement;
+    if (collapseBtn) {
+        toggleBranchPanelCollapse(true);
+        return;
+    }
+
+    const expandBtn = target.closest('.branch-expand-btn') as HTMLElement;
+    if (expandBtn) {
+        toggleBranchPanelCollapse(false);
+        return;
+    }
 
     // Handle repo rule navigation links
     const repoLink = target.closest('.repo-link') as HTMLElement;
@@ -1496,7 +1540,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         <th scope="col" class="select-column">Sel</th>
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
-        <th scope="col">Primary Color${colorSuffix}</th>
+        <th scope="col">Color${colorSuffix}</th>
         <th scope="col" class="branch-table-column">Branch Table</th>
     `;
 
@@ -3300,7 +3344,7 @@ function renderBranchRulesHeader(tableName: string) {
 
     // Create "Branch Rules" text
     const prefixText = document.createElement('span');
-    prefixText.textContent = 'Branch Rules: ';
+    prefixText.textContent = 'Branch Rules Table: ';
     header.appendChild(prefixText);
 
     // Create a wrapper for input and edit icon
@@ -7723,9 +7767,49 @@ function renameProfile(oldName: string, newName: string) {
     currentConfig.advancedProfiles[newName] = currentConfig.advancedProfiles[oldName];
     delete currentConfig.advancedProfiles[oldName];
     selectedProfileName = newName;
+
+    // Update all references to the old profile name in repo rules
+    if (currentConfig.repoRules) {
+        currentConfig.repoRules.forEach((rule) => {
+            if (rule.profileName === oldName) {
+                rule.profileName = newName;
+            }
+            if (rule.primaryColor === oldName) {
+                rule.primaryColor = newName;
+            }
+            if (rule.branchColor === oldName) {
+                rule.branchColor = newName;
+            }
+        });
+    }
+
+    // Update all references in shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                table.rules.forEach((rule) => {
+                    if (rule.profileName === oldName) {
+                        rule.profileName = newName;
+                    }
+                    if (rule.color === oldName) {
+                        rule.color = newName;
+                    }
+                });
+            }
+        }
+    }
+
     saveProfiles();
+    sendConfiguration();
     renderProfiles(currentConfig.advancedProfiles);
     selectProfile(newName);
+
+    // Re-render rules to update any references to the renamed profile
+    if (currentConfig.repoRules) {
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+    }
+    renderBranchRulesForSelectedRepo();
 }
 
 function deleteProfile(profileName: string) {

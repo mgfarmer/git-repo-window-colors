@@ -1107,18 +1107,32 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         </section>
                         <div class="right-column">
                             <section class="branch-panel" aria-labelledby="branch-rules-heading">
+                                <button class="branch-collapse-btn" 
+                                        type="button"
+                                        aria-label="Collapse Branch Rules Table"
+                                        aria-expanded="true"
+                                        title="Collapse section">
+                                    <span class="codicon codicon-chevron-right"></span>
+                                </button>
+                                <button class="branch-expand-btn" 
+                                        type="button"
+                                        aria-label="Expand Branch Rules Table"
+                                        title="Expand section"
+                                        style="display: none;">
+                                    <span class="codicon codicon-chevron-left"></span>
+                                </button>
                                 <div class="panel-header">
-                                    <h2 id="branch-rules-heading">Branch Rules
+                                    <h2 id="branch-rules-heading">Branch Rules Table
                                         <button class="tooltip panel-tooltip help-icon" 
                                                 type="button"
-                                                aria-label="Help for Branch Rules"
+                                                aria-label="Help for Branch Rules Table"
                                                 aria-describedby="branch-rules-tooltip"
                                                 tabindex="0"><span class="codicon codicon-info"></span>
                                             <span class="tooltiptext" 
                                                 id="branch-rules-tooltip" 
                                                 role="tooltip" 
                                                 aria-hidden="true">
-                                                <strong>Branch Rules</strong><br>
+                                                <strong>Branch Rules Table</strong><br>
                                                 Configure colors for branch name patterns across all repositories.<br><br>
                                                 <strong>Pattern:</strong> Regular expression to match branch names<br>
                                                 <strong>Examples:</strong><br>
@@ -1148,29 +1162,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     <div class="placeholder" aria-live="polite">Loading branch rules...</div>
                                 </div>
                             </section>
-                            <section class="import-export-panel">
-                                <div class="import-export-buttons">
-                                    <button type="button" 
-                                            class="import-export-button" 
-                                            data-action="exportConfig" 
-                                            title="Export current configuration to a JSON file"
-                                            aria-label="Export Configuration">
-                                        📤 Export Config
-                                    </button>
-                                    <button type="button" 
-                                            class="import-export-button" 
-                                            data-action="importConfig" 
-                                            title="Import configuration from a JSON file"
-                                            aria-label="Import Configuration">
-                                        📥 Import Config
-                                    </button>
-                                </div>
-                            </section>
                         </div>
                     </div>
                     <section class="bottom-panel" aria-labelledby="other-settings-heading">
-                        <h2 id="other-settings-heading">Other Settings
-                            <button class="tooltip bottom-panel-tooltip help-icon" 
+                        <div class="panel-header">
+                            <h2 id="other-settings-heading">Other Settings
+                                <button class="tooltip bottom-panel-tooltip help-icon" 
                                     type="button"
                                     aria-label="Help for Other Settings"
                                     aria-describedby="other-settings-tooltip"
@@ -1187,7 +1184,24 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     Toggle various UI elements that should be colored by the extension.
                                 </span>
                             </button>
-                        </h2>
+                            </h2>
+                            <div class="import-export-buttons">
+                                <button type="button" 
+                                        class="import-export-button" 
+                                        data-action="exportConfig" 
+                                        title="Export current configuration to a JSON file"
+                                        aria-label="Export Configuration">
+                                    📤 Export Config
+                                </button>
+                                <button type="button" 
+                                        class="import-export-button" 
+                                        data-action="importConfig" 
+                                        title="Import configuration from a JSON file"
+                                        aria-label="Import Configuration">
+                                    📥 Import Config
+                                </button>
+                            </div>
+                        </div>
                         <div id="otherSettingsContent" role="region" aria-label="Other settings controls">
                             <div class="placeholder" aria-live="polite">Loading other settings...</div>
                         </div>
