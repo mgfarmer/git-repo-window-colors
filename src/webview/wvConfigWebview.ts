@@ -3041,7 +3041,6 @@ function showCreateTableDialog(repoRuleIndex: number) {
     // For now, optimistically update the UI
     if (currentConfig && currentConfig.sharedBranchTables) {
         currentConfig.sharedBranchTables[trimmedName] = {
-            fixed: false,
             rules: [],
         };
 
@@ -3153,11 +3152,10 @@ function renderBranchRulesForSelectedRepo() {
     const branchTable = currentConfig.sharedBranchTables?.[tableName];
     const branchRules = branchTable?.rules || [];
 
-    // Update section header
+    // Update section header with editable table name
     const header = document.querySelector('#branch-rules-heading');
     if (header) {
-        const count = branchRules?.length || 0;
-        header.innerHTML = `Branch Rules - <span class="codicon codicon-git-branch"></span> ${escapeHtml(tableName)} (${count})`;
+        renderBranchRulesHeader(tableName);
     }
 
     // Show/hide Copy From button (show for all tables)
@@ -3165,6 +3163,217 @@ function renderBranchRulesForSelectedRepo() {
     updateBranchAddButton(true);
 
     renderBranchRules(branchRules, currentConfig.matchingIndexes?.branchRule, selectedRepoRuleIndex);
+}
+
+function renderBranchRulesHeader(tableName: string) {
+    const header = document.querySelector('#branch-rules-heading');
+    if (!header) return;
+
+    header.innerHTML = '';
+
+    // Create "Branch Rules - " text
+    const prefixText = document.createElement('span');
+    prefixText.textContent = 'Branch Rules - ';
+    header.appendChild(prefixText);
+
+    // Create icon
+    const icon = document.createElement('span');
+    icon.className = 'codicon codicon-git-branch';
+    icon.style.marginRight = '6px';
+    header.appendChild(icon);
+
+    // Create a wrapper for input and edit icon
+    const inputWrapper = document.createElement('span');
+    inputWrapper.style.position = 'relative';
+    inputWrapper.style.display = 'inline-block';
+    header.appendChild(inputWrapper);
+
+    // Create editable input for table name
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = tableName;
+    input.className = 'branch-table-name-input';
+    input.style.border = 'none';
+    input.style.background = 'transparent';
+    input.style.color = 'inherit';
+    input.style.fontSize = 'inherit';
+    input.style.fontWeight = 'inherit';
+    input.style.padding = '2px 4px';
+    input.style.paddingRight = '20px'; // Make room for edit icon
+    input.style.margin = '0';
+    input.style.outline = 'none';
+    input.style.width = 'auto';
+    input.style.minWidth = '100px';
+    input.style.maxWidth = '300px';
+    input.title = 'Click to edit table name';
+    inputWrapper.appendChild(input);
+
+    // Create small edit icon
+    const editIcon = document.createElement('span');
+    editIcon.className = 'codicon codicon-edit';
+    editIcon.style.position = 'absolute';
+    editIcon.style.right = '4px';
+    editIcon.style.top = '50%';
+    editIcon.style.transform = 'translateY(-50%)';
+    editIcon.style.fontSize = '11px';
+    editIcon.style.opacity = '0.6';
+    editIcon.style.pointerEvents = 'none';
+    inputWrapper.appendChild(editIcon);
+
+    // Create save button (hidden initially)
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'codicon codicon-save branch-table-save-btn';
+    saveBtn.style.display = 'none';
+    saveBtn.style.marginLeft = '8px';
+    saveBtn.style.padding = '4px 8px';
+    saveBtn.style.cursor = 'pointer';
+    saveBtn.style.border = '1px solid var(--vscode-button-border)';
+    saveBtn.style.background = 'var(--vscode-button-background)';
+    saveBtn.style.color = 'var(--vscode-button-foreground)';
+    saveBtn.style.borderRadius = '2px';
+    saveBtn.title = 'Save table name';
+    saveBtn.setAttribute('aria-label', 'Save table name');
+    header.appendChild(saveBtn);
+
+    let originalName = tableName;
+    let isEditing = false;
+
+    // Show save button and hide edit icon when user starts editing
+    input.addEventListener('focus', () => {
+        originalName = input.value;
+        isEditing = true;
+        editIcon.style.display = 'none';
+        saveBtn.style.display = 'inline-block';
+        input.style.border = '1px solid var(--vscode-focusBorder)';
+        input.style.background = 'var(--vscode-input-background)';
+        input.style.padding = '2px 4px';
+        input.style.paddingRight = '20px';
+    });
+
+    // Hide save button and show edit icon if user clicks away without changing
+    input.addEventListener('blur', (e) => {
+        // Don't blur if clicking the save button
+        if (e.relatedTarget === saveBtn) {
+            return;
+        }
+
+        // Revert if no change made
+        if (input.value === originalName) {
+            saveBtn.style.display = 'none';
+            editIcon.style.display = 'inline-block';
+            input.style.border = 'none';
+            input.style.background = 'transparent';
+            isEditing = false;
+        }
+    });
+
+    // Auto-resize input based on content
+    const resizeInput = () => {
+        const tempSpan = document.createElement('span');
+        tempSpan.style.visibility = 'hidden';
+        tempSpan.style.position = 'absolute';
+        tempSpan.style.fontSize = window.getComputedStyle(input).fontSize;
+        tempSpan.style.fontFamily = window.getComputedStyle(input).fontFamily;
+        tempSpan.style.fontWeight = window.getComputedStyle(input).fontWeight;
+        tempSpan.textContent = input.value || input.placeholder;
+        document.body.appendChild(tempSpan);
+        const width = Math.max(100, Math.min(300, tempSpan.offsetWidth + 20));
+        input.style.width = width + 'px';
+        document.body.removeChild(tempSpan);
+    };
+    input.addEventListener('input', resizeInput);
+    resizeInput();
+
+    // Save on Enter key
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveBtn.click();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            input.value = originalName;
+            input.blur();
+            saveBtn.style.display = 'none';
+            editIcon.style.display = 'inline-block';
+            input.style.border = 'none';
+            input.style.background = 'transparent';
+            isEditing = false;
+        }
+    });
+
+    // Handle save button click
+    saveBtn.addEventListener('click', async () => {
+        const newName = input.value.trim();
+
+        if (!newName) {
+            alert('Table name cannot be empty.');
+            input.value = originalName;
+            return;
+        }
+
+        if (newName === originalName) {
+            // No change, just hide the button and show edit icon
+            saveBtn.style.display = 'none';
+            editIcon.style.display = 'inline-block';
+            input.style.border = 'none';
+            input.style.background = 'transparent';
+            input.blur();
+            isEditing = false;
+            return;
+        }
+
+        // Check if new name already exists
+        if (currentConfig?.sharedBranchTables?.[newName]) {
+            alert(`A table named "${newName}" already exists.`);
+            input.value = originalName;
+            return;
+        }
+
+        // Rename the table
+        await renameBranchTable(originalName, newName);
+
+        // Update UI state
+        originalName = newName;
+        saveBtn.style.display = 'none';
+        editIcon.style.display = 'inline-block';
+        input.style.border = 'none';
+        input.style.background = 'transparent';
+        input.blur();
+        isEditing = false;
+    });
+}
+
+async function renameBranchTable(oldName: string, newName: string): Promise<void> {
+    if (!currentConfig) return;
+
+    // Create deep copy to ensure VS Code detects the change
+    const updatedTables = JSON.parse(JSON.stringify(currentConfig.sharedBranchTables));
+
+    // Rename the table
+    updatedTables[newName] = updatedTables[oldName];
+    delete updatedTables[oldName];
+
+    // Update all repo rules that reference the old table name
+    const updatedRepoRules = currentConfig.repoRules.map((rule: any) => {
+        if (rule.branchTableName === oldName) {
+            return { ...rule, branchTableName: newName };
+        }
+        return rule;
+    });
+
+    // Send to backend
+    vscode.postMessage({
+        command: 'updateConfig',
+        data: {
+            sharedBranchTables: updatedTables,
+            repoRules: updatedRepoRules,
+        },
+    });
+
+    // Update local config optimistically
+    currentConfig.sharedBranchTables = updatedTables;
+    currentConfig.repoRules = updatedRepoRules;
 }
 
 function updateCopyFromButton(showButton: boolean) {

@@ -822,6 +822,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             if (ruleType === 'repo' && repoRules[index]) {
                 repoRules.splice(index, 1);
                 await this._updateConfiguration({ repoRules });
+
+                // Recompute and apply colors after repo rule deletion
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'repo rule deleted', false);
             } else if (ruleType === 'branch') {
                 // Delete from shared branch table
                 const tableName = (deleteData as any).tableName;
@@ -832,6 +835,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         const updatedTables = JSON.parse(JSON.stringify(sharedBranchTables));
                         updatedTables[tableName].rules.splice(index, 1);
                         await this._updateConfiguration({ sharedBranchTables: updatedTables });
+
+                        // Recompute and apply colors after branch rule deletion
+                        await vscode.commands.executeCommand(
+                            '_grwc.internal.applyColors',
+                            'branch rule deleted',
+                            false,
+                        );
                     }
                 }
             }
