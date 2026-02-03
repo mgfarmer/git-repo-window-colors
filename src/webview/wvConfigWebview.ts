@@ -2503,7 +2503,7 @@ function renderOtherSettings(settings: any) {
                                    id="ask-to-colorize-repo-when-opened"
                                    ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
                                    data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
-                            Ask to colorize repo when opened
+                            Ask to colorize repository when opened
                         </label>
                         <span class="tooltiptext" role="tooltip">
                             When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
