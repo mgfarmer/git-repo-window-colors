@@ -246,6 +246,13 @@
                         "description": "Lighten or darken the non-title bar colors by this factor between -10 and 10. A value of zero is no difference.",
                         "scope": "application"
                     },
+                    "windowColors.configSchemaVersion": {
+                        "type": "number",
+                        "default": 1,
+                        "markdownDescription": "**Internal use only.** Current configuration schema version. Do not modify manually.",
+                        "scope": "application",
+                        "order": 9999
+                    },
                     "windowColors.applyBranchColorToTabsAndStatusBar": {
                         "order": 19,
                         "type": "boolean",

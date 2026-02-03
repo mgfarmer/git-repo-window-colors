@@ -11,3 +11,6 @@ tsconfig.json
 vsc-extension-quickstart.md
 tslint.json
 node_modules/**
+**/*.psd
+features/
+copilot-instructions.md

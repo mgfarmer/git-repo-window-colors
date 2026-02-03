@@ -436,8 +436,6 @@ const managedColors = [
     'sideBarTitle.background',
 ];
 
-const SEPARATOR = '|';
-
 // Function to test if the vscode git model exsists
 function isGitModelAvailable(): boolean {
     const extension = vscode.extensions.getExtension('vscode.git');
@@ -547,304 +545,241 @@ function getCurrentMatchingRule(): RepoConfig | undefined {
 }
 
 /**
- * Migrate legacy defaultBranch/branchColor to Local Branch Rules
- * Returns true if migration occurred
+ * Get the current configuration schema version from package.json
  */
-function migrateLegacyBranchRule(
-    rule: any,
-    invertBranchColorLogic: boolean,
-    hueRotation: number,
-    outputChannel: vscode.OutputChannel,
-): boolean {
-    // Only migrate if defaultBranch is set and no existing local branch rules
-    if (!rule.defaultBranch || (rule.branchRules && rule.branchRules.length > 0)) {
-        return false;
+function getCurrentConfigSchemaVersion(): number {
+    const extension = vscode.extensions.getExtension('KevinMills.git-repo-window-colors');
+    if (!extension?.packageJSON) {
+        outputChannel.appendLine('Warning: Could not read extension package.json, using default schema version 1');
+        return 1;
     }
 
-    const defaultBranch = rule.defaultBranch;
-    const primaryColor = rule.primaryColor;
-    let branchColor = rule.branchColor;
-
-    // If branchColor is not set, calculate hue-rotated color
-    if (!branchColor) {
-        try {
-            const parsedColor = Color(primaryColor);
-            branchColor = parsedColor.rotate(hueRotation).hex();
-        } catch (err) {
-            outputChannel.appendLine(
-                `  Warning: Could not calculate branch color for "${defaultBranch}", skipping migration`,
-            );
-            return false;
+    // Read schema version from package.json configuration
+    const configs = extension.packageJSON.contributes?.configuration;
+    if (Array.isArray(configs)) {
+        for (const config of configs) {
+            const schemaVersion = config.properties?.['windowColors.configSchemaVersion']?.default;
+            if (typeof schemaVersion === 'number') {
+                return schemaVersion;
+            }
         }
     }
 
-    // Escape special regex characters in branch name
-    const escapedBranch = defaultBranch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // Create local branch rule based on invertBranchColorLogic
-    const branchRules: any[] = [];
-
-    if (!invertBranchColorLogic) {
-        // Normal mode: On default branch → use primaryColor
-        // Off default branch → use branchColor (falls through)
-        branchRules.push({
-            pattern: `^${escapedBranch}$`,
-            color: primaryColor,
-            enabled: true,
-        });
-    } else {
-        // Inverted mode: On default branch → use branchColor (falls through)
-        // Off default branch → use primaryColor
-        branchRules.push({
-            pattern: `^(?!${escapedBranch}$).*`,
-            color: primaryColor,
-            enabled: true,
-        });
-    }
-
-    // Update the rule
-    rule.branchRules = branchRules;
-
-    // Remove legacy fields
-    delete rule.defaultBranch;
-    delete rule.branchColor;
-
-    outputChannel.appendLine(
-        `  Migrated legacy branch rule: defaultBranch="${defaultBranch}" → Local Branch Rule (pattern: "${branchRules[0].pattern}")`,
-    );
-
-    return true;
+    outputChannel.appendLine('Warning: configSchemaVersion not found in package.json, using default schema version 1');
+    return 1;
 }
 
 /**
- * Migrate legacy string-based configuration to JSON object format
+ * Migrate configuration based on schema version
+ *
+ * Version history:
+ * - Version 0 (legacy): String-based repoConfigurationList and branchConfigurationList
+ * - Version 1: Introduction of JSON objects, shared branch tables model
+ *
+ * This migration handles the original legacy format:
+ * - repoConfigurationList: ["reponame:color"] -> RepoConfigRule with branchTableName="Default Rules"
+ * - branchConfigurationList: ["pattern:color"] -> "Default Rules" shared table
+ *
+ * All repo rules reference the "Default Rules" shared branch table.
  */
 async function migrateConfigurationToJson(context: ExtensionContext): Promise<void> {
-    const migrated = context.globalState.get<boolean>('configMigratedToJson', false);
+    const CURRENT_CONFIG_SCHEMA_VERSION = getCurrentConfigSchemaVersion();
+    const lastMigratedVersion = context.globalState.get<number>('configSchemaVersion', 0);
 
-    // Skip if already migrated
-    if (migrated) {
-        outputChannel.appendLine('Configuration already migrated to JSON format.');
+    // Skip if already on current version
+    if (lastMigratedVersion >= CURRENT_CONFIG_SCHEMA_VERSION) {
+        outputChannel.appendLine(`Configuration schema is current (v${lastMigratedVersion})`);
         return;
     }
 
-    const config = workspace.getConfiguration('windowColors');
+    outputChannel.appendLine(
+        `Migrating configuration from v${lastMigratedVersion} to v${CURRENT_CONFIG_SCHEMA_VERSION}...`,
+    );
 
-    outputChannel.appendLine('Starting configuration migration to JSON format...');
+    const config = workspace.getConfiguration('windowColors');
 
     try {
         // Get advanced profiles for validation
         const advancedProfiles = config.get('advancedProfiles', {}) as { [key: string]: any };
 
-        // Migrate repoConfigurationList
-        const repoConfigList = config.get('repoConfigurationList', []) as any[];
-        const migratedRepoList: any[] = [];
-        const invertBranchColorLogic = config.get('invertBranchColorLogic', false) as boolean;
-        const hueRotation = config.get('automaticBranchIndicatorColorKnob', 60) as number;
-        let legacyBranchRulesMigrated = 0;
+        // ========== Migration from v0 to v1+ ==========
+        if (lastMigratedVersion < 1) {
+            outputChannel.appendLine(
+                'Running v0 -> v1 migration: Converting to JSON objects and shared branch tables...',
+            );
 
-        for (const item of repoConfigList) {
-            // Skip if already JSON object
-            if (typeof item === 'object' && item !== null) {
-                // Migrate legacy branch rules in existing JSON objects
-                if (item.defaultBranch) {
-                    const migrated = migrateLegacyBranchRule(item, invertBranchColorLogic, hueRotation, outputChannel);
-                    if (migrated) {
-                        legacyBranchRulesMigrated++;
-                    }
-                }
-                migratedRepoList.push(item);
-                continue;
-            }
+            // ===== STEP 1: Migrate repoConfigurationList =====
+            const repoConfigList = config.get('repoConfigurationList', []) as any[];
+            const migratedRepoList: any[] = [];
+            let repoRulesMigrated = 0;
 
-            // Parse legacy string format
-            if (typeof item === 'string') {
-                try {
-                    const parts = item.split(':');
-                    if (parts.length < 2) {
-                        outputChannel.appendLine(`Skipping invalid repo rule: ${item}`);
-                        continue;
+            for (const item of repoConfigList) {
+                // Skip if already JSON object - just ensure it has branchTableName
+                if (typeof item === 'object' && item !== null) {
+                    // Ensure branchTableName is set
+                    if (!item.branchTableName) {
+                        item.branchTableName = 'Default Rules';
                     }
 
-                    const repoParts = parts[0].split(SEPARATOR);
-                    const repoQualifier = repoParts[0].trim();
-                    const defaultBranch = repoParts.length > 1 ? repoParts[1].trim() : undefined;
+                    // Clean up legacy fields from old branch rule models
+                    delete item.defaultBranch;
+                    delete item.branchColor;
+                    delete item.branchRules;
+                    delete item.useGlobalBranchRules;
 
-                    const colorParts = parts[1].split(SEPARATOR);
-                    const primaryColor = colorParts[0].trim();
-                    const branchColor = colorParts.length > 1 ? colorParts[1].trim() : undefined;
-
-                    // Check for profile name in third part
-                    let profileName: string | undefined = undefined;
-                    if (advancedProfiles[primaryColor]) {
-                        profileName = primaryColor;
-                    } else if (parts.length > 2) {
-                        const p2 = parts[2].trim();
-                        if (advancedProfiles[p2]) {
-                            profileName = p2;
-                        }
-                    }
-
-                    const migratedRule: any = {
-                        repoQualifier,
-                        primaryColor,
-                        enabled: true,
-                    };
-
-                    if (defaultBranch) {
-                        migratedRule.defaultBranch = defaultBranch;
-                    }
-                    if (branchColor) {
-                        migratedRule.branchColor = branchColor;
-                    }
-                    if (profileName) {
-                        migratedRule.profileName = profileName;
-                    }
-
-                    // Migrate legacy branch rule to local branch rules
-                    if (defaultBranch) {
-                        const migrated = migrateLegacyBranchRule(
-                            migratedRule,
-                            invertBranchColorLogic,
-                            hueRotation,
-                            outputChannel,
-                        );
-                        if (migrated) {
-                            legacyBranchRulesMigrated++;
-                        }
-                    }
-
-                    migratedRepoList.push(migratedRule);
-                    outputChannel.appendLine(`Migrated repo rule: ${item} -> JSON object`);
-                } catch (err) {
-                    outputChannel.appendLine(`Error migrating repo rule: ${item} - ${err}`);
-                    // Keep original on error
                     migratedRepoList.push(item);
+                    continue;
+                }
+
+                // Parse legacy string format: "repoQualifier:primaryColor"
+                if (typeof item === 'string') {
+                    try {
+                        const parts = item.split(':');
+                        if (parts.length < 2) {
+                            outputChannel.appendLine(`Skipping invalid repo rule: ${item}`);
+                            continue;
+                        }
+
+                        const repoQualifier = parts[0].trim();
+                        const primaryColor = parts[1].trim();
+
+                        // Check if primaryColor is an advanced profile name
+                        let profileName: string | undefined = undefined;
+                        if (advancedProfiles[primaryColor]) {
+                            profileName = primaryColor;
+                        }
+
+                        const migratedRule: any = {
+                            repoQualifier,
+                            primaryColor,
+                            enabled: true,
+                            branchTableName: 'Default Rules', // All repo rules use Default Rules table
+                        };
+
+                        if (profileName) {
+                            migratedRule.profileName = profileName;
+                        }
+
+                        migratedRepoList.push(migratedRule);
+                        repoRulesMigrated++;
+                        outputChannel.appendLine(
+                            `Migrated repo rule: "${item}" -> RepoConfigRule with Default Rules table`,
+                        );
+                    } catch (err) {
+                        outputChannel.appendLine(`Error migrating repo rule: ${item} - ${err}`);
+                        // Skip invalid entries
+                    }
                 }
             }
-        }
 
-        // Migrate branchConfigurationList
-        const branchConfigList = config.get('branchConfigurationList', []) as any[];
-        const migratedBranchList: any[] = [];
+            // ===== STEP 2: Migrate branchConfigurationList =====
+            const branchConfigList = config.get('branchConfigurationList', []) as any[];
+            const migratedBranchList: any[] = [];
+            let branchRulesMigrated = 0;
 
-        for (const item of branchConfigList) {
-            // Skip if already JSON object
-            if (typeof item === 'object' && item !== null) {
-                migratedBranchList.push(item);
-                continue;
-            }
-
-            // Parse legacy string format
-            if (typeof item === 'string') {
-                try {
-                    const parts = item.split(':');
-                    if (parts.length < 2) {
-                        outputChannel.appendLine(`Skipping invalid branch rule: ${item}`);
-                        continue;
-                    }
-
-                    const pattern = parts[0].trim();
-                    const color = parts[1].trim();
-
-                    const migratedRule = {
-                        pattern,
-                        color,
-                        enabled: true,
-                    };
-
-                    migratedBranchList.push(migratedRule);
-                    outputChannel.appendLine(`Migrated branch rule: ${item} -> JSON object`);
-                } catch (err) {
-                    outputChannel.appendLine(`Error migrating branch rule: ${item} - ${err}`);
-                    // Keep original on error
+            for (const item of branchConfigList) {
+                // Skip if already JSON object
+                if (typeof item === 'object' && item !== null) {
                     migratedBranchList.push(item);
+                    continue;
                 }
-            }
-        }
 
-        // Initialize sharedBranchTables if it doesn't exist
-        const existingSharedBranchTables = config.get('sharedBranchTables', null);
-        const sharedBranchTables: { [key: string]: { rules: any[] } } = existingSharedBranchTables || {};
+                // Parse legacy string format: "pattern:color"
+                if (typeof item === 'string') {
+                    try {
+                        const parts = item.split(':');
+                        if (parts.length < 2) {
+                            outputChannel.appendLine(`Skipping invalid branch rule: ${item}`);
+                            continue;
+                        }
 
-        // Create "Default Rules" table from branchConfigurationList if it doesn't exist
-        if (!sharedBranchTables['Default Rules'] && !sharedBranchTables['Global']) {
-            sharedBranchTables['Default Rules'] = {
-                rules: migratedBranchList,
-            };
-            outputChannel.appendLine(
-                `Created "Default Rules" table from branchConfigurationList with ${migratedBranchList.length} rules`,
-            );
-        }
+                        const pattern = parts[0].trim();
+                        const color = parts[1].trim();
 
-        // Second migration pass: Convert legacy branchRules to branchTableName
-        // Migrate repos without branchTableName to use Default Rules
-        let branchTablesMigrated = 0;
-        for (const repoRule of migratedRepoList) {
-            // Check if already migrated (has branchTableName)
-            if (repoRule.branchTableName !== undefined) {
-                continue;
-            }
+                        const migratedRule = {
+                            pattern,
+                            color,
+                            enabled: true,
+                        };
 
-            // No branch table specified, use Default Rules by default
-            repoRule.branchTableName = 'Default Rules';
-            branchTablesMigrated++;
-        }
-
-        if (!existingSharedBranchTables) {
-            await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
-            outputChannel.appendLine(
-                `Initialized sharedBranchTables with ${Object.keys(sharedBranchTables).length} tables`,
-            );
-        } else if (branchTablesMigrated > 0) {
-            await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
-            outputChannel.appendLine(
-                `Updated sharedBranchTables with ${Object.keys(sharedBranchTables).length} tables`,
-            );
-        }
-
-        // Migration: Rename "Global" table to "Default Rules" if it exists
-        if (sharedBranchTables['Global']) {
-            sharedBranchTables['Default Rules'] = sharedBranchTables['Global'];
-            delete sharedBranchTables['Global'];
-
-            // Update all repo rules that reference "Global" to use "Default Rules"
-            for (const repoRule of migratedRepoList) {
-                if (repoRule.branchTableName === 'Global') {
-                    repoRule.branchTableName = 'Default Rules';
-                }
-            }
-
-            await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
-            outputChannel.appendLine('Migrated "Global" table to "Default Rules"');
-        }
-
-        // Write migrated configuration
-        await config.update('repoConfigurationList', migratedRepoList, vscode.ConfigurationTarget.Global);
-        await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
-        await context.globalState.update('configMigratedToJson', true);
-
-        outputChannel.appendLine(
-            `Configuration migration completed: ${migratedRepoList.length} repo rules, ${migratedBranchList.length} branch rules, ${branchTablesMigrated} repo rules migrated to use branch tables`,
-        );
-
-        // Show notification if legacy branch rules were migrated
-        if (legacyBranchRulesMigrated > 0) {
-            vscode.window
-                .showInformationMessage(
-                    `Legacy branch rules have been automatically converted to Local Branch Rules. Please review your Repository Rules configuration.`,
-                    'Open Settings',
-                )
-                .then((selection) => {
-                    if (selection === 'Open Settings') {
-                        vscode.commands.executeCommand('windowColors.openConfigWebview');
+                        migratedBranchList.push(migratedRule);
+                        branchRulesMigrated++;
+                        outputChannel.appendLine(`Migrated branch rule: "${item}" -> BranchConfigRule`);
+                    } catch (err) {
+                        outputChannel.appendLine(`Error migrating branch rule: ${item} - ${err}`);
+                        // Skip invalid entries
                     }
-                });
+                }
+            }
+
+            // ===== STEP 3: Create/Update sharedBranchTables =====
+            const existingSharedBranchTables = config.get('sharedBranchTables', null);
+            const sharedBranchTables: { [key: string]: { rules: any[] } } = existingSharedBranchTables || {};
+
+            // Create or update "Default Rules" table with migrated branch rules
+            if (!sharedBranchTables['Default Rules']) {
+                sharedBranchTables['Default Rules'] = {
+                    rules: migratedBranchList,
+                };
+                outputChannel.appendLine(
+                    `Created "Default Rules" shared table with ${migratedBranchList.length} branch rules`,
+                );
+            } else if (branchRulesMigrated > 0) {
+                // Merge migrated rules into existing Default Rules table
+                sharedBranchTables['Default Rules'].rules = migratedBranchList;
+                outputChannel.appendLine(
+                    `Updated "Default Rules" shared table with ${migratedBranchList.length} branch rules`,
+                );
+            }
+
+            // Migration: Rename "Global" table to "Default Rules" if it exists
+            if (sharedBranchTables['Global']) {
+                // Only rename if Default Rules doesn't already exist
+                if (!sharedBranchTables['Default Rules']) {
+                    sharedBranchTables['Default Rules'] = sharedBranchTables['Global'];
+                    outputChannel.appendLine('Renamed "Global" table to "Default Rules"');
+                } else {
+                    outputChannel.appendLine('Both "Global" and "Default Rules" exist - keeping both for manual merge');
+                }
+                delete sharedBranchTables['Global'];
+
+                // Update all repo rules that reference "Global" to use "Default Rules"
+                for (const repoRule of migratedRepoList) {
+                    if (repoRule.branchTableName === 'Global') {
+                        repoRule.branchTableName = 'Default Rules';
+                    }
+                }
+            }
+
+            // ===== STEP 4: Write migrated configuration =====
+            await config.update('repoConfigurationList', migratedRepoList, vscode.ConfigurationTarget.Global);
+            await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
+            await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
+
+            outputChannel.appendLine(`v0 -> v1 migration completed:`);
+            outputChannel.appendLine(
+                `  - Repo rules: ${migratedRepoList.length} (${repoRulesMigrated} migrated from string format)`,
+            );
+            outputChannel.appendLine(
+                `  - Branch rules: ${migratedBranchList.length} (${branchRulesMigrated} migrated from string format)`,
+            );
+            outputChannel.appendLine(`  - Shared tables: ${Object.keys(sharedBranchTables).length}`);
+            outputChannel.appendLine(`  - All repo rules configured to use "Default Rules" table`);
         }
+
+        // ========== Future migrations go here ==========
+        // if (lastMigratedVersion < 2) {
+        //     outputChannel.appendLine('Running v1 -> v2 migration...');
+        //     // Add v2 migration logic here
+        // }
+
+        // Update schema version in global state
+        await context.globalState.update('configSchemaVersion', CURRENT_CONFIG_SCHEMA_VERSION);
+        outputChannel.appendLine(`Configuration schema updated to v${CURRENT_CONFIG_SCHEMA_VERSION}`);
     } catch (error) {
         outputChannel.appendLine(`Error during migration: ${error}`);
         vscode.window.showErrorMessage(
-            'Failed to migrate configuration to JSON format. Please check the output channel for details.',
+            'Failed to migrate configuration. Please check the Window Colors output channel for details.',
         );
     }
 }
