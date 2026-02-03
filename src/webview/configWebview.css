@@ -36,7 +36,11 @@ body {
     color: var(--vscode-foreground);
     background-color: var(--vscode-editor-background);
     margin: 0;
-    padding: 20px;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Preview Mode Toast */
@@ -84,12 +88,18 @@ body {
 .config-container {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    padding: 20px;
+    overflow: hidden;
 }
 .top-panels {
     display: flex;
     flex: 1;
     gap: 20px;
+    min-height: 0;
+    overflow: hidden;
 }
 .repo-panel {
     flex: 1;
@@ -100,6 +110,8 @@ body {
     display: flex;
     flex-direction: column;
     transition: flex 0.3s ease-in-out;
+    min-height: 0;
+    overflow: hidden;
 }
 .right-column {
     flex: 1;
@@ -129,7 +141,8 @@ body {
     display: flex;
     flex-direction: column;
     position: relative;
-    min-height: 400px;
+    min-height: 0;
+    overflow: hidden;
     transition:
         flex 0.3s ease-in-out,
         min-width 0.3s ease-in-out,
@@ -161,11 +174,11 @@ body {
     background-color: var(--vscode-button-secondaryBackground);
 }
 .bottom-panel {
-    min-height: 200px;
-    max-height: none;
+    flex: 0 0 auto;
     border: 1px solid var(--vscode-panel-border);
     padding: 15px;
     border-radius: 4px;
+    overflow: visible;
 }
 
 .bottom-panel .panel-header {
@@ -195,8 +208,9 @@ h2 {
 }
 .rules-table {
     width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 0;
     overflow: visible;
 }
 .rules-table th {
@@ -207,6 +221,9 @@ h2 {
     border: 1px solid var(--vscode-panel-border);
     font-size: 12px;
     white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 .rules-table td {
     padding: 4px;
@@ -1040,8 +1057,9 @@ input[type='range'] {
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
     margin-top: 0px;
-    margin-bottom: 10px;
+    margin-bottom: 0px;
     padding: 0;
+    padding-bottom: 10px;
 }
 
 /* Align section-help with h2 labels in panels that have panel-header padding */
@@ -1323,8 +1341,10 @@ button:focus {
 .tabs-header {
     display: flex;
     border-bottom: 1px solid var(--vscode-panel-border);
-    margin-bottom: 20px;
+    margin-bottom: 0;
+    padding: 0 20px;
     position: relative;
+    flex: 0 0 auto;
 }
 
 .help-button-global {
@@ -1386,8 +1406,11 @@ button:focus {
 }
 
 .tab-content.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
     height: 100%;
+    min-height: 0;
+    gap: 20px;
 }
 
 /* Profiles Layout */
@@ -2170,10 +2193,11 @@ button:focus {
     }
 }
 
-/* Limit repo and branch rules tables to show max 9 rows with scrollbar */
+/* Allow repo and branch rules tables to fill available space with scrolling */
 #repoRulesContent,
 #branchRulesContent {
-    max-height: 400px;
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: visible;
 }
