@@ -1,0 +1,23 @@
+{
+    "windowColors.colorInactiveTitlebar": true,
+    "windowColors.colorActiveTitlebar": true,
+    "windowColors.invertBranchColorLogic": false,
+    "windowColors.repoConfigurationList": [
+        "mgfarmer: #400000",
+        "gyrfalcon-ui: #003000",
+        "gyrfalcon-cloud: darkblue",
+        "gyrfalcon-cdk-global: darkred",
+        "gyrfalcon-tools: darkmagenta",
+        "gyrfalcon-binutils: #008080",
+        "gyrfalcon-stf: #00b000",
+        "baremetal: orange",
+        "pylib: #400000",
+        "gyrfalcon: #633e02"
+    ],
+    "windowColors.coloreditorTabs": true,
+    "windowColors.colorStatusBar": true,
+    "windowColors.colorEditorTabs": true,
+    "windowColors.branchConfigurationList": ["^(?!.*(main|master)).*:darkred"],
+    "windowColors.applyBranchColorToTabsAndStatusBar": false,
+    "windowColors.activityBarColorKnob": -3
+}

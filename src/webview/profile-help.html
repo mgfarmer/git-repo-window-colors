@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Help</title>
+    <link rel="stylesheet" href="help.css">
+</head>
+<body>
+    <div class="help-content">
+        <div class="help-toc">
+            <h3>Help Topics</h3>
+            <ul>
+                <li><a href="#" data-switch-help="getting-started">Getting Started</a></li>
+                <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+                <li><a href="#" data-switch-help="branch-modes">Shared Branch Tables Guide</a></li>
+                <li><a class="current">Profiles Guide</a> (current)</li>
+                <li><a href="#" data-switch-help="starred">Starred Keys Guide</a></li>
+                <li><a href="#" data-switch-help="colored">Colored Keys Guide</a></li>
+                <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
+            </ul>
+        </div>
+        <h1>Advanced Profiles Guide</h1>
+        
+        <h2>What are Profiles?</h2>
+        <p>
+            Profiles are reusable color palettes that let you define a set of reference colors once and apply them to multiple VS Code UI elements. 
+            Instead of setting colors individually for each theme key, you create a palette and map UI elements to slots in that palette.
+        </p>
+
+        <h2>Creating a Profile</h2>
+        <ol>
+            <li>Click the <strong>"+ Add Profile"</strong> button</li>
+            <li>Give your profile a descriptive name</li>
+            <li>Define your color palette using the available slots</li>
+            <li>Map VS Code theme keys to your palette slots</li>
+        </ol>
+
+        <h2>Understanding the Palette</h2>
+        <p>
+            Each profile has a palette with 12 slots organized into 4 groups:
+        </p>
+        <ul>
+            <li><strong>Primary:</strong> Active Bg/Fg, Inactive Bg/Fg - Main UI colors (4 slots)</li>
+            <li><strong>Secondary:</strong> Active Bg/Fg, Inactive Bg/Fg - Primary Accent colors (4 slots)</li>
+            <li><strong>Tertiary:</strong> Bg/Fg - Accent colors (2 slots)</li>
+            <li><strong>Quaternary:</strong> Bg/Fg - Additional accent colors (2 slots)</li>
+        </ul>
+
+        <div class="note">
+            <strong>Reference Colors:</strong> The 12 palette slots are "reference colors" - they're defined once in the palette 
+            and then referenced by one or more theme keys. This makes it easy to maintain consistent coloring across your UI.
+        </div>
+</invoke>
+
+        <h2>Mapping Theme Keys</h2>
+        <p>
+            After defining your palette, map VS Code theme keys to your palette slots using the tabs:
+        </p>
+        <ul>
+            <li><strong>Title Bar:</strong> Window title and borders</li>
+            <li><strong>Activity Bar:</strong> Left sidebar with icons</li>
+            <li><strong>Status Bar:</strong> Bottom status bar</li>
+            <li><strong>Tabs & Breadcrumbs:</strong> Editor tabs and navigation</li>
+            <li><strong>Command Center:</strong> Top-center command area</li>
+            <li><strong>Terminal:</strong> Integrated terminal colors</li>
+            <li><strong>Lists & Panels:</strong> Side panels, inputs, badges</li>
+            <li><strong>Side Bar:</strong> File explorer and side panels</li>
+            <li><strong>Colored:</strong> Shows all theme keys that have been assigned colors in this profile (special tab)</li>
+            <li><strong>Starred:</strong> Shows theme keys you've marked as important with the star icon (special tab)</li>
+        </ul>
+
+        <h3>Special Tabs</h3>
+        <p>
+            In addition to the category tabs above, there are two dynamic tabs:
+        </p>
+        <ul>
+            <li><strong>⚡ Colored:</strong> Automatically shows all theme keys that have been assigned to a palette slot or fixed color in the current profile. This makes it easy to see everything you've configured at a glance.</li>
+            <li><strong>★ Starred:</strong> Shows theme keys you've starred by clicking the star icon next to any mapping key. Use this to quickly access the keys you work with most often, regardless of which category they're in.
+                <ul>
+                    <li>Click the empty star (☆) next to any mapping key to star it</li>
+                    <li>Click the filled star (★) to unstar it</li>
+                    <li>The badge shows how many starred keys are colored: if some aren't colored yet, it turns yellow with a warning icon and displays "X/Y" format (X colored, Y not colored)</li>
+                    <li>Starred keys are saved globally and appear across all profiles</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>Mapping Options</h3>
+        <p>For each theme key, you can choose:</p>
+        <ul>
+            <li><strong>None:</strong> Don't set this theme key.  Your VS Code theme's default will be used.</li>
+            <li><strong>Fixed Color:</strong> Assign a specific color (not from the palette)</li>
+            <li><strong>Palette Slot:</strong> Reference one of your 12 palette slots</li>
+        </ul>
+
+        <h3>Drag and Drop Assignment</h3>
+        <p>
+            You can quickly assign palette colors to theme keys using drag and drop:
+        </p>
+        <ol>
+            <li>Click and drag any palette slot from the <strong>Reference Palette</strong> section</li>
+            <li>Compatible mapping keys will highlight with a pulsing blue border</li>
+            <li>Drop on any mapping dropdown to assign that palette slot</li>
+        </ol>
+        
+        <div class="tip">
+            <strong>Smart Highlighting:</strong> During drag, the extension highlights compatible drop zones:
+            <ul>
+                <li>Background slots highlight background theme keys</li>
+                <li>Foreground slots highlight foreground theme keys</li>
+                <li>Active slots prefer active or neutral theme keys</li>
+                <li>Inactive slots prefer inactive or neutral theme keys</li>
+                <li>Neutral keys (like borders) are compatible with any slot</li>
+            </ul>
+            You can still drop on any key, but the highlighting helps you find the most logical matches.
+        </div>
+
+        <div class="tip">
+            <strong>Tip:</strong> Enable <strong>"Limit Options"</strong> to filter palette slots by type (background/foreground, active/inactive). 
+            This makes it easier to find the right slot for each theme key.
+        </div>
+
+        <h3>Synchronization Options</h3>
+        <ul>
+            <li><strong>Synchronize fg/bg selections:</strong> Automatically set background when you select foreground (and vice versa)</li>
+            <li><strong>Synchronize active/inactive selections:</strong> Automatically set inactive elements when you configure active elements</li>
+        </ul>
+
+        <h2>Using Profiles in Rules</h2>
+        <p>
+            Once you've created a profile, you can apply it to repository and branch rules:
+        </p>
+        <ol>
+            <li>Go to the <strong>Rules</strong> tab</li>
+            <li>In a repository or branch rule, Click in the "Color or Profile" field.</li>
+            <li>Start typing the name of your profile and select it from the dropdown</li>
+        </ol>
+
+        <div class="note">
+            <strong>Note:</strong> When a profile is assigned to a rule, the colors are determined by:
+            <ul>
+                <li>The profile's palette definition</li>
+                <li>The profile's theme key mappings</li>
+                <li>The repository/branch color (if the palette references it)</li>
+            </ul>
+        </div>
+
+        <h2>Fixed Colors vs. Reference Colors</h2>
+        <p>
+            You have two ways to assign colors to theme keys:
+        </p>
+        <ul>
+            <li><strong>Fixed Color:</strong> A specific color set directly on the theme key. Use this for elements that should always have the same color regardless of the palette.  Select 'Fixed Color' from the drop down.  A new color specifier will appear for you to enter the color. </li>
+            <li><strong>Reference Color (Palette Slot):</strong> A reference to a palette slot that derives its color from the repository/branch. Use this for elements that should adapt based on the active repository/branch.</li>
+        </ul>
+
+        <h2>Best Practices</h2>
+        <ul>
+            <li>Start with a simple profile and gradually add mappings</li>
+            <li>Use Primary slots for most prominent UI elements (title bar, activity bar)</li>
+            <li>Use Secondary slots for less prominent elements (status bar)</li>
+            <li>Test your profile with different repository/branch colors</li>
+            <li>Create multiple profiles for different use cases (light themes, dark themes, etc.)</li>
+            <li>Use descriptive profile names to remember their purpose</li>
+        </ul>
+
+        <h2>Troubleshooting</h2>
+        <ul>
+            <li><strong>Colors not showing:</strong> Make sure the profile is assigned to a matching rule and the rule is enabled</li>
+            <li><strong>Wrong colors:</strong> Check the Color Report tab to see which profile/rule is being applied</li>
+            <li><strong>Contrast issues:</strong> Use the "High Contrast" option or adjust lighten/darken values</li>
+            <li><strong>Too complex:</strong> Start simple - you don't need to map every theme key</li>
+        </ul>
+    </div>
+</body>
+</html>

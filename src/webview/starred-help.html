@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Starred Keys Guide</title>
+    <link rel="stylesheet" href="help.css">
+</head>
+<body>
+    <div class="help-content">
+        <div class="help-toc">
+            <h3>Help Topics</h3>
+            <ul>
+                <li><a href="#" data-switch-help="getting-started">Getting Started</a></li>
+                <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+                <li><a href="#" data-switch-help="branch-modes">Shared Branch Tables Guide</a></li>
+                <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a class="current">Starred Keys Guide</a> (current)</li>
+                <li><a href="#" data-switch-help="colored">Colored Keys Guide</a></li>
+                <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
+            </ul>
+        </div>
+
+        <h1>⭐ Starred Keys Guide</h1>
+
+        <p>
+            The <strong>Starred</strong> tab provides a convenient way to collect and manage your most frequently 
+            used VS Code theme keys in one place. Instead of searching through multiple tabs (Titlebar, Activitybar, 
+            Statusbar, etc.) to find the elements you customize most often, you can star them and access them all 
+            in a single dedicated tab.
+        </p>
+
+        <h2>What is the Starred Tab?</h2>
+
+        <p>
+            When working with profiles, VS Code provides hundreds of theme keys that control different parts of 
+            the interface. The Starred tab is your personal collection of keys you use most frequently. It acts 
+            as a quick-access panel for customizing the elements you care about most.
+        </p>
+
+        <div class="tip">
+            <strong>💡 Tip:</strong> The Starred tab is especially useful when you have a set of keys you 
+            modify across multiple profiles. Instead of navigating through multiple tabs each time, you can 
+            access all your favorite keys in one place.
+        </div>
+
+        <h2>How to Star Keys</h2>
+
+        <p>
+            Starring a key is simple and can be done from any profile mapping tab:
+        </p>
+
+        <ol>
+            <li>Open a profile in the <strong>Profiles</strong> tab</li>
+            <li>Navigate to any mapping tab (Titlebar, Activitybar, Statusbar, etc.)</li>
+            <li>Find the theme key you want to star</li>
+            <li>Click the <strong>☆</strong> (empty star) icon next to the key name</li>
+            <li>The star will become filled <strong>★</strong>, indicating it's starred</li>
+        </ol>
+
+        <p>The key will now appear in the <strong>Starred</strong> tab for easy access.</p>
+
+        <h2>Managing Starred Keys</h2>
+
+        <h3>Viewing Starred Keys</h3>
+
+        <p>
+            Click on the <strong>★ Starred</strong> tab in the profile mapping section to see all your starred keys 
+            in one place. The tab badge shows how many keys you've starred.
+        </p>
+
+        <h3>Unstarring Keys</h3>
+
+        <p>
+            To remove a key from your starred collection:
+        </p>
+
+        <ol>
+            <li>Go to the <strong>Starred</strong> tab (or find the key in any other tab)</li>
+            <li>Click the <strong>★</strong> (filled star) icon next to the key</li>
+            <li>The star will become empty <strong>☆</strong>, and the key will be removed from the Starred tab</li>
+        </ol>
+
+        <div class="note">
+            <strong>Note:</strong> Unstarring a key does NOT remove its color mapping. It only removes the key 
+            from the Starred tab. The color mapping remains active in the profile.
+        </div>
+
+        <h3>Assigning Colors to Starred Keys</h3>
+
+        <p>
+            Once you have keys starred, you can assign colors to them just like in any other tab:
+        </p>
+
+        <ol>
+            <li>Select a <strong>Palette Slot</strong> from the dropdown (Primary, Secondary, Accent1-3, etc.)</li>
+            <li>Optionally adjust the <strong>Opacity</strong> slider to make the color more or less transparent</li>
+            <li>Or use <strong>Fixed Color</strong> to assign a specific color independent of the palette</li>
+        </ol>
+
+        <h2>Understanding the Starred Tab Badge</h2>
+
+        <p>
+            The badge on the Starred tab provides quick insights into your color mappings:
+        </p>
+
+        <ul>
+            <li>
+                <strong>Normal Badge (Number):</strong> Shows the total number of starred keys that have colors assigned
+            </li>
+            <li>
+                <strong>⚠️ Warning Badge (X/Y):</strong> Appears when you have uncolored starred keys
+                <ul>
+                    <li><strong>X</strong> = Number of starred keys with colors</li>
+                    <li><strong>Y</strong> = Number of starred keys without colors</li>
+                    <li>The badge turns <strong>yellow</strong> to draw attention</li>
+                </ul>
+            </li>
+        </ul>
+
+        <div class="example">
+            <strong>Example:</strong><br>
+            A badge showing <strong>⚠️ 5/3</strong> means you have 5 starred keys with colors assigned and 
+            3 starred keys that don't have colors yet.
+        </div>
+
+        <h2>Uncolored Key Warnings</h2>
+
+        <p>
+            When viewing the Starred tab, any keys that don't have colors assigned will display a warning indicator:
+        </p>
+
+        <ul>
+            <li>A <strong>⚠️ warning icon</strong> appears before the dropdown</li>
+            <li>This visual reminder helps you identify which starred keys still need colors</li>
+            <li>The warning disappears once you assign a color to the key</li>
+        </ul>
+
+        <div class="tip">
+            <strong>💡 Pro Tip:</strong> Use the warning indicators to quickly identify incomplete mappings 
+            in your starred collection. This is especially helpful when setting up a new profile or ensuring 
+            all your important elements are colored.
+        </div>
+
+        <h2>Starred Keys Across Profiles</h2>
+
+        <p>
+            Your starred keys collection is <strong>global</strong> and persists across all profiles. This means:
+        </p>
+
+        <ul>
+            <li>Keys starred in one profile will appear in the Starred tab of all profiles</li>
+            <li>You only need to star a key once, and it's available everywhere</li>
+            <li>Different profiles can have different colors for the same starred keys</li>
+        </ul>
+
+        <div class="example">
+            <strong>Example Workflow:</strong><br>
+            You might star <code>titleBar.activeForeground</code>, <code>activityBar.background</code>, 
+            and <code>statusBar.background</code> as your core elements. These will appear in the Starred 
+            tab for all your profiles, but you can assign different colors in your "Dark Theme" profile 
+            versus your "Light Theme" profile.
+        </div>
+
+        <h2>Empty Starred Tab</h2>
+
+        <p>
+            If you haven't starred any keys yet, the Starred tab will display a helpful message:
+        </p>
+
+        <div class="example">
+            <em>"No starred keys yet. Click the star icon next to any mapping key to add it here."</em>
+        </div>
+
+        <p>
+            Simply navigate to any other tab and start starring the keys you use most frequently!
+        </p>
+
+        <h2>Best Practices</h2>
+
+        <ul>
+            <li>
+                <strong>Star Your Essential Keys:</strong> Focus on the 10-20 keys you modify most often 
+                across different profiles
+            </li>
+            <li>
+                <strong>Keep It Organized:</strong> The Starred tab shows keys in the same order they appear 
+                in the regular tabs, grouped by section
+            </li>
+            <li>
+                <strong>Use for Quick Edits:</strong> When fine-tuning colors, the Starred tab lets you 
+                adjust your core elements without navigating between multiple tabs
+            </li>
+            <li>
+                <strong>Monitor Warnings:</strong> Check the badge warning to ensure all your important 
+                keys are colored
+            </li>
+        </ul>
+
+        <h2>Common Use Cases</h2>
+
+        <h3>Creating a Consistent Look</h3>
+
+        <p>
+            Star the primary keys you want to customize (titlebar, activitybar, statusbar backgrounds) 
+            and quickly apply your palette across all of them from the Starred tab.
+        </p>
+
+        <h3>Experimenting with Colors</h3>
+
+        <p>
+            Star a set of related keys (like all editor group borders) and experiment with different 
+            slot assignments and opacities in one view.
+        </p>
+
+        <h3>Maintaining Multiple Profiles</h3>
+
+        <p>
+            When you have several profiles (work, personal, presentation), star your core keys and 
+            use the Starred tab to quickly configure each profile's version of those elements.
+        </p>
+
+        <div class="tip">
+            <strong>Related Topics:</strong>
+            <ul>
+                <li>Learn about palette slots and opacity in the <a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li>Understand how mappings work in different sections</li>
+                <li>See your current colors in the <a href="#" data-switch-help="report">Color Report</a></li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

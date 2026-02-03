@@ -1,0 +1,191 @@
+/* Common Help File Styling */
+.help-content {
+    padding: 20px;
+    max-width: 900px;
+    font-family: var(
+        --vscode-font-family,
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        sans-serif
+    );
+    font-size: var(--vscode-font-size, 13px);
+    color: var(--vscode-editor-foreground);
+    line-height: 1.6;
+}
+
+.help-content h1 {
+    font-size: 1.75em;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 0.75em;
+    color: var(--vscode-editor-foreground);
+    border-bottom: 1px solid var(--vscode-textSeparator-foreground);
+    padding-bottom: 0.5em;
+}
+
+.help-content h2 {
+    font-size: 1.35em;
+    font-weight: 600;
+    margin-top: 1.75em;
+    margin-bottom: 0.75em;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content h3 {
+    font-size: 1.15em;
+    font-weight: 600;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content p {
+    margin-bottom: 1em;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content ul,
+.help-content ol {
+    margin-bottom: 1em;
+    padding-left: 2em;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content li {
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content code {
+    background-color: var(--vscode-textCodeBlock-background);
+    color: var(--vscode-textPreformat-foreground);
+    padding: 3px 6px;
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Courier New', monospace);
+    font-size: 0.95em;
+}
+
+.help-content strong {
+    color: var(--vscode-editor-foreground);
+    font-weight: 600;
+}
+
+/* Table styles */
+.help-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.25em 0;
+    border: 1px solid var(--vscode-editorWidget-border);
+}
+
+.help-content th,
+.help-content td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--vscode-editorWidget-border);
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content th {
+    background-color: var(--vscode-editorWidget-background);
+    font-weight: 600;
+    border-bottom: 2px solid var(--vscode-editorWidget-border);
+}
+
+.help-content td {
+    background-color: var(--vscode-editor-background);
+}
+
+/* Callout boxes */
+.help-content .note {
+    background-color: var(--vscode-textBlockQuote-background);
+    border-left: 4px solid var(--vscode-textLink-foreground);
+    color: var(--vscode-editor-foreground);
+    padding: 14px 16px;
+    margin: 1.25em 0;
+    border-radius: 4px;
+}
+
+.help-content .tip {
+    background-color: var(--vscode-inputValidation-warningBackground);
+    border-left: 4px solid var(--vscode-inputValidation-warningBorder);
+    color: var(--vscode-editor-foreground);
+    padding: 14px 16px;
+    margin: 1.25em 0;
+    border-radius: 4px;
+}
+
+.help-content .warning {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border-left: 4px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-editor-foreground);
+    padding: 14px 16px;
+    margin: 1.25em 0;
+    border-radius: 4px;
+}
+
+.help-content .example {
+    background-color: var(--vscode-textCodeBlock-background);
+    color: var(--vscode-editor-foreground);
+    padding: 14px 16px;
+    margin: 1.25em 0;
+    border-radius: 4px;
+    border: 1px solid var(--vscode-editorWidget-border);
+}
+
+/* Table of Contents */
+.help-toc {
+    background-color: var(--vscode-editorWidget-background);
+    border: 1px solid var(--vscode-editorWidget-border);
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+}
+
+.help-toc h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-toc ul {
+    margin: 0;
+    padding-left: 20px;
+    list-style-type: none;
+}
+
+.help-toc li {
+    margin: 8px 0;
+}
+
+.help-toc a {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.1s ease;
+}
+
+.help-toc a:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
+.help-toc a.current {
+    font-weight: 600;
+    color: var(--vscode-editor-foreground);
+    cursor: default;
+}
+
+/* Link example styling (for Color Report help) */
+.help-content .link-example {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: underline;
+    cursor: pointer;
+}

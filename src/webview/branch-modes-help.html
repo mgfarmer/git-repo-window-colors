@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Branch Tables Guide</title>
+    <link rel="stylesheet" href="help.css">
+</head>
+<body>
+    <div class="help-content">
+        <div class="help-toc">
+            <h3>Help Topics</h3>
+            <ul>
+                <li><a href="#" data-switch-help="getting-started">Getting Started</a></li>
+                <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+                <li><a class="current">Shared Branch Tables Guide</a> (current)</li>
+                <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a href="#" data-switch-help="starred">Starred Keys Guide</a></li>
+                <li><a href="#" data-switch-help="colored">Colored Keys Guide</a></li>
+                <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
+            </ul>
+        </div>
+
+        <h1>Shared Branch Tables Guide</h1>
+        
+        <p>
+            Shared Branch Tables allow you to create and manage multiple sets of branch color rules that can be 
+            reused across different repository rules. Instead of duplicating branch rules or being limited to a 
+            single global set, you can organize branch rules into named tables and reference them from any repository rule.
+        </p>
+
+        <h2>Understanding Shared Branch Tables</h2>
+
+        <h3>What Are Shared Branch Tables?</h3>
+        <p>
+            A branch table is a named collection of branch color rules. Each table contains its own list of 
+            branch patterns (like <code>main</code>, <code>feature/.*</code>, or <code>hotfix/.*</code>) with 
+            associated colors. Repository rules reference these tables by name instead of storing rules directly.
+        </p>
+
+        <div class="example">
+            <strong>Example Tables:</strong><br>
+            <br>
+            <strong>Default</strong>:<br>
+            • <code>main|master</code> → Blue<br>
+            • <code>develop</code> → Purple<br>
+            • <code>feature/.*</code> → Green<br>
+            <br>
+            <strong>Release Workflow</strong>:<br>
+            • <code>release/.*</code> → Orange<br>
+            • <code>hotfix/.*</code> → Red<br>
+            • <code>main</code> → Dark Blue<br>
+            <br>
+            <strong>Client Project</strong>:<br>
+            • <code>production</code> → Dark Red<br>
+            • <code>staging</code> → Orange<br>
+            • <code>dev</code> → Yellow<br>
+        </div>
+
+        <h3>The Default Table</h3>
+        <p>
+            When you first install the extension, a table named <strong>"Default"</strong> is automatically created. 
+            This table is just like any other shared table - it can be renamed, modified, or even deleted if unused. 
+            It simply provides a convenient starting point for organizing your branch rules.
+        </p>
+        <ul>
+            <li>Can be renamed to better match your workflow (e.g., "Standard", "Common Branches")</li>
+            <li>Can be deleted if you prefer a different organizational structure</li>
+            <li>Is ideal for branch patterns used across most of your repositories</li>
+        </ul>
+
+        <h2>Using Branch Tables</h2>
+
+        <h3>Selecting a Table for a Repository</h3>
+        <p>
+            In the Repository Rules table, each repository has a <strong>Branch Table</strong> dropdown showing:
+        </p>
+        <ul>
+            <li><strong>All Available Tables</strong> - Alphabetically sorted, with usage count badges (e.g., "Release Workflow (3)")</li>
+            <li><strong>➕ Create New Table...</strong> - Create a new table (shown last)</li>
+        </ul>
+
+        <div class="tip">
+            <strong>Tip:</strong> The usage count badge (e.g., "Feature Branches (3)") shows how many 
+            repository rules use that table. Hover over it to see which repositories reference it.
+        </div>
+
+        <h3>Creating a New Table</h3>
+        <p>
+            To create a new branch table:
+        </p>
+        <ol>
+            <li>In a repository's Branch Table dropdown, select <strong>"➕ Create New Table..."</strong></li>
+            <li>Enter a unique name for your table</li>
+            <li>Optionally check "Start with copy of current table" to duplicate existing rules</li>
+            <li>Click "Create Table"</li>
+        </ol>
+        <p>
+            The new table is immediately assigned to that repository, and you can begin adding or editing rules.
+        </p>
+
+        <div class="note">
+            <strong>Note:</strong> Table names must be unique.
+        </div>
+
+        <h3>Editing Branch Rules</h3>
+        <p>
+            When you select a repository (via radio button), the Branch Rules section displays the rules from 
+            that repository's assigned table. Any edits you make affect the table itself, which means:
+        </p>
+        <ul>
+            <li>Changes apply to <strong>all repositories</strong> using that table</li>
+            <li>If only one repository uses a table (usage count: 1), it's effectively private to that repo</li>
+            <li>You can see which table you're editing in the Branch Rules section header</li>
+        </ul>
+
+        <h2>Managing Tables (Branch Tables Tab)</h2>
+
+        <p>
+            The <strong>Branch Tables</strong> tab provides a central view of all your branch tables. Here you can:
+        </p>
+        <ul>
+            <li>See all tables with their rule counts and usage counts</li>
+            <li>View which repository rules use each table</li>
+            <li>Delete unused tables (tables with 0 usage)</li>
+            <li>Jump to a repository rule that uses a specific table for editing</li>
+        </ul>
+
+        <h3>Table Actions</h3>
+        <ul>
+            <li><strong>Select:</strong> Switches to the Rules tab and selects a repository using this table, 
+                allowing you to edit the table's branch rules. Disabled if no repositories use the table.</li>
+            <li><strong>Rename:</strong> Change the table name (updates all references).</li>
+            <li><strong>View Usage:</strong> Shows which repository rules reference this table.</li>
+            <li><strong>Delete:</strong> Remove the table (only available when no repositories use it).</li>
+        </ul>
+
+        <h2>How Branch Matching Works</h2>
+        
+        <p>
+            When determining the branch color for your workspace:
+        </p>
+
+        <ol>
+            <li><strong>Match Repository:</strong> Find the repository rule that matches your workspace</li>
+            <li><strong>Get Branch Table:</strong> Look up the branch table referenced by that repository rule</li>
+            <li><strong>Search Rules:</strong> Process branch rules in order within that table</li>
+            <li><strong>Apply First Match:</strong> Use the first rule whose pattern matches your current branch</li>
+        </ol>
+
+        <div class="note">
+            <strong>Important:</strong> Branch rules are processed in order. The <strong>first</strong> matching 
+            pattern is used, and subsequent matches are ignored.
+        </div>
+
+        <h2>Best Practices</h2>
+
+        <h3>When to Share Tables</h3>
+        <ul>
+            <li>For standard branch patterns used across multiple projects</li>
+            <li>When you want consistent branch colors across a group of repositories</li>
+            <li>To maintain a single source of truth for branch rules</li>
+        </ul>
+
+        <h3>When to Create Separate Tables</h3>
+        <ul>
+            <li><strong>Shared Custom Tables</strong> - When multiple repositories share the same branching convention
+                <ul>
+                    <li>Example: All microservices use the same release workflow</li>
+                    <li>Example: Client projects all follow the same naming scheme</li>
+                </ul>
+            </li>
+            <li><strong>Repository-Specific Tables</strong> - When a single repository needs unique rules
+                <ul>
+                    <li>Create a table, assign it to one repository (usage count: 1)</li>
+                    <li>It's effectively private but can easily be shared later if needed</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3>Organizing Tables</h3>
+        <ul>
+            <li>Use descriptive names: "Release Workflow", "Client Projects", "Microservices"</li>
+            <li>Start with a common table (like the Default table) for standard patterns</li>
+            <li>Create specialized tables for distinct branching strategies</li>
+            <li>Check usage counts to understand the impact of changes</li>
+        </ul>
+
+        <div class="example">
+            <strong>Example Organization:</strong><br>
+            <br>
+            <strong>Default</strong> (8 repos):<br>
+            Common patterns for most projects<br>
+            <br>
+            <strong>Release Workflow</strong> (4 repos):<br>
+            Release and hotfix patterns for production services<br>
+            <br>
+            <strong>Client Project A</strong> (1 repo):<br>
+            Custom naming for this specific client<br>
+            <br>
+            This setup keeps most projects simple while allowing flexibility where needed.
+        </div>
+
+        <h2>Sharing and Reusing Tables</h2>
+
+        <h3>To Share Rules Across Repositories</h3>
+        <p>
+            Simply assign the same table to multiple repository rules using the Branch Table dropdown. 
+            All repositories will automatically use the same branch rules.
+        </p>
+
+        <h3>To Stop Sharing (Make Private)</h3>
+        <ol>
+            <li>Select "➕ Create New Table..." from the repository's dropdown</li>
+            <li>Check "Start with copy of current table" to preserve existing rules</li>
+            <li>The new table will have a usage count of 1 (private to this repository)</li>
+        </ol>
+
+        <h2>Troubleshooting</h2>
+
+        <h3>Branch Rules Not Applying</h3>
+        <p>
+            If branch rules aren't working as expected:
+        </p>
+        <ol>
+            <li>Verify which table the repository is using (check the Branch Table dropdown)</li>
+            <li>Select the repository and check the Branch Rules section to see the active rules</li>
+            <li>Confirm the branch pattern matches your current branch (patterns are regular expressions)</li>
+            <li>Check rule order - earlier rules take precedence</li>
+            <li>Ensure the rule is enabled (checkbox in the Actions column)</li>
+            <li>Look at the Output panel (View → Output → Git Repo Window Colors) for matching details</li>
+        </ol>
+
+        <h3>Table Names or References</h3>
+        <p>
+            If you renamed a table or have orphaned references:
+        </p>
+        <ul>
+            <li>Renaming a table automatically updates all repository rule references</li>
+            <li>If a table reference is missing or invalid, check the Output panel for warnings</li>
+            <li>Repository rules with missing table references may need to be reassigned to an existing table</li>
+        </ul>
+
+        <h2>Additional Resources</h2>
+        <ul>
+            <li><a href="#" data-switch-help="rules">Rules Guide</a> - Learn more about repository and branch rules</li>
+            <li><a href="#" data-switch-help="profile">Profiles Guide</a> - Advanced color profiles for more control</li>
+            <li><a href="#" data-switch-help="report">Color Report</a> - See which rules are currently active</li>
+        </ul>
+    </div>
+</body>
+</html>

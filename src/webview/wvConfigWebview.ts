@@ -1,14 +1,80 @@
 // This script runs within the webview context
 // It cannot access the main VS Code APIs directly.
 
+// Import shared types
+import {
+    PaletteSlotSource,
+    PaletteSlotDefinition,
+    Palette,
+    MappingValue,
+    SectionMappings,
+    AdvancedProfile,
+    AdvancedProfileMap,
+} from '../types/advancedModeTypes';
+
+// Import dialog utilities
+import { showInputDialog, showMessageDialog } from './dialogUtils';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
 
 const vscode = acquireVsCodeApi();
 let currentConfig: any = null;
+let starredKeys: string[] = [];
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
+let validationErrors: { repoRules: { [index: number]: string }; branchRules: { [index: number]: string } } = {
+    repoRules: {},
+    branchRules: {},
+};
+let selectedMappingTab: string | null = null; // Track which mapping tab is active
+let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
+let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
+let previewMode: boolean = false; // Track if preview mode is enabled
+
+// Load checkbox states from localStorage with defaults
+let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
+let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
+let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') !== 'false'; // Default to true
+
+// Tab Switching
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            const target = e.currentTarget as HTMLElement;
+            const tabId = target.getAttribute('aria-controls');
+            if (!tabId) return;
+
+            document.querySelectorAll('.tab-button').forEach((b) => {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
+            document.querySelectorAll('.tab-content').forEach((c) => {
+                c.classList.remove('active');
+            });
+
+            target.classList.add('active');
+            target.setAttribute('aria-selected', 'true');
+            const content = document.getElementById(tabId);
+            if (content) content.classList.add('active');
+        });
+    });
+}
+initTabs();
+
+// Close branch table dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    // Don't close if clicking inside a branch table dropdown
+    if (!target.closest('.branch-table-dropdown')) {
+        document.querySelectorAll('.branch-table-dropdown .dropdown-options').forEach((dropdown) => {
+            (dropdown as HTMLElement).style.display = 'none';
+            (dropdown.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
+        });
+    }
+});
 
 // HTML Color Names for auto-complete
 const HTML_COLOR_NAMES = [
@@ -154,10 +220,32 @@ const HTML_COLOR_NAMES = [
     'yellowgreen',
 ];
 
+// Example branch patterns for auto-complete
+const EXAMPLE_BRANCH_PATTERNS = [
+    '^(?!.*(main|master)).*',
+    '^(bug/|bug-).*',
+    '^(feature/|feature-).*',
+    'feature/.*',
+    'bugfix/.*',
+    'main',
+    'master',
+    'develop',
+    'dev',
+    'release.*',
+    'hotfix.*',
+    'fix/.*',
+    'docs/.*',
+    'test/.*',
+    'refactor/.*',
+    'style/.*',
+    'perf/.*',
+];
+
 // Auto-complete state
 let activeAutoCompleteInput: HTMLInputElement | null = null;
 let autoCompleteDropdown: HTMLElement | null = null;
 let selectedSuggestionIndex: number = -1;
+let branchPatternFilterTimeout: any = null;
 
 // Input original value tracking for escape key restoration
 const originalInputValues = new Map<HTMLInputElement, string>();
@@ -325,6 +413,99 @@ function isThemeDark(): boolean {
     return true; // Default to dark mode assumption
 }
 
+// Count how many profiles are in use and check if any are used
+function getProfileUsageInfo(): {
+    inUse: boolean;
+    count: number;
+    profileNames: Set<string>;
+    repoRuleCount: number;
+    branchRuleCount: number;
+} {
+    const result = {
+        inUse: false,
+        count: 0,
+        profileNames: new Set<string>(),
+        repoRuleCount: 0,
+        branchRuleCount: 0,
+    };
+
+    if (!currentConfig) return result;
+
+    const advancedProfiles = currentConfig.advancedProfiles || {};
+    const allProfileNames = Object.keys(advancedProfiles);
+
+    if (allProfileNames.length === 0) return result;
+
+    // Check repo rules
+    if (currentConfig.repoRules) {
+        for (const rule of currentConfig.repoRules) {
+            let ruleUsesProfile = false;
+
+            // Check explicit profileName field
+            if (rule.profileName && advancedProfiles[rule.profileName]) {
+                result.profileNames.add(rule.profileName);
+                ruleUsesProfile = true;
+            }
+            // Check if primaryColor is actually a profile name
+            if (rule.primaryColor && advancedProfiles[rule.primaryColor]) {
+                result.profileNames.add(rule.primaryColor);
+                ruleUsesProfile = true;
+            }
+            // Check if branchColor is actually a profile name
+            if (rule.branchColor && advancedProfiles[rule.branchColor]) {
+                result.profileNames.add(rule.branchColor);
+                ruleUsesProfile = true;
+            }
+            // Check local branch rules
+            if (rule.branchRules) {
+                for (const branchRule of rule.branchRules) {
+                    if (branchRule.profileName && advancedProfiles[branchRule.profileName]) {
+                        result.profileNames.add(branchRule.profileName);
+                        ruleUsesProfile = true;
+                    }
+                    if (branchRule.color && advancedProfiles[branchRule.color]) {
+                        result.profileNames.add(branchRule.color);
+                        ruleUsesProfile = true;
+                    }
+                }
+            }
+
+            if (ruleUsesProfile) {
+                result.repoRuleCount++;
+            }
+        }
+    }
+
+    // Check shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                for (const rule of table.rules) {
+                    let ruleUsesProfile = false;
+
+                    if (rule.profileName && advancedProfiles[rule.profileName]) {
+                        result.profileNames.add(rule.profileName);
+                        ruleUsesProfile = true;
+                    }
+                    if (rule.color && advancedProfiles[rule.color]) {
+                        result.profileNames.add(rule.color);
+                        ruleUsesProfile = true;
+                    }
+
+                    if (ruleUsesProfile) {
+                        result.branchRuleCount++;
+                    }
+                }
+            }
+        }
+    }
+
+    result.count = result.profileNames.size;
+    result.inUse = result.count > 0;
+    return result;
+}
+
 function getThemeAppropriateColor(): string {
     const isDark = isThemeDark();
 
@@ -412,9 +593,32 @@ function getSmartBranchDefaults(): string {
     return suggestions.join('\\n');
 }
 
+function collectUniqueBranchPatterns(): string[] {
+    const patterns = new Set<string>();
+
+    if (!currentConfig) return [];
+
+    // Collect from shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                for (const rule of table.rules) {
+                    if (rule.pattern && rule.pattern.trim()) {
+                        patterns.add(rule.pattern.trim());
+                    }
+                }
+            }
+        }
+    }
+
+    return Array.from(patterns).sort();
+}
+
 // Message handler for extension communication
 window.addEventListener('message', (event) => {
     const message = event.data;
+    console.log('[Message Listener] Received message:', message.command);
 
     switch (message.command) {
         case 'configData':
@@ -429,14 +633,106 @@ window.addEventListener('message', (event) => {
         case 'deleteConfirmed':
             handleDeleteConfirmed(message.data);
             break;
+        case 'openGettingStartedHelp':
+            // Auto-open Getting Started help on first webview launch
+            openHelp('getting-started');
+            break;
+        case 'gettingStartedHelpContent':
+            handleGettingStartedHelpContent(message.data);
+            break;
+        case 'helpContent':
+            handleHelpContent(message.data);
+            break;
+        case 'confirmDeleteProfile':
+            if (message.data && message.data.profileName) {
+                confirmDeleteProfile(message.data.profileName);
+            }
+            break;
+        case 'paletteGenerated':
+            handlePaletteGenerated(message.data);
+            break;
+        case 'starredKeysUpdated':
+            if (message.data && message.data.starredKeys) {
+                starredKeys = message.data.starredKeys;
+                // Re-render profile editor to update star icons
+                const selectedProfileName = (document.getElementById('profileNameInput') as HTMLInputElement)?.value;
+                if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                    renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+                }
+            }
+            break;
     }
 });
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
+    console.log('[handleConfigurationData] Received data from backend');
+    if (data?.repoRules) {
+        console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
+        data.repoRules.forEach((rule: any, index: number) => {
+            console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
+        });
+    }
+
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
+
+    // Extract starred keys if present
+    if (data.starredKeys) {
+        starredKeys = data.starredKeys;
+    }
+
+    // Store validation errors if present
+    if (data.validationErrors) {
+        validationErrors = data.validationErrors;
+    } else {
+        validationErrors = { repoRules: {}, branchRules: {} };
+    }
+
+    // Synchronize profileName fields for backward compatibility
+    // If primaryColor/branchColor/color matches a profile but profileName is not set, set it
+    if (currentConfig?.advancedProfiles && currentConfig?.repoRules) {
+        let needsUpdate = false;
+
+        for (const rule of currentConfig.repoRules) {
+            // Check primaryColor
+            if (rule.primaryColor && !rule.profileName && currentConfig.advancedProfiles[rule.primaryColor]) {
+                rule.profileName = rule.primaryColor;
+                needsUpdate = true;
+            }
+
+            // Check local branch rules
+            if (rule.branchRules) {
+                for (const branchRule of rule.branchRules) {
+                    if (
+                        branchRule.color &&
+                        !branchRule.profileName &&
+                        currentConfig.advancedProfiles[branchRule.color]
+                    ) {
+                        branchRule.profileName = branchRule.color;
+                        needsUpdate = true;
+                    }
+                }
+            }
+        }
+
+        // Check global branch rules
+        if (currentConfig.branchRules) {
+            for (const branchRule of currentConfig.branchRules) {
+                if (branchRule.color && !branchRule.profileName && currentConfig.advancedProfiles[branchRule.color]) {
+                    branchRule.profileName = branchRule.color;
+                    needsUpdate = true;
+                }
+            }
+        }
+
+        // If we made changes, save the updated config
+        if (needsUpdate) {
+            debounceValidateAndSend();
+        }
+    }
+
     renderConfiguration(currentConfig);
 }
 
@@ -491,19 +787,215 @@ function handleDeleteConfirmed(data: any) {
     }
 }
 
+function toggleStarredKey(mappingKey: string): void {
+    vscode.postMessage({
+        command: 'toggleStarredKey',
+        data: { mappingKey },
+    });
+}
+
+function handleGettingStartedHelpContent(data: { content: string }) {
+    console.log('[TOC Navigation] handleGettingStartedHelpContent called, content length:', data.content?.length);
+    const contentDiv = document.getElementById('helpPanelContent');
+    if (contentDiv && data.content) {
+        contentDiv.innerHTML = data.content;
+        console.log('[TOC Navigation] Getting started help content loaded');
+    }
+}
+
+function handleProfileHelpContent(data: { content: string }) {
+    console.log('[TOC Navigation] handleProfileHelpContent called, content length:', data.content?.length);
+    const contentDiv = document.getElementById('helpPanelContent');
+    if (contentDiv && data.content) {
+        contentDiv.innerHTML = data.content;
+        console.log('[TOC Navigation] Profile help content loaded');
+    }
+}
+
+function handleHelpContent(data: { helpType: string; content: string }) {
+    console.log(
+        `[TOC Navigation] handleHelpContent called for ${data.helpType}, content length:`,
+        data.content?.length,
+    );
+    const contentDiv = document.getElementById('helpPanelContent');
+    if (contentDiv && data.content) {
+        contentDiv.innerHTML = data.content;
+        console.log(`[TOC Navigation] ${data.helpType} help content loaded`);
+
+        // Update current help type to what was just loaded
+        currentHelpType = data.helpType;
+
+        // Restore scroll position after DOM has updated
+        requestAnimationFrame(() => {
+            restoreHelpScrollPosition(data.helpType);
+        });
+    }
+}
+
+function handleSwitchHelp(target: string) {
+    console.log('[TOC Navigation] handleSwitchHelp called with target:', target);
+
+    // Save scroll position of current help before switching
+    saveCurrentHelpScrollPosition();
+
+    // Set the panel title
+    const titleElement = document.getElementById('helpPanelTitle');
+    if (titleElement) {
+        if (target === 'getting-started') {
+            titleElement.textContent = 'Getting Started';
+        } else if (target === 'profile') {
+            titleElement.textContent = 'Profiles Guide';
+        } else if (target === 'rules') {
+            titleElement.textContent = 'Rules Guide';
+        } else if (target === 'branch-modes') {
+            titleElement.textContent = 'Branch Modes Guide';
+        } else if (target === 'report') {
+            titleElement.textContent = 'Color Report Guide';
+        } else if (target === 'starred') {
+            titleElement.textContent = 'Starred Keys Guide';
+        } else if (target === 'colored') {
+            titleElement.textContent = 'Colored Keys Guide';
+        }
+        console.log('[TOC Navigation] Updated panel title to:', titleElement.textContent);
+    }
+
+    // Request the new content
+    if (target === 'getting-started') {
+        console.log('[TOC Navigation] Requesting getting started help from extension');
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'profile') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'rules') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'branch-modes') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'report') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'starred') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'colored') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    }
+}
+
+// Store scroll positions per help document
+const helpScrollPositions: { [helpType: string]: number } = {};
+let currentHelpType: string | null = null;
+
+function saveCurrentHelpScrollPosition() {
+    if (currentHelpType) {
+        const contentDiv = document.getElementById('helpPanelContent');
+        if (contentDiv) {
+            helpScrollPositions[currentHelpType] = contentDiv.scrollTop;
+            console.log(`[Help] Saved scroll position for ${currentHelpType}: ${contentDiv.scrollTop}`);
+        }
+    }
+}
+
+function restoreHelpScrollPosition(helpType: string) {
+    const contentDiv = document.getElementById('helpPanelContent');
+    if (contentDiv) {
+        const savedPosition = helpScrollPositions[helpType];
+        if (savedPosition !== undefined) {
+            contentDiv.scrollTop = savedPosition;
+            console.log(`[Help] Restored scroll position for ${helpType}: ${savedPosition}`);
+        } else {
+            // No saved position, reset to top
+            contentDiv.scrollTop = 0;
+            console.log(`[Help] No saved scroll position for ${helpType}, resetting to top`);
+        }
+    }
+}
+
+function openHelp(helpType: string) {
+    // Save scroll position of current help before switching
+    saveCurrentHelpScrollPosition();
+
+    // Set the panel title
+    const titleElement = document.getElementById('helpPanelTitle');
+    if (titleElement) {
+        if (helpType === 'getting-started') {
+            titleElement.textContent = 'Getting Started';
+        } else if (helpType === 'profile') {
+            titleElement.textContent = 'Profiles Guide';
+        } else if (helpType === 'rules') {
+            titleElement.textContent = 'Rules Guide';
+        } else if (helpType === 'branch-modes') {
+            titleElement.textContent = 'Branch Modes Guide';
+        } else if (helpType === 'report') {
+            titleElement.textContent = 'Color Report Guide';
+        } else if (helpType === 'starred') {
+            titleElement.textContent = 'Starred Keys Guide';
+        } else if (helpType === 'colored') {
+            titleElement.textContent = 'Colored Keys Guide';
+        }
+    }
+
+    // Request help content from backend
+    console.log(`[Help] Requesting ${helpType} help content from extension`);
+    currentHelpType = helpType;
+    vscode.postMessage({ command: 'requestHelp', data: { helpType } });
+
+    // Show the help panel
+    const overlay = document.getElementById('helpPanelOverlay');
+    const panel = document.getElementById('helpPanel');
+    if (overlay && panel) {
+        overlay.classList.add('active');
+        panel.classList.add('active');
+    }
+}
+
+function closeHelp() {
+    // Save scroll position before closing
+    saveCurrentHelpScrollPosition();
+
+    const overlay = document.getElementById('helpPanelOverlay');
+    const panel = document.getElementById('helpPanel');
+    if (overlay && panel) {
+        overlay.classList.remove('active');
+        panel.classList.remove('active');
+    }
+}
+
 function renderConfiguration(config: any) {
     console.log('[DEBUG] renderConfiguration ', config);
     // Clear validation errors on new data
     clearValidationErrors();
 
+    // Sync preview mode with configuration
+    previewMode = config.otherSettings?.previewSelectedRepoRule ?? false;
+
     renderRepoRules(config.repoRules, config.matchingIndexes?.repoRule);
-    renderBranchRules(config.branchRules, config.matchingIndexes?.branchRule);
+    renderBranchRulesForSelectedRepo();
     renderOtherSettings(config.otherSettings);
+    renderProfiles(config.advancedProfiles);
     renderWorkspaceInfo(config.workspaceInfo);
+    renderBranchTablesTab(config);
+    renderColorReport(config);
+
+    // Show/hide preview toast based on preview mode
+    if (previewMode) {
+        showPreviewToast();
+    } else {
+        hidePreviewToast();
+    }
+
+    // Update profiles tab visibility based on settings
+    updateProfilesTabVisibility();
 
     // Attach event listeners after DOM is updated
     attachEventListeners();
 }
+
+// Store reference to help panel handler so we can remove it
+let handleHelpPanelLinks: ((event: Event) => void) | null = null;
 
 function attachEventListeners() {
     // Remove old event listeners to prevent duplicates
@@ -516,9 +1008,13 @@ function attachEventListeners() {
     document.removeEventListener('dragstart', handleDocumentDragStart);
     document.removeEventListener('dragover', handleDocumentDragOver);
     document.removeEventListener('drop', handleDocumentDrop);
+    if (handleHelpPanelLinks) {
+        document.removeEventListener('click', handleHelpPanelLinks);
+    }
 
     // Add new event listeners using event delegation
     document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('click', handleColorInputClick); // Shift-click handler for random colors
     document.addEventListener('change', handleDocumentChange);
     document.addEventListener('input', handleDocumentInput);
     document.addEventListener('keydown', handleDocumentKeydown);
@@ -527,16 +1023,125 @@ function attachEventListeners() {
     document.addEventListener('dragstart', handleDocumentDragStart);
     document.addEventListener('dragover', handleDocumentDragOver);
     document.addEventListener('drop', handleDocumentDrop);
+
+    // Add event delegation for help panel TOC links
+    handleHelpPanelLinks = (event: Event) => {
+        const target = event.target as HTMLElement;
+        const link = target.closest('[data-switch-help]');
+        if (link) {
+            event.preventDefault();
+            const helpTarget = link.getAttribute('data-switch-help');
+            if (helpTarget) {
+                handleSwitchHelp(helpTarget);
+            }
+        }
+    };
+    document.addEventListener('click', handleHelpPanelLinks);
+
+    // Initialize branch panel collapse state
+    initBranchPanelState();
+    initSettingsPanelState();
+}
+
+function toggleBranchPanelCollapse(collapse: boolean) {
+    const branchPanel = document.querySelector('.branch-panel');
+    const rightColumn = document.querySelector('.right-column');
+    const collapseBtn = document.querySelector('.branch-collapse-btn') as HTMLElement;
+    const expandBtn = document.querySelector('.branch-expand-btn') as HTMLElement;
+
+    if (!branchPanel || !rightColumn || !collapseBtn || !expandBtn) return;
+
+    if (collapse) {
+        branchPanel.classList.add('collapsed');
+        rightColumn.classList.add('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'false');
+        localStorage.setItem('branchPanelCollapsed', 'true');
+    } else {
+        branchPanel.classList.remove('collapsed');
+        rightColumn.classList.remove('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'true');
+        localStorage.setItem('branchPanelCollapsed', 'false');
+    }
+}
+
+function initBranchPanelState() {
+    const isCollapsed = localStorage.getItem('branchPanelCollapsed') === 'true';
+    if (isCollapsed) {
+        toggleBranchPanelCollapse(true);
+    }
+}
+
+function toggleSettingsPanelCollapse(collapse: boolean) {
+    const settingsPanel = document.querySelector('.bottom-panel');
+    const collapseBtn = document.querySelector('.settings-collapse-btn') as HTMLElement;
+    const expandBtn = document.querySelector('.settings-expand-btn') as HTMLElement;
+
+    if (!settingsPanel || !collapseBtn || !expandBtn) return;
+
+    if (collapse) {
+        settingsPanel.classList.add('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'false');
+        localStorage.setItem('settingsPanelCollapsed', 'true');
+    } else {
+        settingsPanel.classList.remove('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'true');
+        localStorage.setItem('settingsPanelCollapsed', 'false');
+    }
+}
+
+function initSettingsPanelState() {
+    const isCollapsed = localStorage.getItem('settingsPanelCollapsed') === 'true';
+    if (isCollapsed) {
+        toggleSettingsPanelCollapse(true);
+    }
 }
 
 function handleDocumentClick(event: Event) {
     const target = event.target as HTMLElement;
     if (!target) return;
 
+    // Handle branch panel collapse/expand buttons
+    const collapseBtn = target.closest('.branch-collapse-btn') as HTMLElement;
+    if (collapseBtn) {
+        toggleBranchPanelCollapse(true);
+        return;
+    }
+
+    const expandBtn = target.closest('.branch-expand-btn') as HTMLElement;
+    if (expandBtn) {
+        toggleBranchPanelCollapse(false);
+        return;
+    }
+
+    // Handle settings panel collapse/expand buttons
+    const settingsCollapseBtn = target.closest('.settings-collapse-btn') as HTMLElement;
+    if (settingsCollapseBtn) {
+        toggleSettingsPanelCollapse(true);
+        return;
+    }
+
+    const settingsExpandBtn = target.closest('.settings-expand-btn') as HTMLElement;
+    if (settingsExpandBtn) {
+        toggleSettingsPanelCollapse(false);
+        return;
+    }
+
+    // Handle repo rule navigation links
+    const repoLink = target.closest('.repo-link') as HTMLElement;
+    if (repoLink) {
+        event.preventDefault();
+        const index = parseInt(repoLink.getAttribute('data-repo-index') || '-1');
+        if (index >= 0) {
+            navigateToRepoRule(index);
+        }
+        return;
+    }
+
     // Handle delete buttons
-    if (target.classList.contains('delete-btn')) {
-        const repoMatch = target.getAttribute('data-action')?.match(/deleteRepoRule\((\d+)\)/);
-        const branchMatch = target.getAttribute('data-action')?.match(/deleteBranchRule\((\d+)\)/);
+    const deleteBtn = target.closest('.delete-btn') as HTMLElement;
+    if (deleteBtn) {
+        const repoMatch = deleteBtn.getAttribute('data-action')?.match(/deleteRepoRule\((\d+)\)/);
+        const branchMatch = deleteBtn.getAttribute('data-action')?.match(/deleteBranchRule\((\d+)\)/);
 
         if (repoMatch) {
             const index = parseInt(repoMatch[1]);
@@ -556,8 +1161,29 @@ function handleDocumentClick(event: Event) {
             });
         } else if (branchMatch) {
             const index = parseInt(branchMatch[1]);
-            const rule = currentConfig?.branchRules?.[index];
-            const ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
+
+            // Get the table name from the selected repo rule
+            let tableName = '__none__';
+            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+                tableName = currentConfig.repoRules[selectedRepoRuleIndex].branchTableName || '__none__';
+            }
+            console.log(
+                '[DELETE BRANCH WEBVIEW] selectedRepoRuleIndex:',
+                selectedRepoRuleIndex,
+                'tableName:',
+                tableName,
+                'index:',
+                index,
+            );
+
+            // Get the rule from the shared table
+            let rule, ruleDescription;
+            if (tableName !== '__none__' && currentConfig?.sharedBranchTables?.[tableName]?.rules?.[index]) {
+                rule = currentConfig.sharedBranchTables[tableName].rules[index];
+                ruleDescription = rule ? `"${rule.pattern}" -> ${rule.color}` : `#${index + 1}`;
+            } else {
+                ruleDescription = `#${index + 1}`;
+            }
 
             // Send delete confirmation request to backend
             vscode.postMessage({
@@ -567,6 +1193,7 @@ function handleDocumentClick(event: Event) {
                         ruleType: 'branch',
                         index: index,
                         ruleDescription: ruleDescription,
+                        tableName: tableName,
                     },
                 },
             });
@@ -585,6 +1212,40 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle eye button (toggle enabled/disabled)
+    const eyeBtn = target.closest('.eye-btn') as HTMLElement;
+    if (eyeBtn) {
+        const action = eyeBtn.getAttribute('data-action');
+        const match = action?.match(/toggleRule\((\d+), '(\w+)'\)/);
+        if (match) {
+            const [, index, ruleType] = match;
+            toggleRule(parseInt(index), ruleType);
+        }
+        return;
+    }
+
+    // Handle repo rule selection radio button
+    if (target.classList.contains('repo-select-radio')) {
+        const action = target.getAttribute('data-action');
+        const match = action?.match(/selectRepoRule\((\d+)\)/);
+        if (match) {
+            const index = parseInt(match[1]);
+            selectRepoRule(index);
+        }
+        return;
+    }
+
+    // Handle branch rule selection radio button
+    if (target.classList.contains('branch-select-radio')) {
+        const action = target.getAttribute('data-action');
+        const match = action?.match(/selectBranchRule\((\d+)\)/);
+        if (match) {
+            const index = parseInt(match[1]);
+            selectBranchRule(index);
+        }
+        return;
+    }
+
     // Handle color swatches
     if (target.classList.contains('color-swatch')) {
         const action = target.getAttribute('data-action');
@@ -596,8 +1257,9 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
-    // Handle random color buttons
+    // Handle random color buttons - REMOVED, now using shift-click on color input
     if (target.classList.contains('random-color-btn')) {
+        // Deprecated: dice buttons have been removed
         const action = target.getAttribute('data-action');
         const match = action?.match(/generateRandomColor\('(\w+)', (\d+), '(\w+)'\)/);
         if (match) {
@@ -618,6 +1280,87 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle Create Table button
+    const createTableBtn = target.closest('.create-table-button') as HTMLElement;
+    if (createTableBtn) {
+        const action = createTableBtn.getAttribute('data-action');
+        const match = action?.match(/showCreateTableDialog\((\d+)\)/);
+        if (match) {
+            const repoRuleIndex = parseInt(match[1]);
+            showCreateTableDialog(repoRuleIndex);
+        }
+        return;
+    }
+
+    // Handle Branch Tables management buttons
+    if (target.getAttribute('onclick')?.includes('viewBranchTable')) {
+        const match = target.getAttribute('onclick')?.match(/viewBranchTable\('([^']+)'\)/);
+        if (match) {
+            viewBranchTable(match[1]);
+        }
+        return;
+    }
+
+    if (target.getAttribute('onclick')?.includes('renameBranchTableFromMgmt')) {
+        const match = target.getAttribute('onclick')?.match(/renameBranchTableFromMgmt\('([^']+)'\)/);
+        if (match) {
+            renameBranchTableFromMgmt(match[1].replace(/\\'/g, "'"));
+        }
+        return;
+    }
+
+    if (target.getAttribute('onclick')?.includes('deleteBranchTableFromMgmt')) {
+        const match = target.getAttribute('onclick')?.match(/deleteBranchTableFromMgmt\('([^']+)'\)/);
+        if (match) {
+            deleteBranchTableFromMgmt(match[1].replace(/\\'/g, "'"));
+        }
+        return;
+    }
+
+    // Handle preview toast reset button
+    if (target.getAttribute('data-action') === 'resetToMatchingRules') {
+        resetToMatchingRules();
+        return;
+    }
+
+    // Handle preview toast add button
+    if (target.getAttribute('data-action') === 'addRepoRuleFromPreview') {
+        addRepoRuleFromPreview();
+        return;
+    }
+
+    // Handle contextual help button (opens help based on active tab)
+    if (target.closest('[data-action="openContextualHelp"]')) {
+        const activeTab = document.querySelector('.tab-content.active');
+        if (activeTab?.id === 'rules-tab') {
+            openHelp('rules');
+        } else if (activeTab?.id === 'profiles-tab') {
+            // Check if we're in the Starred or Colored mapping tab within Profiles
+            const activeMapTab = document.querySelector(
+                '.mapping-tab-btn[style*="border-bottom-color: var(--vscode-panelTitle-activeBorder)"]',
+            );
+            const tabText = activeMapTab?.textContent?.trim();
+            if (tabText?.includes('★ Starred')) {
+                openHelp('starred');
+            } else if (tabText?.includes('⚡ Colored')) {
+                openHelp('colored');
+            } else {
+                openHelp('profile');
+            }
+        } else if (activeTab?.id === 'branch-tables-tab') {
+            openHelp('branch-modes');
+        } else if (activeTab?.id === 'report-tab') {
+            openHelp('report');
+        }
+        return;
+    }
+
+    // Handle help panel close buttons
+    if (target.closest('[data-action="closeHelp"]')) {
+        closeHelp();
+        return;
+    }
+
     // Handle Import/Export buttons
     if (target.getAttribute('data-action') === 'exportConfig') {
         vscode.postMessage({ command: 'exportConfig', data: {} });
@@ -630,10 +1373,25 @@ function handleDocumentClick(event: Event) {
     }
 
     // Handle move/reorder buttons
-    const moveMatch = target.getAttribute('data-action')?.match(/moveRule\((\d+), '(\w+)', (-?\d+)\)/);
-    if (moveMatch) {
-        const [, index, ruleType, direction] = moveMatch;
-        moveRule(parseInt(index), ruleType, parseInt(direction));
+    const reorderBtn = target.closest('.reorder-btn') as HTMLElement;
+    if (reorderBtn) {
+        const action = reorderBtn.getAttribute('data-action');
+        const match = action?.match(/moveRule\((\d+), '(\w+)', (-?\d+)\)/);
+        if (match) {
+            const [, index, ruleType, direction] = match;
+            moveRule(parseInt(index), ruleType, parseInt(direction));
+        }
+        return;
+    }
+
+    // Handle goto buttons in Color Report
+    if (target.classList.contains('goto-btn') || target.classList.contains('goto-link')) {
+        const gotoData = target.getAttribute('data-goto');
+        if (gotoData) {
+            // Store target in global for handleGotoSource to access
+            (window as any)._gotoTarget = target;
+            handleGotoSource(gotoData, target.textContent || '');
+        }
         return;
     }
 }
@@ -658,6 +1416,22 @@ function handleDocumentChange(event: Event) {
     if (branchMatch) {
         const [, index, field] = branchMatch;
         updateBranchRule(parseInt(index), field, target.value);
+        return;
+    }
+
+    // Handle branch table change
+    const branchTableMatch = action.match(/changeBranchTable\((\d+), this\.value\)/);
+    if (branchTableMatch) {
+        const index = parseInt(branchTableMatch[1]);
+        changeBranchTable(index, target.value);
+        return;
+    }
+
+    // Handle branch mode change (legacy - kept for backward compatibility during migration)
+    const branchModeMatch = action.match(/changeBranchMode\((\d+), this\.value\)/);
+    if (branchModeMatch) {
+        const index = parseInt(branchModeMatch[1]);
+        changeBranchMode(index, target.value === 'true');
         return;
     }
 
@@ -687,8 +1461,8 @@ function handleDocumentChange(event: Event) {
 
         // Handle extra actions
         const extraAction = target.getAttribute('data-extra-action');
-        if (extraAction === 'updateBranchColumnVisibility') {
-            updateBranchColumnVisibility();
+        if (extraAction === 'handlePreviewModeChange') {
+            handlePreviewModeChange();
         }
 
         return;
@@ -704,8 +1478,15 @@ function handleDocumentInput(event: Event) {
         handleColorInputAutoComplete(target);
     }
 
-    // Handle regex validation for branch pattern inputs
+    // Handle branch pattern auto-complete with debouncing
     if (target.id && target.id.startsWith('branch-pattern-')) {
+        // Clear existing timeout for autocomplete
+        clearTimeout(branchPatternFilterTimeout);
+        branchPatternFilterTimeout = setTimeout(() => {
+            filterBranchPatternAutoComplete(target);
+        }, 150); // Debounce autocomplete filtering
+
+        // Regex validation on separate timeout
         clearTimeout(regexValidationTimeout);
         regexValidationTimeout = setTimeout(() => {
             validateRegexPattern(target.value, target.id);
@@ -725,6 +1506,20 @@ function handleDocumentInput(event: Event) {
 function handleDocumentKeydown(event: KeyboardEvent) {
     const target = event.target as HTMLInputElement;
     if (!target) return;
+
+    // Handle escape key to close branch table dropdowns
+    if (event.key === 'Escape') {
+        const openDropdowns = document.querySelectorAll('.branch-table-dropdown .dropdown-options[style*="block"]');
+        if (openDropdowns.length > 0) {
+            openDropdowns.forEach((dropdown) => {
+                (dropdown as HTMLElement).style.display = 'none';
+                (dropdown.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
+            });
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+    }
 
     // Handle escape key for input restoration (both color inputs and rule inputs)
     if (
@@ -765,6 +1560,16 @@ function handleDocumentFocusIn(event: FocusEvent) {
         if (!originalInputValues.has(target)) {
             originalInputValues.set(target, target.value);
         }
+    }
+
+    // Show autocomplete dropdown immediately when focusing color input
+    if (target.classList.contains('color-input') && target.classList.contains('text-input')) {
+        handleColorInputAutoComplete(target);
+    }
+
+    // Show autocomplete dropdown immediately when focusing branch pattern input
+    if (target.id && target.id.startsWith('branch-pattern-')) {
+        filterBranchPatternAutoComplete(target);
     }
 }
 
@@ -860,12 +1665,14 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     // Create header
     const thead = table.createTHead();
     const headerRow = thead.insertRow();
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+    const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
+        <th scope="col" class="select-column">Sel</th>
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
-        <th scope="col">Primary Color</th>
-        <th scope="col" class="branch-column">Default Branch</th>
-        <th scope="col" class="branch-column">Branch Color</th>
+        <th scope="col">Color${colorSuffix}</th>
+        <th scope="col" class="branch-table-column">Branch Table</th>
     `;
 
     // Create body
@@ -874,27 +1681,468 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         const row = tbody.insertRow();
         row.className = 'rule-row';
 
+        // Add error class if this rule has a validation error
+        if (validationErrors.repoRules[index]) {
+            row.classList.add('has-error');
+            row.title = `Error: ${validationErrors.repoRules[index]}`;
+        }
+
+        // Add selected class if this is the selected rule
+        if (selectedRepoRuleIndex === index) {
+            row.classList.add('selected-rule');
+        }
+
+        // Add preview-active class if preview mode is on and this is the selected rule
+        if (previewMode && selectedRepoRuleIndex === index) {
+            row.classList.add('preview-active');
+        }
+
         // Highlight matched rule
         if (matchingIndex !== undefined && index === matchingIndex) {
             // console.log('[DEBUG] Applying matched-rule class to index:', index, 'rule:', rule.repoQualifier);
             row.classList.add('matched-rule');
         }
 
+        // Add disabled class if rule is disabled
+        if (rule.enabled === false) {
+            row.classList.add('disabled-rule');
+        }
+
         row.innerHTML = createRepoRuleRowHTML(rule, index, rules.length);
         setupRepoRuleRowEvents(row, index);
+
+        // Insert custom branch table dropdown
+        // '__none__' = explicitly No Branch Table, missing/undefined defaults to '__none__'
+        const tableName = rule.branchTableName || '__none__';
+        console.log(
+            '[createDropdown] Rule',
+            index,
+            'branchTableName:',
+            rule.branchTableName,
+            'resolved tableName:',
+            tableName,
+        );
+        const cell = row.querySelector(`#branch-table-cell-${index}`);
+        if (cell) {
+            const dropdownContainer = createBranchTableDropdown(tableName, index);
+            cell.appendChild(dropdownContainer);
+        }
     });
 
     container.innerHTML = '';
     container.appendChild(table);
 
-    // Update branch column visibility
-    updateBranchColumnVisibility();
+    // Initialize selection if needed
+    if (selectedRepoRuleIndex === -1 && rules.length > 0) {
+        // Prefer matched workspace rule, then first enabled rule, then first rule
+        if (
+            matchingIndex !== undefined &&
+            matchingIndex !== null &&
+            matchingIndex >= 0 &&
+            matchingIndex < rules.length
+        ) {
+            selectedRepoRuleIndex = matchingIndex;
+        } else {
+            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
+            selectedRepoRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
+        }
+        renderBranchRulesForSelectedRepo();
+
+        // If preview mode is enabled, trigger preview for the initially selected rule
+        if (previewMode && selectedRepoRuleIndex >= 0) {
+            const selectedRule = rules[selectedRepoRuleIndex];
+            const tableName = selectedRule.branchTableName || '__none__';
+            const branchTable = currentConfig?.sharedBranchTables?.[tableName];
+            const hasBranchRules = tableName !== '__none__' && branchTable?.rules && branchTable.rules.length > 0;
+
+            vscode.postMessage({
+                command: 'previewRepoRule',
+                data: {
+                    index: selectedRepoRuleIndex,
+                    previewEnabled: true,
+                    clearBranchPreview: !hasBranchRules,
+                },
+            });
+        }
+    }
+}
+
+function createBranchTableDropdown(selectedTableName: string | null, repoRuleIndex: number): HTMLElement {
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.gap = '4px';
+    container.style.alignItems = 'center';
+    container.style.flex = '1';
+
+    if (!currentConfig?.sharedBranchTables) {
+        // Fallback to simple text
+        container.textContent = selectedTableName || 'No Branch Table';
+        return container;
+    }
+
+    const tables = currentConfig.sharedBranchTables;
+    const repoRules = currentConfig.repoRules || [];
+
+    // Calculate usage counts and track which repos use each table
+    const usageCounts: { [tableName: string]: number } = {};
+    const tableUsageMap: { [tableName: string]: string[] } = {};
+    for (const tableName in tables) {
+        usageCounts[tableName] = 0;
+        tableUsageMap[tableName] = [];
+    }
+    for (const rule of repoRules) {
+        const tableName = rule.branchTableName;
+        // Skip undefined (No Branch Table)
+        if (tableName && usageCounts[tableName] !== undefined) {
+            usageCounts[tableName]++;
+            tableUsageMap[tableName].push(rule.repoQualifier || 'Unknown');
+        }
+    }
+
+    // Create custom dropdown
+    const dropdown = document.createElement('div');
+    dropdown.className = 'branch-table-dropdown';
+    dropdown.setAttribute('data-repo-index', String(repoRuleIndex));
+    dropdown.setAttribute('data-value', selectedTableName);
+    dropdown.setAttribute('tabindex', '0');
+    dropdown.setAttribute('role', 'combobox');
+    dropdown.setAttribute('aria-expanded', 'false');
+    dropdown.style.flex = '1';
+    dropdown.style.position = 'relative';
+    dropdown.style.cursor = 'pointer';
+    dropdown.style.minWidth = '120px';
+
+    // Selected value display
+    const selectedDisplay = document.createElement('div');
+    selectedDisplay.className = 'dropdown-selected';
+    selectedDisplay.style.background = 'var(--vscode-dropdown-background)';
+    selectedDisplay.style.color = 'var(--vscode-dropdown-foreground)';
+    selectedDisplay.style.border = '1px solid var(--vscode-dropdown-border)';
+    selectedDisplay.style.padding = '4px 8px';
+    selectedDisplay.style.fontSize = '12px';
+    selectedDisplay.style.display = 'flex';
+    selectedDisplay.style.alignItems = 'center';
+    selectedDisplay.style.gap = '6px';
+    selectedDisplay.style.position = 'relative';
+    selectedDisplay.style.maxWidth = '150px';
+    selectedDisplay.style.overflow = 'hidden';
+
+    // Arrow indicator
+    const arrow = document.createElement('span');
+    arrow.className = 'codicon codicon-chevron-down';
+    arrow.style.position = 'absolute';
+    arrow.style.right = '6px';
+    arrow.style.fontSize = '12px';
+    arrow.style.pointerEvents = 'none';
+    selectedDisplay.appendChild(arrow);
+
+    // Dropdown options container
+    const optionsContainer = document.createElement('div');
+    optionsContainer.className = 'dropdown-options';
+    optionsContainer.style.display = 'none';
+    optionsContainer.style.position = 'fixed';
+    optionsContainer.style.width = 'max-content';
+    optionsContainer.style.background = 'var(--vscode-dropdown-background)';
+    optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
+    optionsContainer.style.maxHeight = '250px';
+    optionsContainer.style.overflowY = 'auto';
+    optionsContainer.style.zIndex = '10000';
+
+    // Build sorted list of table names
+    const tableNames = Object.keys(tables).sort((a, b) => {
+        if (a === 'Default Rules') return -1;
+        if (b === 'Default Rules') return 1;
+        return a.localeCompare(b);
+    });
+
+    // Add "No Branch Table" option first
+    const noBranchOption = document.createElement('div');
+    noBranchOption.className = 'dropdown-option';
+    noBranchOption.setAttribute('data-value', '__none__');
+    noBranchOption.style.padding = '6px 8px';
+    noBranchOption.style.cursor = 'pointer';
+    noBranchOption.style.display = 'flex';
+    noBranchOption.style.alignItems = 'center';
+    noBranchOption.style.gap = '8px';
+    noBranchOption.style.fontSize = '12px';
+
+    if (selectedTableName === '__none__') {
+        noBranchOption.style.background = 'var(--vscode-list-activeSelectionBackground)';
+        noBranchOption.style.color = 'var(--vscode-list-activeSelectionForeground)';
+    }
+
+    const noBranchIcon = document.createElement('span');
+    noBranchIcon.className = 'codicon codicon-circle-slash';
+    noBranchOption.appendChild(noBranchIcon);
+
+    const noBranchText = document.createElement('span');
+    noBranchText.textContent = 'No Branch Table';
+    noBranchOption.appendChild(noBranchText);
+
+    // Hover effect
+    noBranchOption.addEventListener('mouseenter', () => {
+        if (selectedTableName !== '__none__') {
+            noBranchOption.style.background = 'var(--vscode-list-hoverBackground)';
+        }
+    });
+    noBranchOption.addEventListener('mouseleave', () => {
+        if (selectedTableName !== '__none__') {
+            noBranchOption.style.background = '';
+        }
+    });
+
+    // Click handler
+    noBranchOption.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.setAttribute('data-value', '__none__');
+        updateSelectedDisplay('__none__');
+        optionsContainer.style.display = 'none';
+        dropdown.setAttribute('aria-expanded', 'false');
+
+        // Trigger the branch table change to __none__
+        changeBranchTable(repoRuleIndex, '__none__');
+    });
+
+    optionsContainer.appendChild(noBranchOption);
+
+    // Add separator after No Branch Table
+    const separatorTop = document.createElement('div');
+    separatorTop.style.borderTop = '1px solid var(--vscode-menu-separatorBackground)';
+    separatorTop.style.margin = '4px 0';
+    optionsContainer.appendChild(separatorTop);
+
+    // Update selected display
+    const updateSelectedDisplay = (tableName: string) => {
+        const icon = document.createElement('span');
+        icon.style.flexShrink = '0';
+
+        if (tableName === '__none__') {
+            icon.className = 'codicon codicon-circle-slash';
+            const text = document.createElement('span');
+            text.textContent = 'No Branch Table';
+            text.style.overflow = 'hidden';
+            text.style.textOverflow = 'ellipsis';
+            text.style.whiteSpace = 'nowrap';
+            text.style.paddingRight = '24px';
+            text.style.maxWidth = '150px';
+            text.style.minWidth = '0';
+            text.style.flex = '1';
+            text.title = 'No Branch Table';
+
+            selectedDisplay.innerHTML = '';
+            selectedDisplay.appendChild(icon);
+            selectedDisplay.appendChild(text);
+            selectedDisplay.appendChild(arrow);
+        } else {
+            icon.className = 'codicon codicon-git-branch';
+            const text = document.createElement('span');
+            const count = usageCounts[tableName] || 0;
+            const badge = count > 0 ? ` [${count}]` : '';
+            text.textContent = tableName + badge;
+            text.style.overflow = 'hidden';
+            text.style.textOverflow = 'ellipsis';
+            text.style.whiteSpace = 'nowrap';
+            text.style.paddingRight = '24px';
+            text.style.maxWidth = '150px';
+            text.style.minWidth = '0';
+            text.style.flex = '1';
+            text.title = tableName + badge;
+
+            selectedDisplay.innerHTML = '';
+            selectedDisplay.appendChild(icon);
+            selectedDisplay.appendChild(text);
+            selectedDisplay.appendChild(arrow);
+        }
+    };
+
+    // Create option elements
+    tableNames.forEach((tableName) => {
+        const isSelected = tableName === selectedTableName;
+        const usageCount = usageCounts[tableName] || 0;
+        const reposUsingTable = tableUsageMap[tableName] || [];
+
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'dropdown-option';
+        optionDiv.setAttribute('data-value', tableName);
+        optionDiv.style.padding = '6px 8px';
+        optionDiv.style.cursor = 'pointer';
+        optionDiv.style.display = 'flex';
+        optionDiv.style.alignItems = 'center';
+        optionDiv.style.gap = '8px';
+        optionDiv.style.fontSize = '12px';
+
+        // Add tooltip showing which repos use this table
+        if (usageCount > 0) {
+            const maxReposToShow = 5;
+            const repoList = reposUsingTable.slice(0, maxReposToShow).join(', ');
+            const remaining = reposUsingTable.length - maxReposToShow;
+            const tooltipText = remaining > 0 ? `Used by: ${repoList}...and ${remaining} more` : `Used by: ${repoList}`;
+            optionDiv.title = tooltipText;
+        } else {
+            optionDiv.title = 'Not used by any repository rules';
+        }
+
+        if (isSelected) {
+            optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
+            optionDiv.style.color = 'var(--vscode-list-activeSelectionForeground)';
+        }
+
+        // Add icon
+        const icon = document.createElement('span');
+        icon.className = 'codicon codicon-git-branch';
+        optionDiv.appendChild(icon);
+
+        // Add text
+        const text = document.createElement('span');
+        text.textContent = tableName;
+        optionDiv.appendChild(text);
+
+        // Add usage badge if any
+        if (usageCount > 0) {
+            const badge = document.createElement('span');
+            badge.textContent = `[${usageCount}]`;
+            badge.style.color = 'var(--vscode-descriptionForeground)';
+            badge.style.fontSize = '11px';
+            optionDiv.appendChild(badge);
+        }
+
+        // Hover effect
+        optionDiv.addEventListener('mouseenter', () => {
+            if (!isSelected) {
+                optionDiv.style.background = 'var(--vscode-list-hoverBackground)';
+            }
+        });
+        optionDiv.addEventListener('mouseleave', () => {
+            if (!isSelected) {
+                optionDiv.style.background = '';
+            }
+        });
+
+        // Click handler
+        optionDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.setAttribute('data-value', tableName);
+            updateSelectedDisplay(tableName);
+            optionsContainer.style.display = 'none';
+            dropdown.setAttribute('aria-expanded', 'false');
+
+            // Trigger the branch table change
+            changeBranchTable(repoRuleIndex, tableName);
+        });
+
+        optionsContainer.appendChild(optionDiv);
+    });
+
+    // Add separator before "Create New Table..."
+    const separator = document.createElement('div');
+    separator.style.borderTop = '1px solid var(--vscode-menu-separatorBackground)';
+    separator.style.margin = '4px 0';
+    optionsContainer.appendChild(separator);
+
+    // Add "Create New Table..." option
+    const createOption = document.createElement('div');
+    createOption.className = 'dropdown-option';
+    createOption.style.padding = '6px 8px';
+    createOption.style.cursor = 'pointer';
+    createOption.style.display = 'flex';
+    createOption.style.alignItems = 'center';
+    createOption.style.gap = '8px';
+    createOption.style.fontSize = '12px';
+    createOption.style.fontStyle = 'italic';
+    createOption.style.color = 'var(--vscode-textLink-foreground)';
+
+    const createIcon = document.createElement('span');
+    createIcon.className = 'codicon codicon-git-branch-staged-changes';
+    createOption.appendChild(createIcon);
+
+    const createText = document.createElement('span');
+    createText.textContent = 'Create New Table...';
+    createOption.appendChild(createText);
+
+    // Hover effect for create option
+    createOption.addEventListener('mouseenter', () => {
+        createOption.style.background = 'var(--vscode-list-hoverBackground)';
+    });
+    createOption.addEventListener('mouseleave', () => {
+        createOption.style.background = '';
+    });
+
+    // Click handler for create option
+    createOption.addEventListener('click', (e) => {
+        e.stopPropagation();
+        optionsContainer.style.display = 'none';
+        dropdown.setAttribute('aria-expanded', 'false');
+        showCreateTableDialog(repoRuleIndex);
+    });
+
+    optionsContainer.appendChild(createOption);
+
+    // Toggle dropdown on click
+    selectedDisplay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = optionsContainer.style.display === 'block';
+
+        // Close all other dropdowns first
+        document.querySelectorAll('.branch-table-dropdown .dropdown-options').forEach((other) => {
+            if (other !== optionsContainer) {
+                (other as HTMLElement).style.display = 'none';
+            }
+        });
+
+        if (!isOpen) {
+            // Position dropdown relative to the trigger element
+            const triggerRect = selectedDisplay.getBoundingClientRect();
+            const viewportHeight = window.innerHeight;
+            const spaceBelow = viewportHeight - triggerRect.bottom;
+            const spaceAbove = triggerRect.top;
+            const dropdownHeight = 250; // maxHeight of options
+
+            // Position at the trigger element
+            optionsContainer.style.left = triggerRect.left + 'px';
+            optionsContainer.style.minWidth = triggerRect.width + 'px';
+
+            // If not enough space below but enough above, flip it upward
+            if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+                optionsContainer.style.top = triggerRect.top - dropdownHeight + 'px';
+                optionsContainer.style.bottom = 'auto';
+            } else {
+                // Normal downward position
+                optionsContainer.style.top = triggerRect.bottom + 2 + 'px';
+                optionsContainer.style.bottom = 'auto';
+            }
+        }
+
+        optionsContainer.style.display = isOpen ? 'none' : 'block';
+        dropdown.setAttribute('aria-expanded', String(!isOpen));
+    });
+
+    // Initialize selected display
+    updateSelectedDisplay(selectedTableName);
+
+    dropdown.appendChild(selectedDisplay);
+    container.appendChild(dropdown);
+
+    // Append options to body for proper z-index stacking
+    document.body.appendChild(optionsContainer);
+
+    return container;
 }
 
 function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): string {
+    const isSelected = selectedRepoRuleIndex === index;
+
     return `
+        <td class="select-cell">
+            <input type="radio" 
+                   name="selected-repo-rule" 
+                   class="repo-select-radio" 
+                   id="repo-select-${index}"
+                   ${isSelected ? 'checked' : ''}
+                   data-action="selectRepoRule(${index})"
+                   aria-label="Select ${escapeHtml(rule.repoQualifier || 'rule ' + (index + 1))} for branch rules configuration">
+        </td>
         <td class="reorder-controls">
-            ${createReorderControlsHTML(index, 'repo', totalCount)}
+            ${createReorderControlsHTML(index, 'repo', totalCount, rule)}
         </td>
         <td class="repo-rule-cell">
             <input type="text" 
@@ -908,28 +2156,26 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
         <td class="color-cell">
             ${createColorInputHTML(rule.primaryColor || '', 'repo', index, 'primaryColor')}
         </td>
-        <td class="branch-column">
-            <input type="text" 
-                   class="rule-input" 
-                   id="repo-branch-${index}"
-                   value="${escapeHtml(rule.defaultBranch || '')}" 
-                   placeholder="e.g., main, master"
-                   aria-label="Default branch for rule ${index + 1}"
-                   data-action="updateRepoRule(${index}, 'defaultBranch', this.value)">
-        </td>
-        <td class="color-cell branch-column">
-            ${createColorInputHTML(rule.branchColor || '', 'repo', index, 'branchColor')}
+        <td class="branch-table-cell" id="branch-table-cell-${index}">
+            <!-- Custom dropdown will be inserted here -->
         </td>
     `;
 }
 
-function renderBranchRules(rules: any[], matchingIndex?: number) {
+function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?: number) {
     const container = document.getElementById('branchRulesContent');
     if (!container) return;
 
     if (!rules || rules.length === 0) {
-        container.innerHTML =
-            '<div class="no-rules">No branch rules defined. Click "Add" to create your first rule.</div>';
+        const selectedRule = repoRuleIndex !== undefined ? currentConfig?.repoRules?.[repoRuleIndex] : null;
+        const tableName = selectedRule?.branchTableName || '__none__';
+        let emptyMessage: string;
+        if (tableName === '__none__') {
+            emptyMessage = `<div class="no-rules">No branch table selected for this repository. Select a table from the dropdown to add branch rules.</div>`;
+        } else {
+            emptyMessage = `<div class="no-rules">No branch rules defined in table "${escapeHtml(tableName)}". Click "Add" to create a rule or use "Copy From..." to import rules.</div>`;
+        }
+        container.innerHTML = emptyMessage;
         return;
     }
 
@@ -941,10 +2187,13 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
     // Create header
     const thead = table.createTHead();
     const headerRow = thead.insertRow();
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+    const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
+        <th scope="col" class="select-column">Sel</th>
         <th scope="col">Actions</th>
         <th scope="col">Branch Pattern</th>
-        <th scope="col">Color</th>
+        <th scope="col">Color${colorSuffix}</th>
     `;
 
     // Create body
@@ -953,9 +2202,31 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
         const row = tbody.insertRow();
         row.className = 'rule-row';
 
+        // Note: Validation errors are currently stored per global branchRules array
+        // This may need updating for table-based validation in the future
+        if (validationErrors.branchRules[index]) {
+            row.classList.add('has-error');
+            row.title = `Error: ${validationErrors.branchRules[index]}`;
+        }
+
+        // Add selected class if this is the selected rule
+        if (selectedBranchRuleIndex === index) {
+            row.classList.add('selected-rule');
+        }
+
+        // Add preview-active class if preview mode is on and this is the selected rule
+        if (previewMode && selectedBranchRuleIndex === index) {
+            row.classList.add('preview-active');
+        }
+
         // Highlight matched rule
         if (matchingIndex !== undefined && index === matchingIndex) {
             row.classList.add('matched-rule');
+        }
+
+        // Add disabled class if rule is disabled
+        if (rule.enabled === false) {
+            row.classList.add('disabled-rule');
         }
 
         row.innerHTML = createBranchRuleRowHTML(rule, index, rules.length);
@@ -964,12 +2235,45 @@ function renderBranchRules(rules: any[], matchingIndex?: number) {
 
     container.innerHTML = '';
     container.appendChild(table);
+
+    // Initialize selection if needed (only for the first render or when switching repos)
+    // Check if we need to initialize selectedBranchRuleIndex
+    if (selectedBranchRuleIndex === -1 && rules.length > 0) {
+        // Prefer matched branch rule, then first enabled rule, then first rule
+        if (
+            matchingIndex !== undefined &&
+            matchingIndex !== null &&
+            matchingIndex >= 0 &&
+            matchingIndex < rules.length
+        ) {
+            selectedBranchRuleIndex = matchingIndex;
+        } else {
+            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
+            selectedBranchRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
+        }
+
+        // Trigger re-render to show the selection
+        if (currentConfig && selectedRepoRuleIndex >= 0) {
+            renderBranchRulesForSelectedRepo();
+        }
+    }
 }
 
 function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): string {
+    const isSelected = selectedBranchRuleIndex === index;
+
     return `
+        <td class="select-cell">
+            <input type="radio" 
+                   name="selected-branch-rule" 
+                   class="branch-select-radio" 
+                   id="branch-select-${index}"
+                   ${isSelected ? 'checked' : ''}
+                   data-action="selectBranchRule(${index})"
+                   aria-label="Select branch rule ${index + 1} for preview">
+        </td>
         <td class="reorder-controls">
-            ${createReorderControlsHTML(index, 'branch', totalCount)}
+            ${createReorderControlsHTML(index, 'branch', totalCount, rule)}
         </td>
         <td>
             <input type="text" 
@@ -988,6 +2292,8 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
 
 function createColorInputHTML(color: string, ruleType: string, index: number, field: string): string {
     const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+    const placeholder = profilesEnabled ? 'e.g., blue, #4A90E2, MyProfile' : 'e.g., blue, #4A90E2';
 
     if (USE_NATIVE_COLOR_PICKER) {
         const hexColor = convertColorToHex(color);
@@ -997,16 +2303,13 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                        class="native-color-input" 
                        id="${ruleType}-${field}-${index}"
                        value="${hexColor}" 
+                       title="Click to use a color picker, shift-click to choose a random color"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
-                <button class="random-color-btn" 
-                        data-action="generateRandomColor('${ruleType}', ${index}, '${field}')"
-                        title="Generate random color"
-                        aria-label="Generate random color for ${ruleType} rule ${index + 1} ${field}">🎲</button>
                 <input type="text" 
                        class="color-input text-input" 
                        value="${color || ''}" 
-                       placeholder="e.g., blue, #4A90E2"
+                       placeholder="${placeholder}"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        data-input-action="syncColorInputs('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color text for ${ruleType} rule ${index + 1} ${field}">
@@ -1018,16 +2321,12 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                 <div class="color-swatch" 
                      style="background-color: ${convertColorToValidCSS(color) || '#4A90E2'}"
                      data-action="openColorPicker('${ruleType}', ${index}, '${field}')"
-                     title="Click to choose color"></div>
-                <button class="random-color-btn" 
-                        data-action="generateRandomColor('${ruleType}', ${index}, '${field}')"
-                        title="Generate random color"
-                        aria-label="Generate random color for ${ruleType} rule ${index + 1} ${field}">🎲</button>
+                     title="Click to use a color picker, shift-click to choose a random color"></div>
                 <input type="text" 
                        class="color-input" 
                        id="${ruleType}-${field}-${index}"
                        value="${color || ''}" 
-                       placeholder="e.g., blue, #4A90E2"
+                       placeholder="${placeholder}"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
             </div>
@@ -1035,35 +2334,49 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     }
 }
 
-function createReorderControlsHTML(index: number, ruleType: string, totalCount: number): string {
+function createReorderControlsHTML(index: number, ruleType: string, totalCount: number, rule: any): string {
+    const isEnabled = rule.enabled !== false;
+    const eyeIcon = isEnabled
+        ? '<span class="codicon codicon-eye"></span>'
+        : '<span class="codicon codicon-eye-closed"></span>';
+    const eyeTitle = isEnabled ? 'Disable this rule' : 'Enable this rule';
+
+    // Disable drag handle when there's only one entry
+    const isDragDisabled = totalCount <= 1;
+
     return `
         <div class="reorder-buttons">
-            <div class="drag-handle tooltip right-tooltip" 
-                 draggable="true" 
+            <div class="drag-handle tooltip right-tooltip${isDragDisabled ? ' disabled' : ''}" 
+                 ${isDragDisabled ? '' : 'draggable="true"'} 
                  data-drag-index="${index}"
                  data-drag-type="${ruleType}"
-                 title="Drag to reorder"
-                 tabindex="0"
+                 title="${isDragDisabled ? 'Cannot reorder single entry' : 'Drag to reorder'}"
+                 tabindex="${isDragDisabled ? '-1' : '0'}"
                  role="button"
-                 aria-label="Drag handle for rule ${index + 1}">⋮⋮
+                 aria-label="Drag handle for rule ${index + 1}"
+                 ${isDragDisabled ? 'aria-disabled="true"' : ''}><span class="codicon codicon-gripper"></span>
                 <span class="tooltiptext" role="tooltip">
-                    Drag this handle to reorder rules. Rules are processed from top to bottom.
+                    ${isDragDisabled ? 'Cannot reorder when only one rule exists' : 'Drag this handle to reorder rules. Rules are processed from top to bottom.'}
                 </span>
             </div>
             <button class="reorder-btn" 
                     data-action="moveRule(${index}, '${ruleType}', -1)" 
                     title="Move up"
                     aria-label="Move rule ${index + 1} up"
-                    ${index === 0 ? 'disabled' : ''}>▲</button>
+                    ${index === 0 ? 'disabled' : ''}><span class="codicon codicon-triangle-up"></span></button>
             <button class="reorder-btn" 
                     data-action="moveRule(${index}, '${ruleType}', 1)" 
                     title="Move down"
                     aria-label="Move rule ${index + 1} down"
-                    ${index === totalCount - 1 ? 'disabled' : ''}>▼</button>
+                    ${index === totalCount - 1 ? 'disabled' : ''}><span class="codicon codicon-triangle-down"></span></button>
+            <button class="eye-btn" 
+                    data-action="toggleRule(${index}, '${ruleType}')"
+                    title="${eyeTitle}"
+                    aria-label="Toggle ${ruleType} rule ${index + 1}">${eyeIcon}</button>
             <button class="delete-btn" 
                     data-action="delete${ruleType.charAt(0).toUpperCase() + ruleType.slice(1)}Rule(${index})"
                     title="Delete this rule"
-                    aria-label="Delete ${ruleType} rule ${index + 1}">🗙</button>
+                    aria-label="Delete ${ruleType} rule ${index + 1}"><span class="codicon codicon-trash"></span></button>
         </div>
     `;
 }
@@ -1072,123 +2385,148 @@ function renderOtherSettings(settings: any) {
     const container = document.getElementById('otherSettingsContent');
     if (!container) return;
 
+    // Check if the selected repo rule is using a non-virtual profile
+    const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+
+    // Only disable controls if using an actual user-defined profile (not a virtual one)
+    // Virtual profiles are temporary profiles created for simple color rules
+    let isProfileRule = false;
+    if (profilesEnabled && selectedRule?.profileName) {
+        const profile = currentConfig?.advancedProfiles?.[selectedRule.profileName];
+        isProfileRule = profile && !profile.virtual;
+    } else if (profilesEnabled && selectedRule?.primaryColor) {
+        const profile = currentConfig?.advancedProfiles?.[selectedRule.primaryColor];
+        isProfileRule = profile && !profile.virtual;
+    }
+
+    const disabledAttr = isProfileRule ? 'disabled' : '';
+    const disabledClass = isProfileRule ? 'disabled' : '';
+    const profileNote = isProfileRule ? ' <strong>The currently selected rule is using a profile.</strong>' : '';
+
+    console.log(
+        '[renderOtherSettings] selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+        'selectedRule:',
+        selectedRule,
+        'profilesEnabled:',
+        profilesEnabled,
+        'isProfileRule:',
+        isProfileRule,
+        'primaryColor:',
+        selectedRule?.primaryColor,
+        'profileName:',
+        selectedRule?.profileName,
+        'advancedProfiles:',
+        Object.keys(currentConfig?.advancedProfiles || {}),
+    );
+
     container.innerHTML = `
-        <div class="settings-grid">
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="color-status-bar"
-                           ${settings.colorStatusBar ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorStatusBar', this.checked)">
-                    Color Status Bar
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply repository colors to the status bar at the bottom of the VS Code window. 
-                    This give the repository color more prominence.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="show-branch-columns"
-                           ${settings.showBranchColumns ? 'checked' : ''}
-                           data-action="updateOtherSetting('showBranchColumns', this.checked)"
-                           data-extra-action="updateBranchColumnVisibility">
-                    Show Branch Columns in Repository Rules
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Show or hide the Default Branch and Branch Color columns in the Repository Rules table. 
-                    Disable this to simplify the interface if you only use basic repository coloring, or want to
-                    use separate branch rules instead.
-                </span>
-            </div>
-            <div class="setting-item range-slider tooltip">
-                <label for="activity-bar-knob">Color Knob:</label>
-                <div class="range-controls">
-                    <input type="range" 
-                           id="activity-bar-knob" 
-                           min="-10" 
-                           max="10" 
-                           value="${settings.activityBarColorKnob || 0}"
-                           data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
-                           aria-label="Color adjustment from -10 to +10">
-                    <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
+        <div class="settings-sections">
+            <div class="settings-section">
+                <h3>Color Options</h3>
+                <div class="section-help" style="margin-bottom: 10px;">
+                    <strong>Note:</strong> These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration.${profileNote}
                 </div>
-                <span class="tooltiptext" role="tooltip">
-                    Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
-                    Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
-                    Provided for fine-tuning the look and feel.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="color-editor-tabs"
-                           ${settings.colorEditorTabs ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorEditorTabs', this.checked)">
-                    Color Editor Tabs
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply repository colors to editor tabs. This give the repository color more prominence.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="ask-to-colorize-repo-when-opened"
-                           ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
-                           data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
-                    Ask to colorize repo when opened
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
-                </span>
-            </div>
-            <div class="setting-item range-slider tooltip">
-                <label for="branch-hue-rotation">Branch Hue Rotation:</label>
-                <div class="range-controls">
-                    <input type="range" 
-                           id="branch-hue-rotation" 
-                           min="-179" 
-                           max="179" 
-                           value="${settings.automaticBranchIndicatorColorKnob || 60}"
-                           data-action="updateOtherSetting('automaticBranchIndicatorColorKnob', parseInt(this.value))"
-                           aria-label="Branch hue rotation from -179 to +179 degrees">
-                    <span id="branch-hue-rotation-value" class="value-display">${settings.automaticBranchIndicatorColorKnob || 60}°</span>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="settings-grid">
+                        <div class="setting-item tooltip ${disabledClass}">
+                            <label>
+                                <input type="checkbox" 
+                                       id="color-status-bar"
+                                       ${settings.colorStatusBar ? 'checked' : ''}
+                                       ${disabledAttr}
+                                       data-action="updateOtherSetting('colorStatusBar', this.checked)">
+                                Color Status Bar
+                            </label>
+                            <span class="tooltiptext" role="tooltip">
+                                Apply repository colors to the status bar at the bottom of the VS Code window. 
+                                This give the repository color more prominence.
+                            </span>
+                        </div>
+                        <div class="setting-item tooltip ${disabledClass}">
+                            <label>
+                                <input type="checkbox" 
+                                       id="color-editor-tabs"
+                                       ${settings.colorEditorTabs ? 'checked' : ''}
+                                       ${disabledAttr}
+                                       data-action="updateOtherSetting('colorEditorTabs', this.checked)">
+                                Color Editor Tabs
+                            </label>
+                            <span class="tooltiptext" role="tooltip">
+                                Apply repository colors to editor tabs. This give the repository color more prominence.
+                            </span>
+                        </div>
+                        <div class="setting-item tooltip ${disabledClass}">
+                            <label>
+                                <input type="checkbox" 
+                                       id="color-inactive-titlebar"
+                                       ${settings.colorInactiveTitlebar ? 'checked' : ''}
+                                       ${disabledAttr}
+                                       data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
+                                Color Inactive Title Bar
+                            </label>
+                            <span class="tooltiptext" role="tooltip">
+                                Apply colors to the title bar even when the VS Code window is not focused. 
+                                This maintains visual identification when switching between applications.
+                            </span>
+                        </div>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="setting-item range-slider tooltip ${disabledClass}">
+                            <label for="activity-bar-knob">Color Knob:</label>
+                            <div class="range-controls">
+                                <input type="range" 
+                                       id="activity-bar-knob" 
+                                       min="-10" 
+                                       max="10" 
+                                       value="${settings.activityBarColorKnob || 0}"
+                                       ${disabledAttr}
+                                       data-action="updateOtherSetting('activityBarColorKnob', parseInt(this.value))"
+                                       aria-label="Color adjustment from -10 to +10">
+                                <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
+                            </div>
+                            <span class="tooltiptext" role="tooltip">
+                                Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
+                                Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
+                                Provided for fine-tuning the look and feel.
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <span class="tooltiptext" role="tooltip">
-                    Automatically shift the hue of branch indicator colors. This creates visual variation 
-                    for branch-specific coloring when a default branch is specified and no explicit branch color is defined. 
-                    A value of 180 means
-                    opposite colors, while 60 or -60 gives a nice complementary colors. Or use anything you like!
-                    Note: This setting does not apply to discrete branch rules. 
-                </span>
             </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="color-inactive-titlebar"
-                           ${settings.colorInactiveTitlebar ? 'checked' : ''}
-                           data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
-                    Color Inactive Title Bar
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    Apply colors to the title bar even when the VS Code window is not focused. 
-                    This maintains visual identification when switching between applications.
-                </span>
-            </div>
-            <div class="setting-item tooltip">
-                <label>
-                    <input type="checkbox" 
-                           id="show-status-icon-when-no-rule-matches"
-                           ${settings.showStatusIconWhenNoRuleMatches ? 'checked' : ''}
-                           data-action="updateOtherSetting('showStatusIconWhenNoRuleMatches', this.checked)">
-                    Show Status Icon Only When No Rule Matches
-                </label>
-                <span class="tooltiptext" role="tooltip">
-                    When enabled, the status bar icon will only appear when no repository rule matches the current workspace. 
-                    When disabled, the status bar icon is always visible for Git repositories.
-                </span>
+            
+            <div class="settings-section">
+                <h3>Other Options</h3>
+                <div class="settings-grid">
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="preview-selected-repo-rule"
+                                   ${settings.previewSelectedRepoRule ? 'checked' : ''}
+                                   data-action="updateOtherSetting('previewSelectedRepoRule', this.checked)"
+                                   data-extra-action="handlePreviewModeChange">
+                            Preview Selected Rules
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            When enabled, selecting any repository rule will preview its colors in the workspace 
+                            without loading a workspace that matches the previewed rule. This is useful for testing how different 
+                            rules look before applying them to a specific repository.
+                        </span>
+                    </div>
+                    <div class="setting-item tooltip">
+                        <label>
+                            <input type="checkbox" 
+                                   id="ask-to-colorize-repo-when-opened"
+                                   ${settings.askToColorizeRepoWhenOpened ? 'checked' : ''}
+                                   data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
+                            Ask to colorize repository when opened
+                        </label>
+                        <span class="tooltiptext" role="tooltip">
+                            When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -1197,22 +2535,23 @@ function renderOtherSettings(settings: any) {
     setupRangeInputUpdates();
 }
 
+// Store references to handlers so we can remove them
+let activityBarKnobHandler: ((this: HTMLInputElement, ev: Event) => any) | null = null;
+
 function setupRangeInputUpdates() {
     const activityBarKnob = document.getElementById('activity-bar-knob') as HTMLInputElement;
-    const branchHueRotation = document.getElementById('branch-hue-rotation') as HTMLInputElement;
 
     if (activityBarKnob) {
-        activityBarKnob.addEventListener('input', function () {
+        // Remove old listener if exists
+        if (activityBarKnobHandler) {
+            activityBarKnob.removeEventListener('input', activityBarKnobHandler);
+        }
+        // Create and add new listener
+        activityBarKnobHandler = function () {
             const valueSpan = document.getElementById('activity-bar-knob-value');
             if (valueSpan) valueSpan.textContent = this.value;
-        });
-    }
-
-    if (branchHueRotation) {
-        branchHueRotation.addEventListener('input', function () {
-            const valueSpan = document.getElementById('branch-hue-rotation-value');
-            if (valueSpan) valueSpan.textContent = this.value + '°';
-        });
+        };
+        activityBarKnob.addEventListener('input', activityBarKnobHandler);
     }
 }
 
@@ -1221,13 +2560,423 @@ function renderWorkspaceInfo(workspaceInfo: any) {
     // For now, it's handled by the extension itself
 }
 
-function updateBranchColumnVisibility() {
-    const showBranchColumns = (document.getElementById('show-branch-columns') as HTMLInputElement)?.checked ?? true;
-    const branchColumns = document.querySelectorAll('.branch-column');
+function renderBranchTablesTab(config: any) {
+    const container = document.getElementById('branch-tables-content');
+    if (!container) {
+        console.log('[DEBUG] branch-tables-content container not found');
+        return;
+    }
 
-    branchColumns.forEach((column) => {
-        (column as HTMLElement).style.display = showBranchColumns ? '' : 'none';
+    const sharedTables = config.sharedBranchTables || { 'Default Rules': { rules: [] } };
+    const repoRules = config.repoRules || [];
+
+    // Calculate usage counts and track which repos use each table
+    const usageCounts: { [tableName: string]: number } = {};
+    const usedByRepos: { [tableName: string]: Array<{ qualifier: string; index: number }> } = {};
+    for (const tableName in sharedTables) {
+        usageCounts[tableName] = 0;
+        usedByRepos[tableName] = [];
+    }
+    for (let i = 0; i < repoRules.length; i++) {
+        const repo = repoRules[i];
+        const tableName = repo.branchTableName;
+        // Skip undefined (No Branch Table)
+        if (tableName && usageCounts[tableName] !== undefined) {
+            usageCounts[tableName]++;
+            usedByRepos[tableName].push({ qualifier: repo.repoQualifier, index: i });
+        }
+    }
+
+    let html = '<div class="branch-tables-list">';
+
+    const tableNames = Object.keys(sharedTables).sort((a, b) => {
+        if (a === 'Default Rules') return -1;
+        if (b === 'Default Rules') return 1;
+        return a.localeCompare(b);
     });
+
+    for (const tableName of tableNames) {
+        const table = sharedTables[tableName];
+        const usageCount = usageCounts[tableName] || 0;
+        const ruleCount = table.rules ? table.rules.length : 0;
+        const repoList = usedByRepos[tableName] || [];
+
+        // Build the repo list HTML with bullets and clickable links
+        let repoListHtml = '';
+        if (repoList.length > 0) {
+            repoListHtml = repoList
+                .map((repoInfo, index) => {
+                    const bullet =
+                        index > 0
+                            ? '<span class="codicon codicon-circle-small-filled" style="font-size: 6px; vertical-align: middle; margin: 0 4px;"></span>'
+                            : '';
+                    return `${bullet}<a href="#" class="repo-link" data-repo-index="${repoInfo.index}" style="font-style: italic; color: var(--vscode-textLink-foreground); text-decoration: none; cursor: pointer;">${escapeHtml(repoInfo.qualifier)}</a>`;
+                })
+                .join('');
+        }
+
+        html += `
+            <div class="branch-table-item">
+                <div class="branch-table-grid">
+                    <div class="branch-table-name">
+                        <span class="codicon codicon-git-branch"></span>
+                        <span>${escapeHtml(tableName)}</span>
+                    </div>
+                    <div class="branch-table-rule-count">
+                        ${ruleCount} rule${ruleCount !== 1 ? 's' : ''}
+                    </div>
+                    <div class="branch-table-references">
+                        ${usageCount} repo rule${usageCount !== 1 ? 's' : ''}
+                    </div>
+                    <div class="branch-table-repo-list">
+                        ${repoListHtml}
+                    </div>
+                </div>
+                <div class="branch-table-actions">
+                    <button type="button" 
+                            class="vscode-button secondary"
+                            onclick="deleteBranchTableFromMgmt('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
+                            ${usageCount > 0 ? 'disabled' : ''}
+                            title="${usageCount > 0 ? 'Table is in use by ' + usageCount + ' repo rule' + (usageCount !== 1 ? 's' : '') : 'Delete this table'}">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderColorReport(config: any) {
+    const container = document.getElementById('reportContent');
+    if (!container) {
+        console.log('[DEBUG] reportContent container not found');
+        return;
+    }
+
+    console.log('[DEBUG] renderColorReport called with config:', config);
+    console.log('[DEBUG] colorCustomizations:', config.colorCustomizations);
+
+    const colorCustomizations = config.colorCustomizations || {};
+    const managedColors = [
+        'titleBar.activeBackground',
+        'titleBar.activeForeground',
+        'titleBar.inactiveBackground',
+        'titleBar.inactiveForeground',
+        'activityBar.background',
+        'activityBar.foreground',
+        'activityBar.inactiveForeground',
+        'activityBar.activeBorder',
+        'tab.activeBackground',
+        'tab.activeForeground',
+        'tab.inactiveBackground',
+        'tab.inactiveForeground',
+        'tab.activeBorder',
+        'statusBar.background',
+        'statusBar.foreground',
+    ];
+
+    // Use preview indexes (which are always set - they match the matching indexes when not actively previewing)
+    const repoRuleIndex = config.previewRepoRuleIndex ?? -1;
+    const matchedRepoRule = repoRuleIndex >= 0 ? config.repoRules?.[repoRuleIndex] : null;
+
+    // Determine which branch rule to use from preview context
+    let branchRuleIndex = -1;
+    let branchTableName = '';
+
+    if (config.previewBranchRuleContext) {
+        branchRuleIndex = config.previewBranchRuleContext.index;
+        branchTableName = config.previewBranchRuleContext.tableName || '';
+    }
+
+    let matchedBranchRule = null;
+    if (branchRuleIndex >= 0 && branchTableName && config.sharedBranchTables?.[branchTableName]) {
+        // Get branch rule from shared table
+        matchedBranchRule = config.sharedBranchTables[branchTableName].rules[branchRuleIndex];
+    }
+
+    // Helper function to determine source for each theme key
+    const getSourceForKey = (key: string): { description: string; gotoData: string } => {
+        // Activity bar colors typically come from branch rules when a branch rule is matched
+        // Otherwise they come from repo rules
+        const isActivityBarKey = key.startsWith('activityBar.');
+
+        if (isActivityBarKey && matchedBranchRule) {
+            const pattern = escapeHtml(matchedBranchRule.pattern);
+            const gotoData = `branch:${branchRuleIndex}`;
+
+            // Check if using a profile
+            if (matchedBranchRule.profileName) {
+                const profileName = matchedBranchRule.profileName;
+                const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
+                return {
+                    description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${escapeHtml(pattern)}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    gotoData: profileGotoData,
+                };
+            }
+
+            const color = escapeHtml(matchedBranchRule.color);
+            return {
+                description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
+                gotoData: gotoData,
+            };
+        }
+
+        if (matchedRepoRule) {
+            const qualifier = escapeHtml(matchedRepoRule.repoQualifier);
+            const gotoData = `repo:${repoRuleIndex}`;
+            // For repo rules, check if using a profile
+            if (matchedRepoRule.profileName) {
+                const profileName = matchedRepoRule.profileName;
+                const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
+                return {
+                    description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    gotoData: profileGotoData,
+                };
+            }
+            const primaryColor = escapeHtml(matchedRepoRule.primaryColor);
+            return {
+                description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${primaryColor}</span>)`,
+                gotoData: gotoData,
+            };
+        }
+
+        if (matchedBranchRule) {
+            const pattern = escapeHtml(matchedBranchRule.pattern);
+            const gotoData = `branch:${branchRuleIndex}`;
+
+            // Check if using a profile
+            if (matchedBranchRule.profileName) {
+                const profileName = matchedBranchRule.profileName;
+                const profileGotoData = `profile:${escapeHtml(profileName)}:${escapeHtml(key)}`;
+                return {
+                    description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (using profile: <span class="goto-link" data-goto="${profileGotoData}">${escapeHtml(profileName)}</span>)`,
+                    gotoData: profileGotoData,
+                };
+            }
+
+            const color = escapeHtml(matchedBranchRule.color);
+            return {
+                description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
+                gotoData: gotoData,
+            };
+        }
+
+        return { description: 'None', gotoData: '' };
+    };
+
+    const rows: string[] = [];
+
+    managedColors.forEach((key) => {
+        const color = colorCustomizations[key];
+        if (color) {
+            const sourceInfo = getSourceForKey(key);
+            const isActivityBarKey = key.startsWith('activityBar.');
+
+            // Determine goto target
+            let gotoTarget = '';
+            if (isActivityBarKey && matchedBranchRule) {
+                // Check if branch rule uses a profile
+                const branchProfileName =
+                    matchedBranchRule.profileName ||
+                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
+                        ? matchedBranchRule.color
+                        : null);
+                if (branchProfileName) {
+                    gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
+                } else {
+                    // Include repo index if this is a local branch rule
+                    const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+                    const gotoData = isLocalRule
+                        ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
+                        : `branch:${config.matchingIndexes.branchRule}`;
+                    gotoTarget = `data-goto="${gotoData}"`;
+                }
+            } else if (matchedRepoRule) {
+                // Check if repo rule uses a profile (can be in profileName or primaryColor field)
+                const repoProfileName =
+                    matchedRepoRule.profileName ||
+                    (matchedRepoRule.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
+                        ? matchedRepoRule.primaryColor
+                        : null);
+                if (repoProfileName) {
+                    gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(repoProfileName)}" data-theme-key="${escapeHtml(key)}"`;
+                } else {
+                    gotoTarget = `data-goto="repo:${config.matchingIndexes.repoRule}"`;
+                }
+            } else if (matchedBranchRule) {
+                // Check if branch rule uses a profile
+                const branchProfileName =
+                    matchedBranchRule.profileName ||
+                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
+                        ? matchedBranchRule.color
+                        : null);
+                if (branchProfileName) {
+                    gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
+                } else {
+                    // Include repo index if this is a local branch rule
+                    const isLocalRule = config.matchingIndexes?.repoIndexForBranchRule >= 0;
+                    const gotoData = isLocalRule
+                        ? `branch:${config.matchingIndexes.branchRule}:${config.matchingIndexes.repoIndexForBranchRule}`
+                        : `branch:${config.matchingIndexes.branchRule}`;
+                    gotoTarget = `data-goto="${gotoData}"`;
+                }
+            }
+
+            rows.push(`
+                <tr>
+                    <td class="theme-key"><code><span class="goto-link" ${gotoTarget}>${escapeHtml(key)}</span></code></td>
+                    <td class="color-value">
+                        <div class="color-display">
+                            <span class="report-swatch" style="background-color: ${escapeHtml(color)};"></span>
+                            <span class="color-text">${escapeHtml(color)}</span>
+                        </div>
+                    </td>
+                    <td class="source-rule">${sourceInfo.description}</td>
+                </tr>
+            `);
+        }
+    });
+
+    console.log('[DEBUG] Generated rows:', rows.length);
+
+    if (rows.length === 0) {
+        container.innerHTML =
+            '<div class="no-rules">No colors are currently applied. Create and apply a repository or branch rule to see the color report.</div>';
+        return;
+    }
+
+    // Add preview indicator if preview mode checkbox is checked
+    let previewIndicator = '';
+
+    if (previewMode) {
+        const previewParts: string[] = [];
+
+        // Show the selected repo rule
+        if (
+            config.previewRepoRuleIndex !== null &&
+            config.previewRepoRuleIndex !== undefined &&
+            config.repoRules?.[config.previewRepoRuleIndex]
+        ) {
+            const repoRule = config.repoRules[config.previewRepoRuleIndex];
+            previewParts.push(`Repository rule: "<strong>${escapeHtml(repoRule.repoQualifier)}</strong>"`);
+        }
+
+        // Show the selected branch rule
+        if (config.previewBranchRuleContext) {
+            const branchContext = config.previewBranchRuleContext;
+            const tableName = branchContext.tableName || '';
+            const branchRules = config.sharedBranchTables?.[tableName]?.rules || [];
+            const branchRule = branchRules?.[branchContext.index];
+
+            if (branchRule) {
+                previewParts.push(
+                    `<strong>Branch Rule from "${escapeHtml(tableName)}"</strong>: "<strong>${escapeHtml(branchRule.pattern)}</strong>"`,
+                );
+            }
+        }
+
+        // Generate preview indicator if we have any preview parts
+        if (previewParts.length > 0) {
+            previewIndicator = `<div class="preview-indicator" style="background-color: var(--vscode-editorInfo-background); border-left: 4px solid var(--vscode-editorInfo-foreground); padding: 12px; margin-bottom: 16px; border-radius: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="codicon codicon-preview" style="font-size: 16px; color: var(--vscode-editorInfo-foreground);"></span>
+                    <strong>PREVIEW MODE</strong>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px;">
+                    Showing colors from ${previewParts.join(' and ')}
+                </div>
+            </div>`;
+        }
+    }
+
+    const tableHTML = `
+        ${previewIndicator}
+        <table class="report-table" role="table" aria-label="Applied colors report">
+            <thead>
+                <tr>
+                    <th scope="col">Theme Key</th>
+                    <th scope="col">Applied Color</th>
+                    <th scope="col">Applied By</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows.join('')}
+            </tbody>
+        </table>
+        <div class="report-footer">
+            <p><strong>Note:</strong> This report shows colors managed by Git Repo Window Colors. Other color customizations from your VS Code settings or theme are not shown.</p>
+        </div>
+    `;
+
+    console.log('[DEBUG] About to set innerHTML, container:', container);
+    console.log('[DEBUG] Table HTML length:', tableHTML.length);
+    container.innerHTML = tableHTML;
+    console.log('[DEBUG] innerHTML set, container.children.length:', container.children.length);
+}
+
+function updateProfilesTabVisibility() {
+    // Profiles are always enabled, so always show the tab
+    const profilesTab = document.getElementById('tab-profiles');
+    if (profilesTab) {
+        profilesTab.style.display = '';
+    }
+}
+
+function handlePreviewModeChange() {
+    const checkbox = document.getElementById('preview-selected-repo-rule') as HTMLInputElement;
+    if (!checkbox) return;
+
+    previewMode = checkbox.checked;
+
+    if (previewMode) {
+        // If enabling preview and a rule is selected, send preview message
+        // Prioritize branch rule if selected, otherwise use repo rule
+        if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
+            const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
+            const useGlobal = !selectedRule?.branchRules;
+
+            vscode.postMessage({
+                command: 'previewBranchRule',
+                data: {
+                    index: selectedBranchRuleIndex,
+                    isGlobal: useGlobal,
+                    repoIndex: useGlobal ? undefined : selectedRepoRuleIndex,
+                    previewEnabled: true,
+                },
+            });
+        } else if (selectedRepoRuleIndex !== null && selectedRepoRuleIndex !== -1) {
+            vscode.postMessage({
+                command: 'previewRepoRule',
+                data: {
+                    index: selectedRepoRuleIndex,
+                    previewEnabled: true,
+                },
+            });
+        }
+
+        // Show preview toast
+        showPreviewToast();
+    } else {
+        // If disabling preview, send clear message with preview disabled flag
+        vscode.postMessage({
+            command: 'clearPreview',
+            data: {
+                previewEnabled: false,
+            },
+        });
+
+        // Hide preview toast
+        hidePreviewToast();
+    }
+
+    // Re-render both repo and branch rules to update visual feedback
+    if (currentConfig) {
+        renderRepoRules(currentConfig.repoRules);
+        renderBranchRulesForSelectedRepo();
+    }
 }
 
 // Rule management functions
@@ -1243,36 +2992,11 @@ function addRepoRule() {
 
     const newRule = {
         repoQualifier: currentRepoName,
-        defaultBranch: '',
         primaryColor: getThemeAppropriateColor(),
-        branchColor: '',
     };
 
-    // Determine insertion index:
-    // If current repository matches an existing rule, insert the new rule just ABOVE the first matching rule.
-    // Otherwise append to the end.
-    let insertIndex = currentConfig.repoRules.length; // default append
-
-    if (isCurrentRepoAlreadyMatched) {
-        // matchingIndexes.repoRule holds the FIRST matched rule index (as calculated by backend)
-        const matchedIndex = currentConfig.matchingIndexes?.repoRule;
-        if (matchedIndex !== undefined && matchedIndex !== null && matchedIndex >= 0) {
-            insertIndex = matchedIndex; // insert above the matched rule
-        }
-    } else {
-        // Fallback heuristic: try to locate first rule whose repoQualifier is a substring of the current repository URL
-        const repoUrl = currentConfig.workspaceInfo?.repositoryUrl || '';
-        for (let i = 0; i < currentConfig.repoRules.length; i++) {
-            const qualifier = currentConfig.repoRules[i]?.repoQualifier;
-            if (qualifier && repoUrl.includes(qualifier)) {
-                insertIndex = i;
-                break;
-            }
-        }
-    }
-
-    // Insert at computed index
-    currentConfig.repoRules.splice(insertIndex, 0, newRule);
+    // Always append new rules to the end for predictable behavior
+    currentConfig.repoRules.push(newRule);
     sendConfiguration();
 }
 
@@ -1301,9 +3025,37 @@ function addBranchRule() {
     const newRule = {
         pattern: randomDefectName,
         color: getThemeAppropriateColor(),
+        enabled: true,
     };
 
-    currentConfig.branchRules.push(newRule);
+    // Determine which table to add to
+    let tableName = '__none__'; // Default
+    if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        tableName = selectedRule.branchTableName || '__none__';
+    }
+
+    // Don't allow adding if no table is selected
+    if (tableName === '__none__') {
+        showMessageDialog({
+            title: 'Cannot Add Rule',
+            message:
+                'Cannot add branch rule: No branch table selected for this repository. Please select a table first.',
+        });
+        return;
+    }
+
+    // Add to the table
+    if (currentConfig.sharedBranchTables && currentConfig.sharedBranchTables[tableName]) {
+        currentConfig.sharedBranchTables[tableName].rules.push(newRule);
+    } else {
+        showMessageDialog({
+            title: 'Table Not Found',
+            message: 'Selected table does not exist. Please select an existing table.',
+        });
+        return;
+    }
+
     sendConfiguration();
 }
 
@@ -1315,22 +3067,695 @@ function updateRepoRule(index: number, field: string, value: string) {
 }
 
 function updateBranchRule(index: number, field: string, value: string) {
-    if (!currentConfig?.branchRules?.[index]) return;
+    // Determine which table to update
+    let tableName = '__none__'; // Default
+    if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        tableName = selectedRule.branchTableName || '__none__';
+    }
 
-    currentConfig.branchRules[index][field] = value;
+    // Can't update if no table selected
+    if (tableName === '__none__') {
+        return;
+    }
+
+    // Update the rule in the table
+    if (currentConfig?.sharedBranchTables?.[tableName]?.rules?.[index]) {
+        currentConfig.sharedBranchTables[tableName].rules[index][field] = value;
+    }
+
+    debounceValidateAndSend();
+}
+
+function selectRepoRule(index: number) {
+    if (!currentConfig?.repoRules?.[index]) return;
+
+    console.log('[selectRepoRule] Selecting repo rule index:', index, 'rule:', currentConfig.repoRules[index]);
+
+    selectedRepoRuleIndex = index;
+
+    // Reset branch rule selection when switching repos so it reinitializes
+    selectedBranchRuleIndex = -1;
+
+    // Clear any regex validation errors when switching rules
+    clearRegexValidationError();
+
+    // Send preview command only if preview mode is enabled
+    if (previewMode) {
+        console.log(
+            '[selectRepoRule] Sending previewRepoRule command for index:',
+            index,
+            'rule:',
+            currentConfig.repoRules[index],
+        );
+
+        // Check if this repo has no branch table or empty branch table
+        // If so, include clearBranchPreview flag to avoid double doit() calls
+        const selectedRule = currentConfig.repoRules[index];
+        const tableName = selectedRule.branchTableName || '__none__';
+        const branchTable = currentConfig.sharedBranchTables?.[tableName];
+        const hasBranchRules = tableName !== '__none__' && branchTable?.rules && branchTable.rules.length > 0;
+
+        vscode.postMessage({
+            command: 'previewRepoRule',
+            data: {
+                index,
+                previewEnabled: true,
+                clearBranchPreview: !hasBranchRules,
+            },
+        });
+    }
+
+    // Re-render repo rules to update selected state and preview styling
+    renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+
+    // Re-render other settings to update disabled state of color options
+    renderOtherSettings(currentConfig.otherSettings);
+
+    // Update toast if preview mode is enabled
+    if (previewMode) {
+        showPreviewToast();
+    }
+
+    // Render branch rules for the selected repo
+    renderBranchRulesForSelectedRepo();
+}
+
+function navigateToRepoRule(index: number) {
+    // Switch to the Rules tab
+    const rulesTab = document.getElementById('tab-rules');
+    if (rulesTab) {
+        rulesTab.click();
+    }
+
+    // Select the repo rule
+    selectRepoRule(index);
+}
+
+function selectBranchRule(index: number) {
+    // Determine which table we're selecting from
+    let tableName = '__none__'; // Default
+    if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        tableName = selectedRule.branchTableName || '__none__';
+    }
+
+    // Can't select if no table selected
+    if (tableName === '__none__') {
+        return;
+    }
+
+    const branchRules = currentConfig?.sharedBranchTables?.[tableName]?.rules || [];
+
+    if (!branchRules?.[index]) return;
+
+    selectedBranchRuleIndex = index;
+
+    // Clear any regex validation errors when switching rules
+    clearRegexValidationError();
+
+    // Send preview command only if preview mode is enabled
+    if (previewMode) {
+        vscode.postMessage({
+            command: 'previewBranchRule',
+            data: {
+                index,
+                tableName,
+            },
+        });
+    }
+
+    // Re-render branch rules to update selected state and preview styling
+    renderBranchRulesForSelectedRepo();
+}
+
+function changeBranchMode(index: number, useGlobal: boolean) {
+    if (!currentConfig?.repoRules?.[index]) return;
+
+    // Initialize local branch rules array if switching to local mode
+    if (!useGlobal && !currentConfig.repoRules[index].branchRules) {
+        currentConfig.repoRules[index].branchRules = [];
+    }
+
+    // Reset branch rule selection when changing modes so it reinitializes
+    if (selectedRepoRuleIndex === index) {
+        selectedBranchRuleIndex = -1;
+    }
+
+    // Re-render repo rules to update the dropdown display
+    renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+
+    // If this is the selected rule, re-render branch rules
+    if (selectedRepoRuleIndex === index) {
+        renderBranchRulesForSelectedRepo();
+    }
+
+    sendConfiguration();
+}
+
+function changeBranchTable(index: number, tableName: string) {
+    if (!currentConfig?.repoRules?.[index]) return;
+
+    console.log(
+        '[changeBranchTable] BEFORE - index:',
+        index,
+        'old value:',
+        currentConfig.repoRules[index].branchTableName,
+        'new value:',
+        tableName,
+    );
+
+    // Store '__none__' for No Branch Table, table name string for specific table
+    currentConfig.repoRules[index].branchTableName = tableName;
+
+    console.log('[changeBranchTable] AFTER - stored value:', currentConfig.repoRules[index].branchTableName);
+
+    // Reset branch rule selection when changing tables so it reinitializes
+    if (selectedRepoRuleIndex === index) {
+        selectedBranchRuleIndex = -1;
+
+        // Re-render branch rules for this repo only
+        renderBranchRulesForSelectedRepo();
+    }
+
+    // Use debounced send like other update functions to prevent race conditions
+    debounceValidateAndSend();
+}
+
+async function showCreateTableDialog(repoRuleIndex: number) {
+    console.log('[showCreateTableDialog] START - repoRuleIndex:', repoRuleIndex);
+    console.log('[showCreateTableDialog] selectedRepoRuleIndex before:', selectedRepoRuleIndex);
+
+    const tableName = await showInputDialog({
+        title: 'Create New Branch Table',
+        inputLabel: 'Table Name:',
+        inputPlaceholder: 'Enter table name',
+        confirmText: 'Create',
+        cancelText: 'Cancel',
+        validateInput: (value: string) => {
+            const trimmedName = value.trim();
+            if (!trimmedName) {
+                return 'Table name cannot be empty';
+            }
+            if (currentConfig?.sharedBranchTables?.[trimmedName]) {
+                return `A table named "${trimmedName}" already exists`;
+            }
+            return null; // Valid
+        },
+    });
+
+    if (!tableName) {
+        console.log('[showCreateTableDialog] User cancelled');
+        return; // User cancelled
+    }
+
+    // Name is already validated by the dialog
+    const trimmedName = tableName.trim();
+
+    // Create the new table via backend command
+    console.log('[showCreateTableDialog] Creating table via backend:', trimmedName, 'for repo rule:', repoRuleIndex);
+    vscode.postMessage({
+        command: 'createBranchTable',
+        data: {
+            tableName: trimmedName,
+            repoRuleIndex: repoRuleIndex,
+        },
+    });
+
+    // The backend will send updated config back, which will trigger a refresh
+    // For now, optimistically update the UI
+    if (currentConfig && currentConfig.sharedBranchTables) {
+        console.log('[showCreateTableDialog] Optimistically updating UI');
+        currentConfig.sharedBranchTables[trimmedName] = {
+            rules: [],
+        };
+
+        // Update the repo rule to use the new table
+        if (currentConfig.repoRules?.[repoRuleIndex]) {
+            console.log(
+                '[showCreateTableDialog] BEFORE - branchTableName:',
+                currentConfig.repoRules[repoRuleIndex].branchTableName,
+            );
+            currentConfig.repoRules[repoRuleIndex].branchTableName = trimmedName;
+            console.log(
+                '[showCreateTableDialog] AFTER - branchTableName:',
+                currentConfig.repoRules[repoRuleIndex].branchTableName,
+            );
+        }
+
+        // Select this repo rule so the Branch Rules section shows the new table
+        console.log('[showCreateTableDialog] Setting selectedRepoRuleIndex to:', repoRuleIndex);
+        selectedRepoRuleIndex = repoRuleIndex;
+
+        // Backend will update the repo rule and send back updated config
+        // No need to call debounceValidateAndSend here - backend handles it atomically
+        console.log('[showCreateTableDialog] Waiting for backend to send updated config');
+        console.log('[showCreateTableDialog] END');
+    }
+}
+
+function viewBranchTable(tableName: string) {
+    // Switch to Rules tab and filter to show only repos using this table
+    const rulesTab = document.getElementById('tab-rules') as HTMLButtonElement;
+    if (rulesTab) {
+        rulesTab.click();
+    }
+
+    // TODO: Could add filtering/highlighting here to show only repos using this table
+    // For now, just switch to the Rules tab where users can see table assignments
+}
+
+async function renameBranchTableFromMgmt(tableName: string) {
+    const table = currentConfig?.sharedBranchTables?.[tableName];
+    if (!table) return;
+
+    const newName = await showInputDialog({
+        title: 'Rename Branch Table',
+        inputLabel: `Rename "${tableName}" to:`,
+        inputValue: tableName,
+        confirmText: 'Rename',
+        cancelText: 'Cancel',
+        validateInput: (value: string) => {
+            const trimmedName = value.trim();
+            if (!trimmedName) {
+                return 'Table name cannot be empty';
+            }
+            if (trimmedName !== tableName && currentConfig?.sharedBranchTables?.[trimmedName]) {
+                return `A table named "${trimmedName}" already exists`;
+            }
+            return null; // Valid
+        },
+    });
+
+    if (!newName || newName === tableName) {
+        return; // User cancelled or no change
+    }
+
+    // Name is already validated by the dialog
+    const trimmedName = newName.trim();
+
+    // Send rename command to backend
+    vscode.postMessage({
+        command: 'renameBranchTable',
+        data: { oldName: tableName, newName: trimmedName },
+    });
+}
+
+async function deleteBranchTableFromMgmt(tableName: string) {
+    const table = currentConfig?.sharedBranchTables?.[tableName];
+    if (!table) return;
+
+    // Check usage count
+    const repos = currentConfig?.repoRules || [];
+    const usageCount = repos.filter((r: any) => r.branchTableName === tableName).length;
+
+    if (usageCount > 0) {
+        await showMessageDialog({
+            title: 'Cannot Delete Table',
+            message: `Cannot delete table "${tableName}" because it is being used by ${usageCount} repo rule${usageCount !== 1 ? 's' : ''}. Please reassign those repos to different tables first.`,
+        });
+        return;
+    }
+
+    const ruleCount = table.rules ? table.rules.length : 0;
+    const confirmMsg =
+        ruleCount > 0
+            ? `Delete table "${tableName}"? This will permanently delete ${ruleCount} branch rule(s).`
+            : `Delete table "${tableName}"?`;
+
+    const confirmed = await showMessageDialog({
+        title: 'Confirm Deletion',
+        message: confirmMsg,
+        confirmText: 'Delete',
+        cancelText: 'Cancel',
+    });
+    if (!confirmed) {
+        return;
+    }
+
+    // Send delete command to backend
+    vscode.postMessage({
+        command: 'deleteBranchTable',
+        data: { tableName },
+    });
+}
+
+function renderBranchRulesForSelectedRepo() {
+    if (!currentConfig || selectedRepoRuleIndex === -1) return;
+
+    const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
+    if (!selectedRule) return;
+
+    // Get table name - default to '__none__' if not set
+    const tableName = selectedRule.branchTableName || '__none__';
+
+    // If no table selected, show empty message
+    if (!tableName || tableName === '__none__') {
+        const header = document.querySelector('#branch-rules-heading');
+        if (header) {
+            header.innerHTML = `<span class="codicon codicon-circle-slash"></span> No Branch Table`;
+        }
+        // Hide the Copy From and Add buttons when no table is selected
+        updateCopyFromButton(false);
+        updateBranchAddButton(false);
+        renderBranchRules([], undefined, selectedRepoRuleIndex);
+        return;
+    }
+
+    const branchTable = currentConfig.sharedBranchTables?.[tableName];
+    const branchRules = branchTable?.rules || [];
+
+    // Update section header with editable table name
+    const header = document.querySelector('#branch-rules-heading');
+    if (header) {
+        renderBranchRulesHeader(tableName);
+    }
+
+    // Show/hide Copy From button (show for all tables)
+    updateCopyFromButton(true);
+    updateBranchAddButton(true);
+
+    renderBranchRules(branchRules, currentConfig.matchingIndexes?.branchRule, selectedRepoRuleIndex);
+}
+
+function renderBranchRulesHeader(tableName: string) {
+    const header = document.querySelector('#branch-rules-heading');
+    if (!header) return;
+
+    header.innerHTML = '';
+
+    // Create icon
+    const icon = document.createElement('span');
+    icon.className = 'codicon codicon-git-branch';
+    icon.style.marginRight = '0px';
+    header.appendChild(icon);
+
+    // Create "Branch Rules" text
+    const prefixText = document.createElement('span');
+    prefixText.textContent = 'Branch Rules Table: ';
+    header.appendChild(prefixText);
+
+    // Create a wrapper for input and edit icon
+    const inputWrapper = document.createElement('span');
+    inputWrapper.style.position = 'relative';
+    inputWrapper.style.display = 'inline-block';
+    inputWrapper.style.cursor = 'pointer';
+    inputWrapper.title = 'Click to rename table';
+    header.appendChild(inputWrapper);
+
+    // Create table name text
+    const nameText = document.createElement('span');
+    nameText.textContent = tableName;
+    nameText.style.color = 'inherit';
+    nameText.style.fontSize = 'inherit';
+    nameText.style.fontWeight = 'inherit';
+    nameText.style.padding = '2px 4px';
+    nameText.style.paddingRight = '20px'; // Make room for edit icon
+    inputWrapper.appendChild(nameText);
+
+    // Create small edit icon
+    const editIcon = document.createElement('span');
+    editIcon.className = 'codicon codicon-edit';
+    editIcon.style.position = 'absolute';
+    editIcon.style.right = '4px';
+    editIcon.style.top = '50%';
+    editIcon.style.transform = 'translateY(-50%)';
+    editIcon.style.fontSize = '11px';
+    editIcon.style.opacity = '0.6';
+    inputWrapper.appendChild(editIcon);
+
+    // Click handler to open rename dialog
+    inputWrapper.addEventListener('click', async () => {
+        await renameBranchTableFromMgmt(tableName);
+    });
+}
+
+function updateCopyFromButton(showButton: boolean) {
+    const panelHeader = document.querySelector('.branch-panel .panel-header');
+    if (!panelHeader) return;
+
+    // Get or create button container
+    let buttonContainer = panelHeader.querySelector('.panel-header-buttons');
+    const addBtn = panelHeader.querySelector('.branch-add-button');
+
+    if (!buttonContainer && addBtn) {
+        // Wrap the Add button in a container if it doesn't exist
+        buttonContainer = document.createElement('div');
+        buttonContainer.className = 'panel-header-buttons';
+        panelHeader.insertBefore(buttonContainer, addBtn);
+        buttonContainer.appendChild(addBtn);
+    }
+
+    if (!buttonContainer) return;
+
+    // Remove existing copy button if present
+    const existingBtn = buttonContainer.querySelector('.copy-from-button');
+    if (existingBtn) existingBtn.remove();
+
+    if (!showButton) return;
+
+    // Create Copy From button
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'copy-from-button';
+    copyBtn.textContent = '📋 Copy From...';
+    copyBtn.title = 'Copy branch rules from global or another repository';
+    copyBtn.setAttribute('aria-label', 'Copy branch rules from another source');
+
+    // Insert before the Add button in the container
+    if (addBtn) {
+        buttonContainer.insertBefore(copyBtn, addBtn);
+    }
+
+    // Add click handler to show dropdown
+    copyBtn.addEventListener('click', showCopyFromMenu);
+}
+
+function updateBranchAddButton(enableButton: boolean) {
+    const addBtn = document.querySelector('.branch-add-button') as HTMLButtonElement;
+    if (!addBtn) return;
+
+    if (enableButton) {
+        addBtn.disabled = false;
+        addBtn.style.opacity = '1';
+        addBtn.title = 'Add a new branch rule';
+    } else {
+        addBtn.disabled = true;
+        addBtn.style.opacity = '0.5';
+        addBtn.title = 'Select a branch table to add rules';
+    }
+}
+
+function showCopyFromMenu(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const button = event.currentTarget as HTMLElement;
+    const rect = button.getBoundingClientRect();
+
+    // Remove any existing menu
+    const existingMenu = document.querySelector('.copy-from-menu');
+    if (existingMenu) existingMenu.remove();
+
+    // Build menu options
+    const menu = document.createElement('div');
+    menu.className = 'copy-from-menu';
+    menu.setAttribute('role', 'menu');
+
+    // Add Global option if there are global rules
+    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'copy-from-option';
+        option.textContent = `Global Rules (${currentConfig.branchRules.length})`;
+        option.setAttribute('role', 'menuitem');
+        option.setAttribute('data-source-type', 'global');
+        menu.appendChild(option);
+    }
+
+    // Add options for other repos with local rules
+    if (currentConfig?.repoRules) {
+        currentConfig.repoRules.forEach((rule, index) => {
+            if (index === selectedRepoRuleIndex) return; // Skip current repo
+            if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
+
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'copy-from-option';
+            option.textContent = `${rule.repoQualifier} (${rule.branchRules.length})`;
+            option.setAttribute('role', 'menuitem');
+            option.setAttribute('data-source-type', 'repo');
+            option.setAttribute('data-source-index', String(index));
+            menu.appendChild(option);
+        });
+    }
+
+    // If no options, show message
+    if (menu.children.length === 0) {
+        const noOptions = document.createElement('div');
+        noOptions.className = 'copy-from-no-options';
+        noOptions.textContent = 'No rules available to copy';
+        menu.appendChild(noOptions);
+    }
+
+    // Position menu below button
+    menu.style.position = 'absolute';
+    menu.style.top = `${rect.bottom + window.scrollY}px`;
+    menu.style.left = `${rect.left + window.scrollX}px`;
+
+    document.body.appendChild(menu);
+
+    // Add event handlers
+    menu.addEventListener('click', handleCopyFromSelection);
+
+    // Close menu when clicking outside
+    const closeMenu = (e: MouseEvent) => {
+        if (!menu.contains(e.target as Node) && e.target !== button) {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+}
+
+function handleCopyFromSelection(event: Event) {
+    const target = event.target as HTMLElement;
+    if (!target.classList.contains('copy-from-option')) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const sourceType = target.getAttribute('data-source-type');
+    const sourceIndex = target.getAttribute('data-source-index');
+
+    if (sourceType === 'global') {
+        copyBranchRulesFrom('global', -1);
+    } else if (sourceType === 'repo' && sourceIndex !== null) {
+        copyBranchRulesFrom('repo', parseInt(sourceIndex, 10));
+    }
+
+    // Remove menu
+    const menu = document.querySelector('.copy-from-menu');
+    if (menu) menu.remove();
+}
+
+function copyBranchRulesFrom(sourceType: 'global' | 'repo', sourceIndex: number) {
+    if (!currentConfig || selectedRepoRuleIndex === -1) return;
+
+    const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
+    if (!selectedRule) return;
+
+    // Get source rules
+    let sourceRules: any[] = [];
+    if (sourceType === 'global') {
+        sourceRules = currentConfig.branchRules || [];
+    } else if (sourceType === 'repo') {
+        const sourceRepo = currentConfig.repoRules?.[sourceIndex];
+        if (sourceRepo) {
+            sourceRules = sourceRepo.branchRules || [];
+        }
+    }
+
+    if (sourceRules.length === 0) return;
+
+    // Initialize local branchRules if needed
+    if (!selectedRule.branchRules) {
+        selectedRule.branchRules = [];
+    }
+
+    // Deep clone and append rules (not replace!)
+    sourceRules.forEach((rule) => {
+        const clonedRule = {
+            pattern: rule.pattern,
+            color: rule.color,
+            enabled: rule.enabled !== false, // Default to true
+        };
+        selectedRule.branchRules!.push(clonedRule);
+    });
+
+    // Re-render
+    renderBranchRulesForSelectedRepo();
     debounceValidateAndSend();
 }
 
 function updateColorRule(ruleType: string, index: number, field: string, value: string) {
     if (!currentConfig) return;
 
-    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
-    if (!rules?.[index]) return;
+    console.log(
+        '[updateColorRule] ruleType:',
+        ruleType,
+        'index:',
+        index,
+        'field:',
+        field,
+        'value:',
+        value,
+        'selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+    );
 
-    rules[index][field] = value;
+    if (ruleType === 'repo') {
+        const rules = currentConfig.repoRules;
+        if (!rules?.[index]) return;
+        rules[index][field] = value;
+
+        // If updating primaryColor or branchColor with a profile name, also set the profileName field
+        if (field === 'primaryColor' && value && currentConfig.advancedProfiles?.[value]) {
+            rules[index].profileName = value;
+        } else if (field === 'primaryColor') {
+            // If primaryColor is not a profile, clear profileName
+            delete rules[index].profileName;
+        }
+    } else if (ruleType === 'branch') {
+        // Determine if we're updating global or local branch rules
+        if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const useGlobal = !selectedRule.branchRules;
+
+            if (useGlobal) {
+                // Update global branch rules
+                if (!currentConfig?.branchRules?.[index]) return;
+                currentConfig.branchRules[index][field] = value;
+
+                // If updating color with a profile name, also set the profileName field
+                if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
+                    currentConfig.branchRules[index].profileName = value;
+                } else if (field === 'color') {
+                    delete currentConfig.branchRules[index].profileName;
+                }
+            } else {
+                // Update local branch rules
+                if (!selectedRule.branchRules?.[index]) return;
+                selectedRule.branchRules[index][field] = value;
+
+                // If updating color with a profile name, also set the profileName field
+                if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
+                    selectedRule.branchRules[index].profileName = value;
+                } else if (field === 'color') {
+                    delete selectedRule.branchRules[index].profileName;
+                }
+            }
+        } else {
+            // Fallback to global
+            if (!currentConfig?.branchRules?.[index]) return;
+            currentConfig.branchRules[index][field] = value;
+
+            // If updating color with a profile name, also set the profileName field
+            if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
+                currentConfig.branchRules[index].profileName = value;
+            } else if (field === 'color') {
+                delete currentConfig.branchRules[index].profileName;
+            }
+        }
+    }
 
     // Update color swatch if present
     updateColorSwatch(ruleType, index, field, value);
+
+    // If we updated a repo rule's primary color, re-render other settings to update disabled state
+    if (ruleType === 'repo' && field === 'primaryColor' && index === selectedRepoRuleIndex) {
+        renderOtherSettings(currentConfig.otherSettings);
+    }
 
     debounceValidateAndSend();
 }
@@ -1378,6 +3803,37 @@ function syncColorInputs(ruleType: string, index: number, field: string, value: 
     }
 }
 
+// Handle shift-click on color inputs to generate random colors
+function handleColorInputClick(event: MouseEvent) {
+    const target = event.target as HTMLInputElement;
+    if (!target.classList.contains('native-color-input') && !target.classList.contains('color-swatch')) {
+        return;
+    }
+
+    if (event.shiftKey) {
+        event.preventDefault();
+
+        // For repository/branch rules tables
+        const dataAction = target.getAttribute('data-action');
+        if (dataAction) {
+            const match = dataAction.match(/updateColorRule\('(\w+)', (\d+), '(\w+)',/);
+            if (match) {
+                const [, ruleType, index, field] = match;
+                generateRandomColor(ruleType, parseInt(index), field);
+                return;
+            }
+        }
+
+        // For palette editor and mappings - generate random color directly
+        const randomColor = getThemeAppropriateColor();
+        if (target.type === 'color') {
+            target.value = convertColorToHex(randomColor);
+            // Trigger change event to update associated text input
+            target.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+}
+
 function generateRandomColor(ruleType: string, index: number, field: string) {
     if (!currentConfig) return;
 
@@ -1385,10 +3841,42 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
     const randomColor = getThemeAppropriateColor();
 
     // Update the config
-    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
-    if (!rules?.[index]) return;
+    if (ruleType === 'repo') {
+        const rules = currentConfig.repoRules;
+        if (!rules?.[index]) return;
+        rules[index][field] = randomColor;
 
-    rules[index][field] = randomColor;
+        // Clear profile fields when generating a random color
+        if (field === 'primaryColor') {
+            delete rules[index].profileName;
+        }
+    } else if (ruleType === 'branch') {
+        // Determine if we're updating global or local branch rules
+        if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const useGlobal = !selectedRule.branchRules;
+
+            if (useGlobal) {
+                // Update global branch rules
+                if (!currentConfig?.branchRules?.[index]) return;
+                currentConfig.branchRules[index][field] = randomColor;
+                // Clear profileName when generating a random color
+                delete currentConfig.branchRules[index].profileName;
+            } else {
+                // Update local branch rules
+                if (!selectedRule.branchRules?.[index]) return;
+                selectedRule.branchRules[index][field] = randomColor;
+                // Clear profileName when generating a random color
+                delete selectedRule.branchRules[index].profileName;
+            }
+        } else {
+            // Fallback to global
+            if (!currentConfig?.branchRules?.[index]) return;
+            currentConfig.branchRules[index][field] = randomColor;
+            // Clear profileName when generating a random color
+            delete currentConfig.branchRules[index].profileName;
+        }
+    }
 
     // Update the UI elements
     updateColorSwatch(ruleType, index, field, randomColor);
@@ -1417,7 +3905,21 @@ function moveRule(index: number, ruleType: string, direction: number) {
 
     if (!currentConfig) return;
 
-    const rules = ruleType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
+    let rules;
+    if (ruleType === 'repo') {
+        rules = currentConfig.repoRules;
+    } else {
+        // For branch rules, get from the selected table
+        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const tableName = selectedRule.branchTableName || '__none__';
+
+            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
+                rules = currentConfig.sharedBranchTables[tableName].rules;
+            }
+        }
+    }
+
     // console.log('[DEBUG] Rules array exists:', !!rules, 'length:', rules?.length);
 
     if (!rules) return;
@@ -1438,6 +3940,13 @@ function moveRule(index: number, ruleType: string, direction: number) {
     rules[index] = rules[newIndex];
     rules[newIndex] = temp;
 
+    // Update selection if we moved a repo rule
+    if (ruleType === 'repo' && selectedRepoRuleIndex === index) {
+        selectedRepoRuleIndex = newIndex;
+    } else if (ruleType === 'repo' && selectedRepoRuleIndex === newIndex) {
+        selectedRepoRuleIndex = index;
+    }
+
     // console.log(
     //     '[DEBUG] Rules after move:',
     //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
@@ -1447,6 +3956,294 @@ function moveRule(index: number, ruleType: string, direction: number) {
     // Send updated configuration - backend will recalculate matching indexes and send back proper update
     // This will trigger a complete table refresh with correct highlighting
     sendConfiguration();
+}
+
+function toggleRule(index: number, ruleType: string) {
+    if (!currentConfig) return;
+
+    let rules;
+    if (ruleType === 'repo') {
+        rules = currentConfig.repoRules;
+    } else {
+        // For branch rules, get from the selected table
+        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const tableName = selectedRule.branchTableName || '__none__';
+
+            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
+                rules = currentConfig.sharedBranchTables[tableName].rules;
+            }
+        }
+    }
+
+    if (!rules || !rules[index]) return;
+
+    // Toggle the enabled state (default to true if not set)
+    rules[index].enabled = rules[index].enabled === false ? true : false;
+
+    // Send updated configuration
+    sendConfiguration();
+}
+
+function handleGotoSource(gotoData: string, linkText: string = '') {
+    // Check if this is a click event with data attributes
+    const targetElement = (window as any)._gotoTarget as HTMLElement;
+
+    if (targetElement) {
+        const profileName = targetElement.getAttribute('data-profile-name');
+        const themeKey = targetElement.getAttribute('data-theme-key');
+
+        if (profileName && gotoData === 'profile') {
+            // Navigate to Profiles tab
+            const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+            if (profilesTab) {
+                profilesTab.click();
+            }
+
+            // Select the profile and highlight the mapping
+            setTimeout(() => {
+                const profileItems = document.querySelectorAll('.profile-item');
+                profileItems.forEach((item) => {
+                    if ((item as HTMLElement).dataset.profileName === profileName) {
+                        (item as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        (item as HTMLElement).click();
+
+                        // Apply highlight to profile after re-render
+                        setTimeout(() => {
+                            const updatedProfileItems = document.querySelectorAll('.profile-item');
+                            updatedProfileItems.forEach((updatedItem) => {
+                                if ((updatedItem as HTMLElement).dataset.profileName === profileName) {
+                                    (updatedItem as HTMLElement).classList.add('highlight-fadeout');
+                                    setTimeout(() => {
+                                        (updatedItem as HTMLElement).classList.remove('highlight-fadeout');
+                                    }, 2500);
+                                }
+                            });
+                        }, 100);
+
+                        // Highlight the mapping row for the theme key
+                        if (themeKey) {
+                            // Find which tab contains this theme key
+                            let tabName: string | null = null;
+                            for (const [sectionName, keys] of Object.entries(SECTION_DEFINITIONS)) {
+                                if (keys.includes(themeKey)) {
+                                    tabName = sectionName;
+                                    break;
+                                }
+                            }
+
+                            if (tabName) {
+                                // Click the correct tab
+                                setTimeout(() => {
+                                    const tabBtns = document.querySelectorAll('.mapping-tab-btn');
+                                    tabBtns.forEach((btn) => {
+                                        if ((btn as HTMLElement).textContent?.includes(tabName!)) {
+                                            (btn as HTMLElement).click();
+                                        }
+                                    });
+
+                                    // Now try to find and highlight the mapping row
+                                    setTimeout(() => {
+                                        const contentId = 'mapping-section-' + tabName!.replace(/\s+/g, '-');
+                                        const content = document.getElementById(contentId);
+
+                                        if (content) {
+                                            // Look for the grid container first, then its direct children
+                                            const gridContainer = content.querySelector('div[style*="grid"]');
+                                            if (gridContainer) {
+                                                // Only look at direct children of the grid (the actual mapping rows)
+                                                const rows = Array.from(gridContainer.children).filter((child) =>
+                                                    child.querySelector('label'),
+                                                );
+
+                                                rows.forEach((row) => {
+                                                    const label = row.querySelector('label');
+                                                    if (label) {
+                                                        const labelText = label.textContent?.trim();
+                                                        if (labelText === themeKey) {
+                                                            (row as HTMLElement).scrollIntoView({
+                                                                behavior: 'smooth',
+                                                                block: 'center',
+                                                            });
+                                                            (row as HTMLElement).classList.add('highlight-fadeout');
+                                                            setTimeout(() => {
+                                                                (row as HTMLElement).classList.remove(
+                                                                    'highlight-fadeout',
+                                                                );
+                                                            }, 2500);
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        }
+                                    }, 200);
+                                }, 300);
+                            }
+                        }
+                    }
+                });
+            }, 200);
+            return;
+        }
+    }
+
+    // First check if the link text is a known profile name
+    if (linkText && currentConfig?.advancedProfiles && linkText in currentConfig.advancedProfiles) {
+        // Navigate to Profiles tab
+        const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+        if (profilesTab) {
+            profilesTab.click();
+        }
+
+        // Select the profile in the list
+        setTimeout(() => {
+            const profileItems = document.querySelectorAll('.profile-item');
+
+            profileItems.forEach((item) => {
+                const itemProfileName = (item as HTMLElement).dataset.profileName;
+
+                if (itemProfileName === linkText) {
+                    (item as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    (item as HTMLElement).click();
+
+                    // Apply highlight after the re-render from click
+                    setTimeout(() => {
+                        // Re-query the profile items after re-render
+                        const updatedProfileItems = document.querySelectorAll('.profile-item');
+                        updatedProfileItems.forEach((updatedItem) => {
+                            if ((updatedItem as HTMLElement).dataset.profileName === linkText) {
+                                (updatedItem as HTMLElement).classList.add('highlight-fadeout');
+
+                                setTimeout(() => {
+                                    (updatedItem as HTMLElement).classList.remove('highlight-fadeout');
+                                }, 2500);
+                            }
+                        });
+                    }, 100);
+                }
+            });
+        }, 200);
+        return;
+    }
+
+    const parts = gotoData.split(':');
+    const type = parts[0];
+
+    if (type === 'repo' || type === 'branch') {
+        // Navigate to Rules tab
+        const rulesTab = document.getElementById('tab-rules') as HTMLElement;
+        if (rulesTab) {
+            rulesTab.click();
+        }
+
+        // Find and highlight the rule
+        setTimeout(() => {
+            const index = parseInt(parts[1]);
+
+            // If this is a branch rule with a repo index (local branch rule), select the repo first
+            if (type === 'branch' && parts.length >= 3) {
+                const repoIndex = parseInt(parts[2]);
+                console.log(`[Navigation] Local branch rule detected, selecting repo ${repoIndex} first`);
+
+                // Select the repo rule to show its local branch rules
+                const repoContainer = document.getElementById('repoRulesContent');
+                if (repoContainer) {
+                    const repoRows = repoContainer.querySelectorAll('.rule-row');
+                    if (repoRows[repoIndex]) {
+                        const repoRadio = repoRows[repoIndex].querySelector('input[type="radio"]') as HTMLInputElement;
+                        if (repoRadio) {
+                            repoRadio.click();
+                            console.log(`[Navigation] Selected repo ${repoIndex}`);
+                        }
+                    }
+                }
+
+                // Wait for the branch rules to re-render, then highlight the branch rule
+                setTimeout(() => {
+                    const branchContainer = document.getElementById('branchRulesContent');
+                    if (branchContainer) {
+                        const branchRows = branchContainer.querySelectorAll('.rule-row');
+                        if (branchRows[index]) {
+                            const targetRow = branchRows[index] as HTMLElement;
+                            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetRow.classList.add('highlight-fadeout');
+                            setTimeout(() => {
+                                targetRow.classList.remove('highlight-fadeout');
+                            }, 2000);
+                        }
+                    }
+                }, 300);
+            } else {
+                // Regular repo or global branch rule navigation
+                const container =
+                    type === 'repo'
+                        ? document.getElementById('repoRulesContent')
+                        : document.getElementById('branchRulesContent');
+                if (container) {
+                    const rows = container.querySelectorAll('.rule-row');
+                    if (rows[index]) {
+                        const targetRow = rows[index] as HTMLElement;
+                        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetRow.classList.add('highlight-fadeout');
+                        setTimeout(() => {
+                            targetRow.classList.remove('highlight-fadeout');
+                        }, 2000);
+                    }
+                }
+            }
+        }, 100);
+    } else if (type === 'profile') {
+        // Navigate to Profiles tab
+        const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+        if (profilesTab) {
+            profilesTab.click();
+        }
+
+        // Highlight the profile and mapping
+        setTimeout(() => {
+            const profileName = parts[1];
+            const themeKey = parts[2]; // May be undefined
+
+            // Select the profile in the list
+            const profileItems = document.querySelectorAll('.profile-item');
+            profileItems.forEach((item) => {
+                if ((item as HTMLElement).dataset.profileName === profileName) {
+                    (item as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    (item as HTMLElement).click();
+
+                    // Apply highlight after re-render
+                    setTimeout(() => {
+                        const updatedProfileItems = document.querySelectorAll('.profile-item');
+                        updatedProfileItems.forEach((updatedItem) => {
+                            if ((updatedItem as HTMLElement).dataset.profileName === profileName) {
+                                (updatedItem as HTMLElement).classList.add('highlight-fadeout');
+                                setTimeout(() => {
+                                    (updatedItem as HTMLElement).classList.remove('highlight-fadeout');
+                                }, 2500);
+                            }
+                        });
+                    }, 100);
+                }
+            });
+
+            // Highlight the mapping row for this theme key (if provided)
+            if (themeKey) {
+                setTimeout(() => {
+                    const mappingRows = document.querySelectorAll('.mapping-row');
+                    mappingRows.forEach((row) => {
+                        const label = row.querySelector('.mapping-label');
+                        if (label && label.textContent?.includes(themeKey)) {
+                            (row as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            (row as HTMLElement).classList.add('highlight-fadeout');
+                            setTimeout(() => {
+                                (row as HTMLElement).classList.remove('highlight-fadeout');
+                            }, 2500);
+                        }
+                    });
+                }, 300);
+            }
+        }, 100);
+    }
 }
 
 function updateOtherSetting(setting: string, value: any) {
@@ -1574,6 +4371,24 @@ function setupRepoRuleRowEvents(row: HTMLTableRowElement, index: number) {
             });
         });
     }
+
+    // Set up click events for rule and color controls to select the rule
+    const selectableControls = row.querySelectorAll('input[type="text"], input[type="color"], select');
+    selectableControls.forEach((control) => {
+        control.addEventListener('click', (e) => {
+            // Don't interfere with the control's normal function, just also select the rule
+            if (selectedRepoRuleIndex !== index) {
+                selectRepoRule(index);
+            }
+        });
+
+        // Also handle focus events (keyboard navigation)
+        control.addEventListener('focus', (e) => {
+            if (selectedRepoRuleIndex !== index) {
+                selectRepoRule(index);
+            }
+        });
+    });
 }
 
 function setupBranchRuleRowEvents(row: HTMLTableRowElement, index: number) {
@@ -1589,6 +4404,24 @@ function setupBranchRuleRowEvents(row: HTMLTableRowElement, index: number) {
             });
         });
     }
+
+    // Set up click events for rule and color controls to select the rule
+    const selectableControls = row.querySelectorAll('input[type="text"], input[type="color"], select');
+    selectableControls.forEach((control) => {
+        control.addEventListener('click', (e) => {
+            // Don't interfere with the control's normal function, just also select the rule
+            if (selectedBranchRuleIndex !== index) {
+                selectBranchRule(index);
+            }
+        });
+
+        // Also handle focus events (keyboard navigation)
+        control.addEventListener('focus', (e) => {
+            if (selectedBranchRuleIndex !== index) {
+                selectBranchRule(index);
+            }
+        });
+    });
 }
 
 // Validation functions
@@ -1814,6 +4647,17 @@ function convertColorToHex(color: string): string {
 
     //console.log(`[DEBUG] convertColorToHex called with: "${color}"`);
 
+    // Check if it's a profile name (exists in current config)
+    if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[color]) {
+        // It's a profile, return a representative color from the profile
+        const profile = currentConfig.advancedProfiles[color];
+        if (profile.palette?.primaryActiveBg?.value) {
+            return convertColorToHex(profile.palette.primaryActiveBg.value);
+        }
+        // Fallback to a distinct color to indicate it's a profile
+        return '#9B59B6'; // Purple to indicate profile
+    }
+
     // If it's already a hex color, return it
     if (color.startsWith('#')) {
         // console.log(`[DEBUG] "${color}" is already hex`);
@@ -1842,6 +4686,34 @@ function convertColorToHex(color: string): string {
     // console.log(`[DEBUG] "${color}" conversion failed, using default`);
     // If conversion failed or it's an unknown format, return default
     return '#4A90E2';
+}
+
+/**
+ * Convert hex color to rgba with opacity
+ */
+function hexToRgba(hex: string, opacity: number): string {
+    // Remove # if present
+    hex = hex.replace('#', '');
+
+    // Parse the hex values
+    let r: number, g: number, b: number;
+
+    if (hex.length === 3) {
+        // Short form like #RGB
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+    } else if (hex.length === 6) {
+        // Long form like #RRGGBB
+        r = parseInt(hex.substring(0, 2), 16);
+        g = parseInt(hex.substring(2, 4), 16);
+        b = parseInt(hex.substring(4, 6), 16);
+    } else {
+        // Invalid hex, return transparent
+        return 'rgba(0, 0, 0, 0)';
+    }
+
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
 
 function runConfigurationTests() {
@@ -1929,26 +4801,357 @@ function clearRegexValidationError() {
     });
 }
 
+// Preview Toast Functions
+function showPreviewToast() {
+    console.log('[showPreviewToast] CALLED');
+    const toast = document.getElementById('preview-toast');
+    const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
+    const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
+    if (!toast) return;
+
+    console.log('[showPreviewToast] Toast element found');
+
+    // Only show if actually previewing (selected indexes don't match the matching indexes)
+    const isActuallyPreviewing =
+        selectedRepoRuleIndex !== currentConfig?.matchingIndexes?.repoRule ||
+        selectedBranchRuleIndex !== currentConfig?.matchingIndexes?.branchRule;
+
+    console.log(
+        '[showPreviewToast] isActuallyPreviewing:',
+        isActuallyPreviewing,
+        'selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+        'matchingRepoRule:',
+        currentConfig?.matchingIndexes?.repoRule,
+        'selectedBranchRuleIndex:',
+        selectedBranchRuleIndex,
+        'matchingBranchRule:',
+        currentConfig?.matchingIndexes?.branchRule,
+    );
+
+    if (!isActuallyPreviewing) {
+        hidePreviewToast();
+        return;
+    }
+
+    // Check if we're in "no matching rule" scenario
+    const noMatchingRule =
+        currentConfig?.matchingIndexes?.repoRule === undefined || currentConfig?.matchingIndexes?.repoRule < 0;
+    const isGitRepo =
+        currentConfig?.workspaceInfo?.repositoryUrl && currentConfig.workspaceInfo.repositoryUrl.length > 0;
+
+    // Update button and tooltip based on scenario
+    if (resetBtn) {
+        if (noMatchingRule) {
+            if (isGitRepo) {
+                // Show "add" button for git repos with no matching rule
+                resetBtn.textContent = 'add';
+                resetBtn.setAttribute('data-action', 'addRepoRuleFromPreview');
+                resetBtn.style.display = '';
+                toast.title =
+                    'No repository rules match the current workspace. Press [add] to create a rule for this repository.';
+            } else {
+                // Hide button for non-git workspaces
+                resetBtn.style.display = 'none';
+                toast.title = 'Preview mode: The current workspace is not a git repository.';
+            }
+        } else {
+            // Show "reset" button for normal preview mode
+            resetBtn.textContent = 'reset';
+            resetBtn.setAttribute('data-action', 'resetToMatchingRules');
+            resetBtn.style.display = '';
+            toast.title =
+                'You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.';
+        }
+    }
+
+    // Get the selected repo rule
+    const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
+    if (!selectedRule) return;
+
+    console.log('[showPreviewToast] selectedRule:', selectedRule);
+
+    // Check if this rule uses a profile (not virtual)
+    const profileName = selectedRule.profileName || selectedRule.primaryColor;
+    const profile = currentConfig?.advancedProfiles?.[profileName];
+
+    console.log('[showPreviewToast] profileName:', profileName, 'profile:', profile);
+
+    let primaryColor = selectedRule.primaryColor;
+    let secondaryBgColor = null;
+    let secondaryFgColor = null;
+
+    if (profile && !profile.virtual && profile.palette) {
+        console.log('[showPreviewToast] Using profile palette:', profile.palette);
+
+        // Resolve primary color from palette
+        const primaryActiveBg = profile.palette.primaryActiveBg;
+        if (primaryActiveBg) {
+            console.log('[showPreviewToast] primaryActiveBg slot:', primaryActiveBg);
+            const resolvedPrimary = resolveColorFromSlot(primaryActiveBg, selectedRule);
+            console.log('[showPreviewToast] resolved primary color:', resolvedPrimary);
+            if (resolvedPrimary) {
+                primaryColor = resolvedPrimary;
+            }
+        }
+
+        // Try to find secondary colors in the palette
+        const secondaryActiveBg = profile.palette.secondaryActiveBg;
+        const secondaryActiveFg = profile.palette.secondaryActiveFg;
+
+        console.log('[showPreviewToast] secondaryActiveBg slot:', secondaryActiveBg);
+        console.log('[showPreviewToast] secondaryActiveFg slot:', secondaryActiveFg);
+
+        if (secondaryActiveBg) {
+            secondaryBgColor = resolveColorFromSlot(secondaryActiveBg, selectedRule);
+            console.log('[showPreviewToast] resolved secondary bg:', secondaryBgColor);
+        }
+        if (secondaryActiveFg) {
+            secondaryFgColor = resolveColorFromSlot(secondaryActiveFg, selectedRule);
+            console.log('[showPreviewToast] resolved secondary fg:', secondaryFgColor);
+        }
+    }
+
+    console.log(
+        '[showPreviewToast] Final colors - primary:',
+        primaryColor,
+        'secondaryBg:',
+        secondaryBgColor,
+        'secondaryFg:',
+        secondaryFgColor,
+    );
+
+    // Apply the primary color to toast
+    if (primaryColor) {
+        toast.style.backgroundColor = primaryColor;
+        toast.style.borderColor = primaryColor;
+        toast.style.color = getContrastingTextColor(primaryColor);
+    }
+
+    // Apply secondary colors to reset button if available
+    if (resetBtn) {
+        if (secondaryBgColor && secondaryFgColor) {
+            resetBtn.style.backgroundColor = secondaryBgColor;
+            resetBtn.style.color = secondaryFgColor;
+            resetBtn.style.borderColor = secondaryFgColor;
+        } else {
+            // Fallback to default semi-transparent styling
+            resetBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+            resetBtn.style.color = 'inherit';
+            resetBtn.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+        }
+    }
+
+    toast.classList.add('visible');
+}
+
+// Helper to resolve a color from a palette slot definition
+function resolveColorFromSlot(slot: any, rule: any): string | null {
+    if (!slot) return null;
+
+    console.log('[resolveColorFromSlot] slot:', slot, 'rule:', rule);
+
+    // If slot is a direct color string
+    if (typeof slot === 'string') {
+        console.log('[resolveColorFromSlot] Direct string:', slot);
+        return slot;
+    }
+
+    // If slot is an object
+    if (typeof slot === 'object') {
+        // Check for fixed source with value
+        if (slot.source === 'fixed' && slot.value) {
+            console.log('[resolveColorFromSlot] Fixed value:', slot.value);
+            return slot.value;
+        }
+
+        // Check for direct color property
+        if (slot.color) {
+            console.log('[resolveColorFromSlot] Has color property:', slot.color);
+            return slot.color;
+        }
+
+        // Check for source-based definitions
+        if (slot.source === 'repoColor' && rule.primaryColor) {
+            console.log('[resolveColorFromSlot] Using repoColor:', rule.primaryColor);
+            return rule.primaryColor;
+        }
+        if (slot.source === 'branchColor' && rule.branchColor) {
+            console.log('[resolveColorFromSlot] Using branchColor:', rule.branchColor);
+            return rule.branchColor;
+        }
+
+        // If has value property (alternative format)
+        if (slot.value) {
+            console.log('[resolveColorFromSlot] Using value property:', slot.value);
+            return slot.value;
+        }
+
+        // If no source but has modifiers, might need base color
+        // For now, we can't resolve these without the full palette generator
+        console.log('[resolveColorFromSlot] Cannot resolve slot with modifiers only');
+    }
+
+    console.log('[resolveColorFromSlot] Returning null');
+    return null;
+}
+
+function hidePreviewToast() {
+    const toast = document.getElementById('preview-toast');
+    if (!toast) return;
+    toast.classList.remove('visible');
+}
+
+function resetToMatchingRules() {
+    // Turn off preview mode
+    const checkbox = document.getElementById('preview-selected-repo-rule') as HTMLInputElement;
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    previewMode = false;
+
+    // Select the matching repo rule if available
+    if (currentConfig?.matchingIndexes?.repoRule !== undefined && currentConfig?.matchingIndexes?.repoRule >= 0) {
+        selectRepoRule(currentConfig.matchingIndexes.repoRule);
+    }
+
+    // Select the matching branch rule if available
+    if (currentConfig?.matchingIndexes?.branchRule !== undefined && currentConfig?.matchingIndexes?.branchRule >= 0) {
+        selectedBranchRuleIndex = currentConfig.matchingIndexes.branchRule;
+    }
+
+    // Send clear preview message
+    vscode.postMessage({
+        command: 'clearPreview',
+        data: {
+            previewEnabled: false,
+        },
+    });
+
+    // Hide toast
+    hidePreviewToast();
+
+    // Re-render
+    if (currentConfig) {
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+        renderBranchRulesForSelectedRepo();
+    }
+}
+
+function addRepoRuleFromPreview() {
+    if (!currentConfig) return;
+
+    // Turn off preview mode
+    const checkbox = document.getElementById('preview-selected-repo-rule') as HTMLInputElement;
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    previewMode = false;
+
+    // Add a new repo rule for the current workspace
+    const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    const newRule = {
+        repoQualifier: currentRepoName,
+        primaryColor: getThemeAppropriateColor(),
+    };
+
+    currentConfig.repoRules.push(newRule);
+
+    // Select the newly created rule
+    const newRuleIndex = currentConfig.repoRules.length - 1;
+    selectedRepoRuleIndex = newRuleIndex;
+
+    // Send configuration update
+    sendConfiguration();
+
+    // Hide the preview toast
+    hidePreviewToast();
+
+    // Switch to rules tab to show the new rule
+    const rulesTab = document.getElementById('tab-rules');
+    if (rulesTab) {
+        (rulesTab as HTMLElement).click();
+    }
+}
+
+// Helper to determine if a color is light or dark for text contrast
+function getContrastingTextColor(color: string): string {
+    // Simple approach: try to determine if color is light or dark
+    // For hex colors
+    if (color.startsWith('#')) {
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b = parseInt(hex.substr(4, 2), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness > 155 ? '#000000' : '#ffffff';
+    }
+    // For named colors or rgb(), default to white text
+    return '#ffffff';
+}
+
 // Color Auto-complete Functions
 function handleColorInputAutoComplete(input: HTMLInputElement) {
     const value = input.value.toLowerCase().trim();
 
+    const matches: string[] = [];
+    const profileMatches: string[] = [];
+    const colorMatches: string[] = [];
+
+    // Check if this is a palette slot input (should not show profiles)
+    const isPaletteSlot = input.hasAttribute('data-palette-slot');
+
+    // Check if profiles are enabled
+    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
+
+    // 1. Add profile section (only for non-palette inputs and when profiles are enabled)
+    if (!isPaletteSlot && profilesEnabled) {
+        matches.push('__PROFILES_HEADER__'); // Special marker for "Profiles" header
+
+        if (currentConfig?.advancedProfiles) {
+            const profileNames = Object.keys(currentConfig.advancedProfiles);
+            profileNames.forEach((name) => {
+                if (value.length === 0 || name.toLowerCase().includes(value)) {
+                    profileMatches.push(name);
+                }
+            });
+
+            if (profileMatches.length > 0) {
+                matches.push(...profileMatches);
+            } else if (profileNames.length === 0 && value.length === 0) {
+                // No profiles defined at all and filter is empty
+                matches.push('__NO_PROFILES__'); // Special marker for "none defined"
+            } else if (value.length > 0) {
+                // Profiles exist but none match the filter
+                matches.push('__NO_MATCHES__'); // Special marker for "no matches"
+            }
+        } else if (value.length === 0) {
+            // Profiles are enabled but none are defined and filter is empty
+            matches.push('__NO_PROFILES__'); // Special marker for "none defined"
+        }
+    }
+
+    // 2. Add matching color names
     if (value.length === 0) {
+        // Show all color names when field is empty
+        colorMatches.push(...HTML_COLOR_NAMES);
+    } else {
+        // Filter color names based on input
+        colorMatches.push(...HTML_COLOR_NAMES.filter((colorName) => colorName.toLowerCase().includes(value)));
+    }
+
+    // Add color separator and colors
+    if (matches.length > 0 && colorMatches.length > 0) {
+        matches.push('__COLORS_SEPARATOR__'); // Special marker for "Colors" separator
+    }
+    matches.push(...colorMatches);
+
+    if (matches.length === 0 || (matches.length === 1 && matches[0] === '__SEPARATOR__')) {
         hideAutoCompleteDropdown();
         return;
     }
 
-    // Filter color names that start with the input value
-    const matches = HTML_COLOR_NAMES.filter(
-        (colorName) => colorName.toLowerCase().includes(value), // && colorName.toLowerCase() !== value,
-    );
-
-    if (matches.length === 0) {
-        hideAutoCompleteDropdown();
-        return;
-    }
-
-    showAutoCompleteDropdown(input, matches.slice(0, 20)); // Show max 10 suggestions
+    showAutoCompleteDropdown(input, matches.slice(0, 50)); // Show max 50 suggestions (more room with all profiles)
 }
 
 function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]) {
@@ -1959,18 +5162,66 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
     dropdown.setAttribute('role', 'listbox');
     dropdown.setAttribute('aria-label', 'Color name suggestions');
 
+    let selectableIndex = 0; // Track actual selectable items (excluding separator)
     suggestions.forEach((suggestion, index) => {
+        // Handle Profiles header
+        if (suggestion === '__PROFILES_HEADER__') {
+            const header = document.createElement('div');
+            header.className = 'color-autocomplete-separator';
+            header.textContent = 'Profiles';
+            dropdown.appendChild(header);
+            return; // Don't increment selectableIndex
+        }
+
+        // Handle "no profiles defined" placeholder
+        if (suggestion === '__NO_PROFILES__') {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'color-autocomplete-placeholder';
+            placeholder.textContent = 'none defined';
+            dropdown.appendChild(placeholder);
+            return; // Don't increment selectableIndex
+        }
+
+        // Handle "no matches" placeholder
+        if (suggestion === '__NO_MATCHES__') {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'color-autocomplete-placeholder';
+            placeholder.textContent = 'no matches';
+            dropdown.appendChild(placeholder);
+            return; // Don't increment selectableIndex
+        }
+
+        // Handle Colors separator
+        if (suggestion === '__COLORS_SEPARATOR__') {
+            const separator = document.createElement('div');
+            separator.className = 'color-autocomplete-separator';
+            separator.textContent = 'Colors';
+            dropdown.appendChild(separator);
+            return; // Don't increment selectableIndex
+        }
+
         const item = document.createElement('div');
         item.className = 'color-autocomplete-item';
         item.setAttribute('role', 'option');
         item.textContent = suggestion;
-        item.dataset.index = index.toString();
+        item.dataset.index = selectableIndex.toString();
+        item.dataset.value = suggestion; // Store original value
 
-        // Add color preview
-        const preview = document.createElement('span');
-        preview.className = 'color-preview';
-        preview.style.backgroundColor = suggestion;
-        item.appendChild(preview);
+        // Add color preview (only for actual color names, not profile references)
+        const isProfile = currentConfig?.advancedProfiles && currentConfig.advancedProfiles[suggestion];
+        if (!isProfile) {
+            const preview = document.createElement('span');
+            preview.className = 'color-preview';
+            preview.style.backgroundColor = suggestion;
+            item.appendChild(preview);
+        } else {
+            // Add profile indicator
+            const indicator = document.createElement('span');
+            indicator.className = 'profile-indicator';
+            indicator.textContent = ' ⚙';
+            indicator.title = 'Advanced Profile';
+            item.appendChild(indicator);
+        }
 
         item.addEventListener('mousedown', (e) => {
             e.preventDefault(); // Prevent input from losing focus
@@ -1978,11 +5229,12 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
         });
 
         item.addEventListener('mouseenter', () => {
-            selectedSuggestionIndex = index;
+            selectedSuggestionIndex = selectableIndex;
             updateAutoCompleteSelection();
         });
 
         dropdown.appendChild(item);
+        selectableIndex++;
     });
 
     // Position dropdown below input
@@ -2038,8 +5290,8 @@ function handleAutoCompleteKeydown(event: KeyboardEvent) {
         case 'Enter':
             if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < items.length) {
                 event.preventDefault();
-                const selectedItem = items[selectedSuggestionIndex];
-                const colorName = selectedItem.textContent?.replace(/\s+$/, '') || ''; // Remove trailing spaces from preview
+                const selectedItem = items[selectedSuggestionIndex] as HTMLElement;
+                const colorName = selectedItem.dataset.value || '';
                 selectAutoCompleteSuggestion(activeAutoCompleteInput!, colorName);
             }
             break;
@@ -2100,6 +5352,118 @@ function selectAutoCompleteSuggestion(input: HTMLInputElement, colorName: string
     input.focus();
 }
 
+function filterBranchPatternAutoComplete(input: HTMLInputElement) {
+    const value = input.value.toLowerCase().trim();
+
+    // Collect unique patterns from all rules
+    const existingPatterns = collectUniqueBranchPatterns();
+
+    let matches: string[] = [];
+
+    if (value.length === 0) {
+        // Show all existing patterns when field is empty
+        matches = existingPatterns;
+    } else {
+        // Filter existing patterns - startsWith first, then includes
+        const startsWithMatches = existingPatterns.filter((pattern) => pattern.toLowerCase().startsWith(value));
+        const includesMatches = existingPatterns.filter(
+            (pattern) => !pattern.toLowerCase().startsWith(value) && pattern.toLowerCase().includes(value),
+        );
+        matches = [...startsWithMatches, ...includesMatches];
+    }
+
+    // Add Examples section
+    if (matches.length > 0) {
+        matches.push('__EXAMPLES_SEPARATOR__');
+    }
+
+    // Filter examples using same logic
+    if (value.length === 0) {
+        matches.push(...EXAMPLE_BRANCH_PATTERNS);
+    } else {
+        const exampleStartsWith = EXAMPLE_BRANCH_PATTERNS.filter((pattern) => pattern.toLowerCase().startsWith(value));
+        const exampleIncludes = EXAMPLE_BRANCH_PATTERNS.filter(
+            (pattern) => !pattern.toLowerCase().startsWith(value) && pattern.toLowerCase().includes(value),
+        );
+        matches.push(...exampleStartsWith, ...exampleIncludes);
+    }
+
+    if (matches.length === 0 || (matches.length === 1 && matches[0] === '__EXAMPLES_SEPARATOR__')) {
+        hideAutoCompleteDropdown();
+        return;
+    }
+
+    showBranchPatternAutoCompleteDropdown(input, matches.slice(0, 50));
+}
+
+function showBranchPatternAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]) {
+    hideAutoCompleteDropdown(); // Hide any existing dropdown
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'color-autocomplete-dropdown'; // Reuse existing styles
+    dropdown.setAttribute('role', 'listbox');
+    dropdown.setAttribute('aria-label', 'Branch pattern suggestions');
+
+    let selectableIndex = 0;
+    suggestions.forEach((suggestion, index) => {
+        // Handle Examples separator
+        if (suggestion === '__EXAMPLES_SEPARATOR__') {
+            const separator = document.createElement('div');
+            separator.className = 'color-autocomplete-separator';
+            separator.textContent = 'Examples';
+            dropdown.appendChild(separator);
+            return;
+        }
+
+        const item = document.createElement('div');
+        item.className = 'color-autocomplete-item';
+        item.textContent = suggestion;
+        item.dataset.value = suggestion;
+        item.dataset.index = selectableIndex.toString();
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', 'false');
+
+        item.addEventListener('click', () => {
+            selectBranchPatternSuggestion(input, suggestion);
+        });
+
+        item.addEventListener('mouseenter', () => {
+            selectedSuggestionIndex = selectableIndex;
+            updateAutoCompleteSelection();
+        });
+
+        dropdown.appendChild(item);
+        selectableIndex++;
+    });
+
+    document.body.appendChild(dropdown);
+
+    // Position the dropdown below the input
+    const rect = input.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = rect.bottom + 'px';
+    dropdown.style.minWidth = rect.width + 'px';
+
+    autoCompleteDropdown = dropdown;
+    activeAutoCompleteInput = input;
+    selectedSuggestionIndex = -1;
+
+    // Set up keyboard navigation
+    input.addEventListener('keydown', handleAutoCompleteKeydown);
+}
+
+function selectBranchPatternSuggestion(input: HTMLInputElement, pattern: string) {
+    input.value = pattern;
+
+    // Trigger the input event to update the configuration
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+
+    hideAutoCompleteDropdown();
+    input.focus();
+}
+
 // Close auto-complete when clicking outside
 document.addEventListener('click', (event) => {
     if (
@@ -2121,3 +5485,2434 @@ document.addEventListener('focusout', (event) => {
         }, 150);
     }
 });
+
+// --- Advanced Profiles Implementation ---
+
+// Friendly display names for palette slots
+const PALETTE_SLOT_LABELS: Record<string, string> = {
+    primaryActiveBg: 'Primary Active Background',
+    primaryActiveFg: 'Primary Active Foreground',
+    primaryInactiveBg: 'Primary Inactive Background',
+    primaryInactiveFg: 'Primary Inactive Foreground',
+    secondaryActiveBg: 'Secondary Active Background',
+    secondaryActiveFg: 'Secondary Active Foreground',
+    secondaryInactiveBg: 'Secondary Inactive Background',
+    secondaryInactiveFg: 'Secondary Inactive Foreground',
+    tertiaryBg: 'Tertiary Background',
+    tertiaryFg: 'Tertiary Foreground',
+    quaternaryBg: 'Quaternary Background',
+    quaternaryFg: 'Quaternary Foreground',
+};
+
+/**
+ * Human-readable labels for VS Code theme color keys
+ */
+const THEME_KEY_LABELS: Record<string, string> = {
+    // Title Bar
+    'titleBar.activeBackground': 'Title Bar: Active Background',
+    'titleBar.activeForeground': 'Title Bar: Active Foreground',
+    'titleBar.inactiveBackground': 'Title Bar: Inactive Background',
+    'titleBar.inactiveForeground': 'Title Bar: Inactive Foreground',
+    'titleBar.border': 'Title Bar: Border',
+
+    // Activity Bar
+    'activityBar.background': 'Activity Bar: Background',
+    'activityBar.foreground': 'Activity Bar: Foreground',
+    'activityBar.inactiveForeground': 'Activity Bar: Inactive Foreground',
+    'activityBar.border': 'Activity Bar: Border',
+
+    // Status Bar
+    'statusBar.background': 'Status Bar: Background',
+    'statusBar.foreground': 'Status Bar: Foreground',
+    'statusBar.border': 'Status Bar: Border',
+
+    // Tabs & Breadcrumbs
+    'tab.activeBackground': 'Tab: Active Background',
+    'tab.activeForeground': 'Tab: Active Foreground',
+    'tab.inactiveBackground': 'Tab: Inactive Background',
+    'tab.inactiveForeground': 'Tab: Inactive Foreground',
+    'tab.hoverBackground': 'Tab: Hover Background',
+    'tab.unfocusedHoverBackground': 'Tab: Unfocused Hover Background',
+    'tab.activeBorder': 'Tab: Active Border',
+    'editorGroupHeader.tabsBackground': 'Editor Group Header: Tabs Background',
+    'breadcrumb.background': 'Breadcrumb: Background',
+    'breadcrumb.foreground': 'Breadcrumb: Foreground',
+
+    // Command Center
+    'commandCenter.background': 'Command Center: Background',
+    'commandCenter.foreground': 'Command Center: Foreground',
+    'commandCenter.activeBackground': 'Command Center: Active Background',
+    'commandCenter.activeForeground': 'Command Center: Active Foreground',
+
+    // Terminal
+    'terminal.background': 'Terminal: Background',
+    'terminal.foreground': 'Terminal: Foreground',
+
+    // Lists & Panels
+    'panel.background': 'Panel: Background',
+    'panel.border': 'Panel: Border',
+    'panelTitle.activeForeground': 'Panel Title: Active Foreground',
+    'panelTitle.inactiveForeground': 'Panel Title: Inactive Foreground',
+    'panelTitle.activeBorder': 'Panel Title: Active Border',
+    'list.activeSelectionBackground': 'List: Active Selection Background',
+    'list.activeSelectionForeground': 'List: Active Selection Foreground',
+    'list.inactiveSelectionBackground': 'List: Inactive Selection Background',
+    'list.inactiveSelectionForeground': 'List: Inactive Selection Foreground',
+    'list.focusOutline': 'List: Focus Outline',
+    'list.hoverBackground': 'List: Hover Background',
+    'list.hoverForeground': 'List: Hover Foreground',
+    'badge.background': 'Badge: Background',
+    'badge.foreground': 'Badge: Foreground',
+    'panelTitleBadge.background': 'Panel Title Badge: Background',
+    'panelTitleBadge.foreground': 'Panel Title Badge: Foreground',
+    'input.background': 'Input: Background',
+    'input.foreground': 'Input: Foreground',
+    'input.border': 'Input: Border',
+    'input.placeholderForeground': 'Input: Placeholder Foreground',
+    focusBorder: 'Focus Border',
+
+    // Side Bar
+    'sideBar.background': 'Side Bar: Background',
+    'sideBar.foreground': 'Side Bar: Foreground',
+    'sideBar.border': 'Side Bar: Border',
+};
+
+// Explicit ordering for palette slots to ensure consistent display order
+// Order: Primary (Active Fg, Active Bg, Inactive Fg, Inactive Bg),
+//        Secondary (same pattern), Tertiary (Fg, Bg), Quaternary (Fg, Bg)
+const PALETTE_SLOT_ORDER: string[] = [
+    'primaryActiveFg',
+    'primaryActiveBg',
+    'primaryInactiveFg',
+    'primaryInactiveBg',
+    'secondaryActiveFg',
+    'secondaryActiveBg',
+    'secondaryInactiveFg',
+    'secondaryInactiveBg',
+    'tertiaryFg',
+    'tertiaryBg',
+    'quaternaryFg',
+    'quaternaryBg',
+];
+
+const DEFAULT_PALETTE: Palette = {
+    primaryActiveBg: { source: 'fixed', value: '#4A90E2' },
+    primaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
+    primaryInactiveBg: { source: 'fixed', value: '#2E5C8A' },
+    primaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
+    secondaryActiveBg: { source: 'fixed', value: '#5FA3E8' },
+    secondaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
+    secondaryInactiveBg: { source: 'fixed', value: '#4278B0' },
+    secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
+    tertiaryBg: { source: 'fixed', value: '#1E1E1E' },
+    tertiaryFg: { source: 'fixed', value: '#CCCCCC' },
+    quaternaryBg: { source: 'fixed', value: '#2D2D30' },
+    quaternaryFg: { source: 'fixed', value: '#D4D4D4' },
+};
+
+const DEFAULT_MAPPINGS: SectionMappings = {
+    'activityBar.background': 'primaryActiveBg',
+    'activityBar.foreground': 'primaryActiveFg',
+    'activityBar.inactiveForeground': 'primaryInactiveFg',
+    'statusBar.background': 'primaryActiveBg',
+    'statusBar.foreground': 'secondaryActiveFg',
+    'titleBar.activeBackground': 'primaryActiveBg',
+    'titleBar.activeForeground': 'primaryActiveFg',
+    'titleBar.inactiveBackground': 'primaryInactiveBg',
+    'titleBar.inactiveForeground': 'primaryInactiveFg',
+};
+
+const SECTION_DEFINITIONS: { [name: string]: string[] } = {
+    'Title Bar': [
+        'titleBar.activeBackground',
+        'titleBar.activeForeground',
+        'titleBar.inactiveBackground',
+        'titleBar.inactiveForeground',
+        'titleBar.border',
+    ],
+    'Activity Bar': [
+        'activityBar.background',
+        'activityBar.foreground',
+        'activityBar.inactiveForeground',
+        'activityBar.border',
+    ],
+    'Status Bar': ['statusBar.background', 'statusBar.foreground', 'statusBar.border'],
+    'Tabs & Breadcrumbs': [
+        'tab.activeBackground',
+        'tab.activeForeground',
+        'tab.inactiveBackground',
+        'tab.inactiveForeground',
+        'tab.hoverBackground',
+        'tab.unfocusedHoverBackground',
+        'tab.activeBorder',
+        'editorGroupHeader.tabsBackground',
+        'breadcrumb.background',
+        'breadcrumb.foreground',
+    ],
+    'Command Center': [
+        'commandCenter.background',
+        'commandCenter.foreground',
+        'commandCenter.activeBackground',
+        'commandCenter.activeForeground',
+    ],
+    Terminal: ['terminal.background', 'terminal.foreground'],
+    'Lists & Panels': [
+        'panel.background',
+        'panel.border',
+        'panelTitle.activeForeground',
+        'panelTitle.inactiveForeground',
+        'panelTitle.activeBorder',
+        'list.activeSelectionBackground',
+        'list.activeSelectionForeground',
+        'list.inactiveSelectionBackground',
+        'list.inactiveSelectionForeground',
+        'list.focusOutline',
+        'list.hoverBackground',
+        'list.hoverForeground',
+        'badge.background',
+        'badge.foreground',
+        'panelTitleBadge.background',
+        'panelTitleBadge.foreground',
+        'input.background',
+        'input.foreground',
+        'input.border',
+        'input.placeholderForeground',
+        'focusBorder',
+    ],
+    'Side Bar': ['sideBar.background', 'sideBar.foreground', 'sideBar.border'],
+};
+
+let selectedProfileName: string | null = (() => {
+    try {
+        return localStorage.getItem('selectedProfileName');
+    } catch {
+        return null;
+    }
+})();
+
+// selectedMappingTab and syncFgBgEnabled are declared at the top of the file
+
+/**
+ * Definitive mapping of foreground/background pairs
+ * Maps each foreground key to its background counterpart (and implicitly vice versa)
+ */
+const FG_BG_PAIRS: { [key: string]: string } = {
+    // Title Bar
+    'titleBar.activeForeground': 'titleBar.activeBackground',
+    'titleBar.activeBackground': 'titleBar.activeForeground',
+    'titleBar.inactiveForeground': 'titleBar.inactiveBackground',
+    'titleBar.inactiveBackground': 'titleBar.inactiveForeground',
+
+    // Activity Bar
+    'activityBar.foreground': 'activityBar.background',
+    'activityBar.background': 'activityBar.foreground',
+    'activityBar.inactiveForeground': 'activityBar.background',
+
+    // Status Bar
+    'statusBar.foreground': 'statusBar.background',
+    'statusBar.background': 'statusBar.foreground',
+
+    // Tabs
+    'tab.activeForeground': 'tab.activeBackground',
+    'tab.activeBackground': 'tab.activeForeground',
+    'tab.inactiveForeground': 'tab.inactiveBackground',
+    'tab.inactiveBackground': 'tab.inactiveForeground',
+
+    // Breadcrumbs
+    'breadcrumb.foreground': 'breadcrumb.background',
+    'breadcrumb.background': 'breadcrumb.foreground',
+
+    // Command Center
+    'commandCenter.foreground': 'commandCenter.background',
+    'commandCenter.background': 'commandCenter.foreground',
+    'commandCenter.activeForeground': 'commandCenter.activeBackground',
+    'commandCenter.activeBackground': 'commandCenter.activeForeground',
+
+    // Terminal
+    'terminal.foreground': 'terminal.background',
+    'terminal.background': 'terminal.foreground',
+
+    // Panels
+    'panelTitle.activeForeground': 'panel.background',
+    'panelTitle.inactiveForeground': 'panel.background',
+
+    // Lists
+    'list.activeSelectionForeground': 'list.activeSelectionBackground',
+    'list.activeSelectionBackground': 'list.activeSelectionForeground',
+    'list.inactiveSelectionForeground': 'list.inactiveSelectionBackground',
+    'list.inactiveSelectionBackground': 'list.inactiveSelectionForeground',
+    'list.hoverForeground': 'list.hoverBackground',
+    'list.hoverBackground': 'list.hoverForeground',
+
+    // Badges
+    'badge.foreground': 'badge.background',
+    'badge.background': 'badge.foreground',
+    'panelTitleBadge.foreground': 'panelTitleBadge.background',
+    'panelTitleBadge.background': 'panelTitleBadge.foreground',
+
+    // Input
+    'input.foreground': 'input.background',
+    'input.background': 'input.foreground',
+    'input.placeholderForeground': 'input.background',
+
+    // Side Bar
+    'sideBar.foreground': 'sideBar.background',
+    'sideBar.background': 'sideBar.foreground',
+};
+
+/**
+ * Definitive mapping of active/inactive pairs
+ * Maps each active key to its inactive counterpart (and implicitly vice versa)
+ */
+const ACTIVE_INACTIVE_PAIRS: { [key: string]: string } = {
+    // Title Bar
+    'titleBar.activeBackground': 'titleBar.inactiveBackground',
+    'titleBar.inactiveBackground': 'titleBar.activeBackground',
+    'titleBar.activeForeground': 'titleBar.inactiveForeground',
+    'titleBar.inactiveForeground': 'titleBar.activeForeground',
+
+    // Activity Bar (note: activity bar uses different naming)
+    'activityBar.foreground': 'activityBar.inactiveForeground',
+    'activityBar.inactiveForeground': 'activityBar.foreground',
+
+    // Tabs
+    'tab.activeBackground': 'tab.inactiveBackground',
+    'tab.inactiveBackground': 'tab.activeBackground',
+    'tab.activeForeground': 'tab.inactiveForeground',
+    'tab.inactiveForeground': 'tab.activeForeground',
+
+    // Command Center
+    'commandCenter.background': 'commandCenter.activeBackground',
+    'commandCenter.activeBackground': 'commandCenter.background',
+    'commandCenter.foreground': 'commandCenter.activeForeground',
+    'commandCenter.activeForeground': 'commandCenter.foreground',
+
+    // Panel titles
+    'panelTitle.activeForeground': 'panelTitle.inactiveForeground',
+    'panelTitle.inactiveForeground': 'panelTitle.activeForeground',
+
+    // Lists
+    'list.activeSelectionBackground': 'list.inactiveSelectionBackground',
+    'list.inactiveSelectionBackground': 'list.activeSelectionBackground',
+    'list.activeSelectionForeground': 'list.inactiveSelectionForeground',
+    'list.inactiveSelectionForeground': 'list.activeSelectionForeground',
+};
+
+/**
+ * Find the corresponding foreground or background element key using definitive mapping
+ */
+function findCorrespondingFgBg(key: string): string | null {
+    return FG_BG_PAIRS[key] || null;
+}
+
+/**
+ * Get the corresponding palette slot for a given slot
+ * e.g., 'primaryActiveFg' <-> 'primaryActiveBg'
+ */
+function getCorrespondingPaletteSlot(slotName: string): string | null {
+    if (slotName === 'none') return null;
+
+    if (slotName.endsWith('Fg')) {
+        return slotName.replace('Fg', 'Bg');
+    } else if (slotName.endsWith('Bg')) {
+        return slotName.replace('Bg', 'Fg');
+    }
+    return null;
+}
+
+/**
+ * Find the corresponding active or inactive element key using definitive mapping
+ */
+function findCorrespondingActiveInactive(key: string): string | null {
+    return ACTIVE_INACTIVE_PAIRS[key] || null;
+}
+
+/**
+ * Get the corresponding active/inactive palette slot
+ * e.g., 'primaryActiveFg' <-> 'primaryInactiveFg'
+ */
+function getCorrespondingActiveInactiveSlot(slotName: string): string | null {
+    if (slotName === 'none') return null;
+
+    if (slotName.includes('Active')) {
+        return slotName.replace('Active', 'Inactive');
+    } else if (slotName.includes('Inactive')) {
+        return slotName.replace('Inactive', 'Active');
+    }
+    return null;
+}
+
+/**
+ * Determine if an element key is for a background color
+ */
+function isBackgroundElement(key: string): boolean {
+    return key.toLowerCase().includes('background') || key.toLowerCase().endsWith('bg');
+}
+
+/**
+ * Determine if an element key is for a foreground color
+ */
+function isForegroundElement(key: string): boolean {
+    return key.toLowerCase().includes('foreground') || key.toLowerCase().endsWith('fg');
+}
+
+/**
+ * Determine if an element key is for an active state
+ */
+function isActiveElement(key: string): boolean {
+    // Check for 'active' in the key but not 'inactive'
+    const keyLower = key.toLowerCase();
+    return keyLower.includes('active') && !keyLower.includes('inactive');
+}
+
+/**
+ * Determine if an element key is for an inactive state
+ */
+function isInactiveElement(key: string): boolean {
+    return key.toLowerCase().includes('inactive');
+}
+
+/**
+ * Determine if an element key is for neither active nor inactive (neutral)
+ */
+function isNeutralElement(key: string): boolean {
+    const keyLower = key.toLowerCase();
+    return !keyLower.includes('active') && !keyLower.includes('inactive');
+}
+
+/**
+ * Check if a palette slot is compatible with a mapping key for drag-and-drop
+ * Returns true if the slot can logically be assigned to this key
+ */
+function isSlotCompatibleWithKey(slotName: string, mappingKey: string): boolean {
+    const keyIsBg = isBackgroundElement(mappingKey);
+    const keyIsFg = isForegroundElement(mappingKey);
+    const keyIsActive = isActiveElement(mappingKey);
+    const keyIsInactive = isInactiveElement(mappingKey);
+    const keyIsNeutral = isNeutralElement(mappingKey);
+
+    const slotIsBg = slotName.endsWith('Bg');
+    const slotIsFg = slotName.endsWith('Fg');
+    const slotIsActive = slotName.includes('Active') && !slotName.includes('Inactive');
+    const slotIsInactive = slotName.includes('Inactive');
+    const slotIsNeutral = !slotName.includes('Active') && !slotName.includes('Inactive');
+
+    // Neutral keys are compatible with everything
+    if (keyIsNeutral && !keyIsBg && !keyIsFg && !keyIsActive && !keyIsInactive) {
+        return true;
+    }
+
+    // Check Bg/Fg compatibility
+    if (keyIsBg && !slotIsBg) return false;
+    if (keyIsFg && !slotIsFg) return false;
+
+    // Check Active/Inactive compatibility
+    // Active keys can use active or neutral slots
+    if (keyIsActive && !(slotIsActive || slotIsNeutral)) return false;
+    // Inactive keys can use inactive or neutral slots
+    if (keyIsInactive && !(slotIsInactive || slotIsNeutral)) return false;
+    // Neutral keys with bg/fg context can use neutral slots or matching state
+    if (keyIsNeutral && !slotIsNeutral) return false;
+
+    return true;
+}
+
+/**
+ * Highlight or unhighlight compatible drop zones during drag
+ */
+function highlightCompatibleDropZones(slotName: string, highlight: boolean) {
+    const allDropdowns = document.querySelectorAll('.custom-dropdown');
+    allDropdowns.forEach((dropdown) => {
+        const dropdownEl = dropdown as HTMLElement;
+        const mappingKey = dropdownEl.getAttribute('data-mapping-key');
+
+        if (highlight && mappingKey) {
+            const isCompatible = isSlotCompatibleWithKey(slotName, mappingKey);
+            if (isCompatible) {
+                dropdownEl.classList.add('drag-compatible');
+            }
+        } else {
+            dropdownEl.classList.remove('drag-compatible');
+            dropdownEl.classList.remove('drag-hover');
+        }
+    });
+}
+
+/**
+ * Check if a palette slot is congruous with a theme key for Fg/Bg
+ * Returns true if the slot type matches the key type (both Fg or both Bg)
+ */
+function isSlotCongruousFgBg(key: string, slot: string): boolean {
+    if (slot === 'none' || slot === '__fixed__') return true; // Special cases are always congruous
+
+    const keyIsBg = isBackgroundElement(key);
+    const keyIsFg = isForegroundElement(key);
+    const slotIsBg = slot.endsWith('Bg');
+    const slotIsFg = slot.endsWith('Fg');
+
+    // Congruous if both are Bg or both are Fg
+    return (keyIsBg && slotIsBg) || (keyIsFg && slotIsFg);
+}
+
+/**
+ * Check if a palette slot is congruous with a theme key for Active/Inactive
+ * Returns true if the slot state matches the key state (both Active, both Inactive, or both Neutral)
+ */
+function isSlotCongruousActiveInactive(key: string, slot: string): boolean {
+    if (slot === 'none' || slot === '__fixed__') return true; // Special cases are always congruous
+
+    const keyIsActive = isActiveElement(key);
+    const keyIsInactive = isInactiveElement(key);
+    const keyIsNeutral = isNeutralElement(key);
+    const slotIsActive = slot.includes('Active') && !slot.includes('Inactive');
+    const slotIsInactive = slot.includes('Inactive');
+    const slotIsNeutral = !slot.includes('Active') && !slot.includes('Inactive');
+
+    // Congruous if states match
+    return (keyIsActive && slotIsActive) || (keyIsInactive && slotIsInactive) || (keyIsNeutral && slotIsNeutral);
+}
+
+/**
+ * Filter palette slots to only show related options based on element characteristics
+ */
+function getFilteredPaletteOptions(elementKey: string, allSlots: string[], currentSlot?: string): string[] {
+    if (!limitOptionsEnabled) {
+        // Even when not filtering, return in proper order
+        const sorted = allSlots
+            .filter((s) => s !== 'none')
+            .sort((a, b) => {
+                const indexA = PALETTE_SLOT_ORDER.indexOf(a);
+                const indexB = PALETTE_SLOT_ORDER.indexOf(b);
+                if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            });
+        return sorted;
+    }
+
+    const isBg = isBackgroundElement(elementKey);
+    const isFg = isForegroundElement(elementKey);
+    const isActive = isActiveElement(elementKey);
+    const isInactive = isInactiveElement(elementKey);
+    const isNeutral = isNeutralElement(elementKey);
+
+    // If element is neutral (no fg/bg or active/inactive context), don't filter - show all slots
+    if (isNeutral && !isBg && !isFg && !isActive && !isInactive) {
+        const sorted = allSlots
+            .filter((s) => s !== 'none')
+            .sort((a, b) => {
+                const indexA = PALETTE_SLOT_ORDER.indexOf(a);
+                const indexB = PALETTE_SLOT_ORDER.indexOf(b);
+                if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+            });
+        // Include current slot if specified
+        if (currentSlot && currentSlot !== 'none' && currentSlot !== '__fixed__' && !sorted.includes(currentSlot)) {
+            sorted.push(currentSlot);
+        }
+        return sorted;
+    }
+
+    const filtered = allSlots.filter((slot) => {
+        if (slot === 'none') return false; // Will be added manually in dropdown
+
+        const slotLower = slot.toLowerCase();
+
+        // Check bg/fg match
+        const slotIsBg = slotLower.endsWith('bg');
+        const slotIsFg = slotLower.endsWith('fg');
+
+        // For elements that are clearly bg or fg, filter by that
+        if (isBg && !slotIsBg) return false;
+        if (isFg && !slotIsFg) return false;
+
+        // Check active/inactive match
+        const slotIsActive = slotLower.includes('active') && !slotLower.includes('inactive');
+        const slotIsInactive = slotLower.includes('inactive');
+        const slotIsNeutral = !slotLower.includes('active') && !slotLower.includes('inactive');
+
+        // For elements with active/inactive state, filter accordingly
+        if (isActive && !(slotIsActive || slotIsNeutral)) return false;
+        if (isInactive && !(slotIsInactive || slotIsNeutral)) return false;
+
+        return true;
+    });
+
+    // Always include the current slot if it's set and not already in the filtered list
+    if (currentSlot && currentSlot !== 'none' && currentSlot !== '__fixed__' && !filtered.includes(currentSlot)) {
+        filtered.push(currentSlot);
+    }
+
+    // Sort according to PALETTE_SLOT_ORDER
+    filtered.sort((a, b) => {
+        const indexA = PALETTE_SLOT_ORDER.indexOf(a);
+        const indexB = PALETTE_SLOT_ORDER.indexOf(b);
+
+        // If both are in the order array, sort by their index
+        if (indexA !== -1 && indexB !== -1) {
+            return indexA - indexB;
+        }
+
+        // If only one is in the order array, it comes first
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+
+        // If neither is in the order array, sort alphabetically
+        return a.localeCompare(b);
+    });
+
+    return filtered;
+}
+
+function renderProfiles(profiles: AdvancedProfileMap | undefined) {
+    const listContainer = document.getElementById('profilesList');
+    const editorTop = document.getElementById('profileEditorTop');
+    const editorBottom = document.getElementById('profileEditorBottom');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = '';
+
+    // Restore last selected profile if it still exists
+    if (selectedProfileName && profiles && !profiles[selectedProfileName]) {
+        selectedProfileName = null;
+        try {
+            localStorage.removeItem('selectedProfileName');
+        } catch {}
+    }
+
+    // Auto-select first profile if none selected but profiles exist
+    if (!selectedProfileName && profiles && Object.keys(profiles).length > 0) {
+        selectedProfileName = Object.keys(profiles)[0];
+        try {
+            localStorage.setItem('selectedProfileName', selectedProfileName);
+        } catch {}
+    }
+
+    // Hide editor sections by default, show only when selection exists
+    if (editorTop) {
+        editorTop.style.visibility = selectedProfileName ? 'visible' : 'hidden';
+        editorTop.style.opacity = selectedProfileName ? '1' : '0';
+    }
+    if (editorBottom) {
+        editorBottom.style.visibility = selectedProfileName ? 'visible' : 'hidden';
+        editorBottom.style.opacity = selectedProfileName ? '1' : '0';
+    }
+
+    if (!profiles || Object.keys(profiles).length === 0) {
+        // Initialize default if empty just for UI or display empty
+        listContainer.innerHTML =
+            '<div style="padding:10px; color:var(--vscode-descriptionForeground); font-style:italic;">No profiles defined. Click "+ Add" to create one.</div>';
+        // Ensure selection is cleared if no profiles exist
+        selectedProfileName = null;
+        if (editorTop) {
+            editorTop.style.visibility = 'hidden';
+            editorTop.style.opacity = '0';
+        }
+        if (editorBottom) {
+            editorBottom.style.visibility = 'hidden';
+            editorBottom.style.opacity = '0';
+        }
+    } else {
+        // Get currently applied profiles from matching rules
+        const matchedRepoRule =
+            currentConfig?.matchingIndexes?.repoRule >= 0
+                ? currentConfig.repoRules?.[currentConfig.matchingIndexes.repoRule]
+                : null;
+        const matchedBranchRule =
+            currentConfig?.matchingIndexes?.branchRule >= 0
+                ? currentConfig.branchRules?.[currentConfig.matchingIndexes.branchRule]
+                : null;
+
+        // Extract profile names from matched rules
+        const repoProfileName =
+            matchedRepoRule?.profileName ||
+            (matchedRepoRule?.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
+                ? matchedRepoRule.primaryColor
+                : null);
+        const branchProfileName =
+            matchedBranchRule?.profileName ||
+            (matchedBranchRule?.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
+                ? matchedBranchRule.color
+                : null);
+
+        console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
+        console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);
+        console.log('[Profile Indicators] matchedBranchRule:', matchedBranchRule);
+        console.log('[Profile Indicators] repoProfileName:', repoProfileName);
+        console.log('[Profile Indicators] branchProfileName:', branchProfileName);
+
+        Object.keys(profiles).forEach((name) => {
+            const el = document.createElement('div');
+            el.className = 'profile-item';
+            el.dataset.profileName = name;
+            if (name === selectedProfileName) el.classList.add('selected');
+
+            // Create name span with badge
+            const nameContainer = document.createElement('div');
+            nameContainer.className = 'profile-name-container';
+
+            // Add indicators for currently applied profiles (on the left)
+            const isRepoProfile = name === repoProfileName;
+            const isBranchProfile = name === branchProfileName;
+
+            console.log(
+                `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
+            );
+
+            // Create indicator container (even if empty, to maintain alignment)
+            const indicatorContainer = document.createElement('span');
+            indicatorContainer.className = 'profile-indicators';
+
+            if (isRepoProfile || isBranchProfile) {
+                console.log(`[Profile Indicators] Adding indicators for "${name}"`);
+
+                if (isRepoProfile) {
+                    const repoIcon = document.createElement('span');
+                    repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
+                    repoIcon.title = 'Applied to repository rule for this workspace';
+                    indicatorContainer.appendChild(repoIcon);
+                    console.log(`[Profile Indicators] Added repo icon for "${name}"`);
+                }
+
+                if (isBranchProfile) {
+                    const branchIcon = document.createElement('span');
+                    branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
+                    branchIcon.title = 'Applied to branch rule for this workspace';
+                    indicatorContainer.appendChild(branchIcon);
+                    console.log(`[Profile Indicators] Added branch icon for "${name}"`);
+                }
+            }
+
+            nameContainer.appendChild(indicatorContainer);
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'profile-name';
+            nameSpan.textContent = name;
+            nameContainer.appendChild(nameSpan);
+
+            // Count total active mappings for badge
+            const profile = profiles[name];
+            const totalActive = countTotalActiveMappings(profile);
+
+            const badge = document.createElement('span');
+            badge.className = 'profile-count-badge';
+            badge.textContent = totalActive.toString();
+            badge.title = `${totalActive} elements being colored`;
+            nameContainer.appendChild(badge);
+
+            // Create color swatch
+            const swatch = document.createElement('div');
+            swatch.className = 'profile-color-swatch';
+
+            // Get the profile colors
+            let bgColor = '#4A90E2'; // Default
+            let fgColor = '#FFFFFF'; // Default
+
+            if (profile?.palette?.primaryActiveBg?.value) {
+                bgColor = convertColorToHex(profile.palette.primaryActiveBg.value);
+            }
+            if (profile?.palette?.primaryActiveFg?.value) {
+                fgColor = convertColorToHex(profile.palette.primaryActiveFg.value);
+            }
+
+            swatch.style.backgroundColor = bgColor;
+            swatch.style.color = fgColor;
+            swatch.textContent = 'Sample';
+
+            el.appendChild(nameContainer);
+            el.appendChild(swatch);
+            el.onclick = () => selectProfile(name);
+            listContainer.appendChild(el);
+        });
+    }
+
+    // Attach Add Handler
+    const addBtn = document.querySelector('[data-action="addProfile"]');
+    if (addBtn) {
+        (addBtn as HTMLElement).onclick = () => addNewProfile();
+    }
+
+    // Render the selected profile if one exists
+    if (selectedProfileName && profiles && profiles[selectedProfileName]) {
+        renderProfileEditor(selectedProfileName, profiles[selectedProfileName]);
+        initializeProfileEditorCheckboxListeners();
+    }
+}
+
+function selectProfile(name: string) {
+    selectedProfileName = name;
+    try {
+        localStorage.setItem('selectedProfileName', name);
+    } catch {}
+    renderProfiles(currentConfig.advancedProfiles); // Re-render list to update selection
+
+    // Explicitly show editor sections
+    const editorTop = document.getElementById('profileEditorTop');
+    const editorBottom = document.getElementById('profileEditorBottom');
+    if (editorTop) {
+        editorTop.style.visibility = 'visible';
+        editorTop.style.opacity = '1';
+    }
+    if (editorBottom) {
+        editorBottom.style.visibility = 'visible';
+        editorBottom.style.opacity = '1';
+    }
+
+    const profile = currentConfig.advancedProfiles[name];
+    renderProfileEditor(name, profile);
+    initializeProfileEditorCheckboxListeners();
+}
+
+/**
+ * Checks if a string is a valid HTML color name.
+ * Returns true if it's a color, false otherwise.
+ */
+function isHtmlColor(str: string): boolean {
+    if (!str) return false;
+    const s = new Option().style;
+    s.color = str;
+    return s.color !== '';
+}
+
+function addNewProfile() {
+    let name = 'Profile ' + (Object.keys(currentConfig.advancedProfiles || {}).length + 1);
+
+    // Ensure the generated name is not a valid HTML color
+    let counter = Object.keys(currentConfig.advancedProfiles || {}).length + 1;
+    while (isHtmlColor(name)) {
+        counter++;
+        name = 'Profile ' + counter;
+    }
+
+    if (!currentConfig.advancedProfiles) currentConfig.advancedProfiles = {};
+
+    currentConfig.advancedProfiles[name] = {
+        palette: JSON.parse(JSON.stringify(DEFAULT_PALETTE)),
+        mappings: JSON.parse(JSON.stringify(DEFAULT_MAPPINGS)),
+    };
+
+    saveProfiles();
+    selectProfile(name);
+}
+
+/**
+ * Count how many mappings in a section have non-None values
+ */
+function countActiveMappings(profile: AdvancedProfile, sectionKeys: string[]): number {
+    let count = 0;
+    sectionKeys.forEach((key: string) => {
+        const mappingValue = profile.mappings[key];
+        let slot: string;
+
+        if (typeof mappingValue === 'string') {
+            slot = mappingValue || 'none';
+        } else if (mappingValue) {
+            slot = mappingValue.slot || 'none';
+        } else {
+            slot = 'none';
+        }
+
+        if (slot !== 'none') {
+            count++;
+        }
+    });
+    return count;
+}
+
+/**
+ * Count total active mappings across all sections in a profile
+ */
+function countTotalActiveMappings(profile: AdvancedProfile): number {
+    let total = 0;
+    Object.keys(profile.mappings || {}).forEach((key: string) => {
+        const mappingValue = profile.mappings[key];
+        let slot: string;
+
+        if (typeof mappingValue === 'string') {
+            slot = mappingValue || 'none';
+        } else if (mappingValue) {
+            slot = mappingValue.slot || 'none';
+        } else {
+            slot = 'none';
+        }
+
+        if (slot !== 'none') {
+            total++;
+        }
+    });
+    return total;
+}
+
+/**
+ * Sets up the palette generator wand button and dropdown menu
+ */
+function setupPaletteGenerator() {
+    const generatorBtn = document.getElementById('paletteGeneratorBtn');
+    const dropdown = document.getElementById('paletteGeneratorDropdown');
+
+    if (!generatorBtn || !dropdown) return;
+
+    // Toggle dropdown on button click
+    generatorBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isVisible = dropdown.style.display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'block';
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!generatorBtn.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    // Handle algorithm selection
+    const algorithmOptions = dropdown.querySelectorAll('.palette-algorithm-option');
+    algorithmOptions.forEach((option) => {
+        option.addEventListener('click', (e) => {
+            const algorithm = (e.target as HTMLElement).getAttribute('data-algorithm');
+            if (algorithm && selectedProfileName) {
+                generatePalette(algorithm);
+                dropdown.style.display = 'none';
+            }
+        });
+    });
+}
+
+// Store previous palette for undo functionality
+let previousPalette: any = null;
+
+/**
+ * Generates a pleasing color palette and updates the current profile
+ */
+function generatePalette(algorithm: string) {
+    if (!selectedProfileName || !currentConfig.advancedProfiles[selectedProfileName]) {
+        return;
+    }
+
+    const profile = currentConfig.advancedProfiles[selectedProfileName];
+    const primaryBg = profile.palette.primaryActiveBg?.value;
+
+    if (!primaryBg) {
+        console.warn('Cannot generate palette: No primary background color defined');
+        return;
+    }
+
+    // Store current palette for undo
+    previousPalette = JSON.parse(JSON.stringify(profile.palette));
+
+    // Send message to extension to generate palette
+    vscode.postMessage({
+        command: 'generatePalette',
+        data: {
+            paletteData: {
+                profileName: selectedProfileName,
+                primaryBg: primaryBg,
+                algorithm: algorithm,
+            },
+        },
+    });
+}
+
+/**
+ * Handles the paletteGenerated message from the extension
+ */
+function handlePaletteGenerated(data: { advancedProfiles: any; generatedPalette: any; profileName: string }) {
+    // Update current config with the new profiles
+    currentConfig.advancedProfiles = data.advancedProfiles;
+
+    // Show the toast with generated palette styling
+    showPaletteToast(data.generatedPalette);
+
+    // Re-render the profile editor to show the new palette
+    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+        renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+    }
+}
+
+/**
+ * Shows the palette toast notification with styling from generated palette
+ */
+function showPaletteToast(generatedPalette: any) {
+    const toast = document.getElementById('paletteToast');
+    const acceptBtn = document.getElementById('paletteToastAccept');
+    const undoBtn = document.getElementById('paletteToastUndo');
+
+    if (!toast || !acceptBtn || !undoBtn) {
+        return;
+    }
+
+    // Style the toast border with tertiary background
+    toast.style.borderColor = generatedPalette.tertiaryActiveBg;
+
+    // Style Accept button with primary colors
+    acceptBtn.style.backgroundColor = generatedPalette.primaryActiveBg;
+    acceptBtn.style.color = generatedPalette.primaryActiveFg;
+
+    // Style Undo button with secondary colors
+    undoBtn.style.backgroundColor = generatedPalette.secondaryActiveBg;
+    undoBtn.style.color = generatedPalette.secondaryActiveFg;
+
+    // Show the toast
+    toast.style.display = 'flex';
+}
+
+/**
+ * Hides the palette toast notification
+ */
+function hidePaletteToast() {
+    const toast = document.getElementById('paletteToast');
+    if (toast) {
+        toast.style.display = 'none';
+    }
+}
+
+// Store references to event handlers so they can be removed
+let paletteAcceptHandler: ((e: Event) => void) | null = null;
+let paletteUndoHandler: ((e: Event) => void) | null = null;
+
+/**
+ * Sets up the palette toast event handlers
+ */
+function setupPaletteToast() {
+    const acceptBtn = document.getElementById('paletteToastAccept');
+    const undoBtn = document.getElementById('paletteToastUndo');
+
+    // Remove old event listeners if they exist
+    if (acceptBtn && paletteAcceptHandler) {
+        acceptBtn.removeEventListener('click', paletteAcceptHandler);
+    }
+    if (undoBtn && paletteUndoHandler) {
+        undoBtn.removeEventListener('click', paletteUndoHandler);
+    }
+
+    // Create new handlers
+    paletteAcceptHandler = () => {
+        // Accept the changes - just hide the toast
+        hidePaletteToast();
+        previousPalette = null;
+    };
+
+    paletteUndoHandler = () => {
+        // Restore the previous palette
+        if (previousPalette && selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+            currentConfig.advancedProfiles[selectedProfileName].palette = previousPalette;
+            saveProfiles();
+            renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+            previousPalette = null;
+        }
+        hidePaletteToast();
+    };
+
+    // Add new event listeners
+    if (acceptBtn) {
+        acceptBtn.addEventListener('click', paletteAcceptHandler);
+    }
+
+    if (undoBtn) {
+        undoBtn.addEventListener('click', paletteUndoHandler);
+    }
+}
+
+function renderProfileEditor(name: string, profile: AdvancedProfile) {
+    // Name Input
+    const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
+    if (nameInput) {
+        nameInput.value = name;
+        // Handle name change
+        nameInput.onchange = (e) => renameProfile(name, (e.target as HTMLInputElement).value);
+    }
+
+    // Wire up action buttons
+    const deleteBtn = document.querySelector('[data-action="deleteProfile"]') as HTMLElement;
+    if (deleteBtn) {
+        deleteBtn.onclick = () => deleteProfile(name);
+    }
+
+    const duplicateBtn = document.querySelector('[data-action="duplicateProfile"]') as HTMLElement;
+    if (duplicateBtn) {
+        duplicateBtn.onclick = () => duplicateProfile(name);
+    }
+
+    // Wire up palette generator
+    setupPaletteGenerator();
+    setupPaletteToast();
+
+    // Palette Editor
+    const paletteGrid = document.getElementById('paletteEditor');
+    if (paletteGrid) {
+        paletteGrid.innerHTML = '';
+
+        // Migrate old terminalBg/terminalFg to tertiaryBg/tertiaryFg
+        if ((profile.palette as any).terminalBg && !profile.palette.tertiaryBg) {
+            profile.palette.tertiaryBg = (profile.palette as any).terminalBg;
+            delete (profile.palette as any).terminalBg;
+        }
+        if ((profile.palette as any).terminalFg && !profile.palette.tertiaryFg) {
+            profile.palette.tertiaryFg = (profile.palette as any).terminalFg;
+            delete (profile.palette as any).terminalFg;
+        }
+
+        // Ensure all palette slots exist (migration for older profiles)
+        if (!profile.palette.tertiaryBg) {
+            profile.palette.tertiaryBg = DEFAULT_PALETTE.tertiaryBg;
+        }
+        if (!profile.palette.tertiaryFg) {
+            profile.palette.tertiaryFg = DEFAULT_PALETTE.tertiaryFg;
+        }
+        if (!profile.palette.quaternaryBg) {
+            profile.palette.quaternaryBg = DEFAULT_PALETTE.quaternaryBg;
+        }
+        if (!profile.palette.quaternaryFg) {
+            profile.palette.quaternaryFg = DEFAULT_PALETTE.quaternaryFg;
+        }
+
+        // Define groups with their respective pairs
+        const paletteGroups = [
+            {
+                name: 'Primary',
+                slots: ['primaryActiveBg', 'primaryActiveFg', 'primaryInactiveBg', 'primaryInactiveFg'],
+            },
+            {
+                name: 'Secondary',
+                slots: ['secondaryActiveBg', 'secondaryActiveFg', 'secondaryInactiveBg', 'secondaryInactiveFg'],
+            },
+            { name: 'Tertiary', slots: ['tertiaryBg', 'tertiaryFg'] },
+            { name: 'Quaternary', slots: ['quaternaryBg', 'quaternaryFg'] },
+        ];
+
+        // Render each group with a border
+        paletteGroups.forEach((group) => {
+            // Create group container
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'palette-group';
+
+            // Create grid for this group's pairs
+            const groupGrid = document.createElement('div');
+            groupGrid.className = 'palette-group-grid';
+
+            // Process pairs within this group
+            for (let i = 0; i < group.slots.length; i += 2) {
+                const bgKey = group.slots[i];
+                const fgKey = group.slots[i + 1];
+
+                if (!bgKey || !fgKey) continue;
+
+                const bgDef = profile.palette[bgKey];
+                const fgDef = profile.palette[fgKey];
+
+                if (!bgDef || !fgDef) continue;
+
+                // Create combined swatch showing Bg + Fg together
+                const swatch = document.createElement('div');
+                swatch.className = 'palette-pair-swatch';
+                updatePairSwatch(swatch, bgDef.value || '#000000', fgDef.value || '#FFFFFF');
+
+                // Create wrapper for Bg+Fg pair
+                const pairWrapper = document.createElement('div');
+                pairWrapper.className = 'palette-pair-wrapper';
+
+                // Create Bg slot element
+                const bgEl = createPaletteSlotElement(bgKey, bgDef, (newDef) => {
+                    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        currentConfig.advancedProfiles[selectedProfileName].palette[bgKey] = newDef;
+                        saveProfiles();
+                        // Update the combined swatch
+                        updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
+                    }
+                });
+
+                // Create Fg slot element
+                const fgEl = createPaletteSlotElement(fgKey, fgDef, (newDef) => {
+                    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        currentConfig.advancedProfiles[selectedProfileName].palette[fgKey] = newDef;
+                        saveProfiles();
+                        // Update the combined swatch
+                        updatePairSwatch(swatch, bgDef.value || '#000000', newDef.value || '#FFFFFF');
+                    }
+                });
+
+                pairWrapper.appendChild(bgEl);
+                pairWrapper.appendChild(fgEl);
+
+                // Append to group grid: wrapper (col 1-2) | swatch (col 3)
+                groupGrid.appendChild(pairWrapper);
+                groupGrid.appendChild(swatch);
+            }
+
+            groupContainer.appendChild(groupGrid);
+            paletteGrid.appendChild(groupContainer);
+        });
+    }
+
+    // Mappings Editor (Tabbed)
+    const mappingsContainer = document.getElementById('mappingsEditor');
+    if (mappingsContainer) {
+        mappingsContainer.innerHTML = '';
+
+        // 1. Create Tab Headers
+        const tabsHeader = document.createElement('div');
+        tabsHeader.className = 'mapping-tabs-header';
+        tabsHeader.style.display = 'flex';
+        tabsHeader.style.gap = '5px';
+        tabsHeader.style.marginBottom = '10px';
+        tabsHeader.style.overflowX = 'auto';
+        tabsHeader.style.borderBottom = '1px solid var(--vscode-panel-border)';
+
+        const tabsContent = document.createElement('div');
+        tabsContent.className = 'mapping-tabs-content';
+
+        let firstTab = true;
+        let tabToActivate: HTMLButtonElement | null = null;
+
+        // Helper function to build the "Colored" tab content
+        const buildColoredTabContent = (): string[] => {
+            const coloredKeys: string[] = [];
+            if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                const mappings = currentConfig.advancedProfiles[selectedProfileName].mappings;
+                // Gather all keys from all sections that have a mapping defined (including 'none')
+                // The Colored tab should show all elements the user has explicitly configured
+                Object.keys(SECTION_DEFINITIONS).forEach((sectionName) => {
+                    const sectionKeys = SECTION_DEFINITIONS[sectionName];
+                    sectionKeys.forEach((key) => {
+                        const mappingValue = mappings[key];
+                        // Include any key that has a defined mapping (even if it's 'none')
+                        if (mappingValue !== undefined) {
+                            coloredKeys.push(key);
+                        }
+                    });
+                });
+            }
+            return coloredKeys;
+        };
+
+        // Helper function to build the "Starred" tab content
+        const buildStarredTabContent = (): string[] => {
+            return starredKeys;
+        };
+
+        // Create array of all tabs (regular sections + Colored + Starred)
+        const allTabs = [...Object.keys(SECTION_DEFINITIONS), 'Colored', 'Starred'];
+
+        allTabs.forEach((sectionName) => {
+            // Determine keys for this tab
+            const keys =
+                sectionName === 'Colored'
+                    ? buildColoredTabContent()
+                    : sectionName === 'Starred'
+                      ? buildStarredTabContent()
+                      : SECTION_DEFINITIONS[sectionName];
+
+            // Count active mappings in this section
+            const activeCount = countActiveMappings(profile, keys);
+
+            // Tab Button
+            const tabBtn = document.createElement('button');
+            tabBtn.className = 'mapping-tab-btn';
+
+            // Tab text
+            const tabText = document.createElement('span');
+            if (sectionName === 'Colored') {
+                tabText.textContent = '\u26a1 ' + sectionName;
+                tabText.style.fontStyle = 'italic';
+            } else if (sectionName === 'Starred') {
+                tabText.textContent = '\u2605 ' + sectionName; // ★ star symbol
+                tabText.style.fontStyle = 'italic';
+            } else {
+                tabText.textContent = sectionName;
+            }
+            tabBtn.appendChild(tabText);
+
+            // Badge with count (only show if > 0)
+            if (activeCount > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'mapping-tab-badge';
+
+                // For Starred tab, make badge yellow if any starred keys are not colored
+                let isStarredWithUncolored = false;
+                if (sectionName === 'Starred') {
+                    const uncoloredCount = keys.length - activeCount;
+                    if (uncoloredCount > 0) {
+                        isStarredWithUncolored = true;
+                        badge.style.backgroundColor = '#ccaa00'; // Yellow
+                        badge.style.color = '#000000'; // Black text for contrast
+                        badge.title = `${activeCount} colored, ${uncoloredCount} not colored`;
+
+                        // Add warning icon
+                        const warningIcon = document.createElement('span');
+                        warningIcon.className = 'codicon codicon-warning';
+                        warningIcon.style.marginRight = '4px';
+                        badge.appendChild(warningIcon);
+
+                        // Show "colored/uncolored" format
+                        const badgeText = document.createTextNode(`${activeCount}/${uncoloredCount}`);
+                        badge.appendChild(badgeText);
+                    } else {
+                        // All starred keys are colored
+                        badge.title = `${activeCount} colored`;
+                    }
+                } else {
+                    // Tooltip for regular tabs
+                    badge.title = `${activeCount} element${activeCount === 1 ? '' : 's'} colored`;
+                }
+
+                // Add normal badge text if not a starred tab with uncolored items
+                if (!isStarredWithUncolored) {
+                    const badgeText = document.createTextNode(activeCount.toString());
+                    badge.appendChild(badgeText);
+                }
+
+                tabBtn.appendChild(badge);
+            }
+            tabBtn.style.padding = '5px 10px';
+            tabBtn.style.background = 'transparent';
+            tabBtn.style.border = 'none';
+            tabBtn.style.color = 'var(--vscode-foreground)';
+            tabBtn.style.cursor = 'pointer';
+            tabBtn.style.borderBottom = '2px solid transparent';
+
+            // Check if this tab should be active (either it was selected before, or it's the first tab)
+            const shouldActivate = selectedMappingTab === sectionName || (firstTab && !selectedMappingTab);
+            if (shouldActivate) {
+                tabToActivate = tabBtn;
+                if (!selectedMappingTab) selectedMappingTab = sectionName; // Set initial tab
+            }
+
+            tabBtn.onclick = () => {
+                // Track the selected tab
+                selectedMappingTab = sectionName;
+
+                // Special handling for Colored and Starred tabs - rebuild content
+                if (sectionName === 'Colored' || sectionName === 'Starred') {
+                    // For Colored tab, clean up mappings that are explicitly set to 'none'
+                    if (
+                        sectionName === 'Colored' &&
+                        selectedProfileName &&
+                        currentConfig?.advancedProfiles?.[selectedProfileName]
+                    ) {
+                        const mappings = currentConfig.advancedProfiles[selectedProfileName].mappings;
+                        Object.keys(mappings).forEach((key) => {
+                            const value = mappings[key];
+                            const slot = typeof value === 'string' ? value : value?.slot;
+                            if (slot === 'none') {
+                                delete mappings[key];
+                            }
+                        });
+                        saveProfiles();
+                    }
+
+                    // Deactivate all
+                    Array.from(tabsHeader.children).forEach((c: any) => {
+                        c.style.borderBottomColor = 'transparent';
+                        c.style.fontWeight = 'normal';
+                    });
+                    Array.from(tabsContent.children).forEach((c: any) => (c.style.display = 'none'));
+
+                    // Activate self
+                    tabBtn.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+                    tabBtn.style.fontWeight = 'bold';
+
+                    // Trigger re-render to rebuild tab content
+                    if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                        renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+                    }
+                } else {
+                    // Regular tab behavior
+                    // Deactivate all
+                    Array.from(tabsHeader.children).forEach((c: any) => {
+                        c.style.borderBottomColor = 'transparent';
+                        c.style.fontWeight = 'normal';
+                    });
+                    Array.from(tabsContent.children).forEach((c: any) => (c.style.display = 'none'));
+
+                    // Activate self
+                    tabBtn.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+                    tabBtn.style.fontWeight = 'bold';
+
+                    const content = document.getElementById('mapping-section-' + sectionName.replace(/\s+/g, '-'));
+                    if (content) content.style.display = 'block';
+                }
+            };
+
+            tabsHeader.appendChild(tabBtn);
+
+            // Tab Content
+            const contentDiv = document.createElement('div');
+            contentDiv.id = 'mapping-section-' + sectionName.replace(/\s+/g, '-');
+            const shouldShow = selectedMappingTab === sectionName || (firstTab && !selectedMappingTab);
+            contentDiv.style.display = shouldShow ? 'block' : 'none';
+            firstTab = false;
+
+            // Use 2-column grid layout
+            const grid = document.createElement('div');
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = '1fr 1px 1fr';
+            grid.style.gap = '8px 20px';
+            grid.style.padding = '10px 10px';
+
+            // Special handling for empty Colored tab
+            if (sectionName === 'Colored' && keys.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.textContent = 'No color mappings yet. Assign colors in other tabs to see them here.';
+                emptyMsg.style.gridColumn = '1 / -1';
+                emptyMsg.style.padding = '20px';
+                emptyMsg.style.textAlign = 'center';
+                emptyMsg.style.color = 'var(--vscode-descriptionForeground)';
+                emptyMsg.style.fontStyle = 'italic';
+                grid.appendChild(emptyMsg);
+            }
+
+            // Special handling for empty Starred tab
+            if (sectionName === 'Starred' && keys.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.textContent =
+                    'No starred keys yet. Click the star icon next to any mapping key to add it here.';
+                emptyMsg.style.gridColumn = '1 / -1';
+                emptyMsg.style.padding = '20px';
+                emptyMsg.style.textAlign = 'center';
+                emptyMsg.style.color = 'var(--vscode-descriptionForeground)';
+                emptyMsg.style.fontStyle = 'italic';
+                grid.appendChild(emptyMsg);
+            }
+
+            keys.forEach((key: string) => {
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.gap = '8px';
+
+                // Add star icon
+                const starIcon = document.createElement('span');
+                const isStarred = starredKeys.includes(key);
+                starIcon.className = `codicon ${isStarred ? 'codicon-star-full' : 'codicon-star-empty'}`;
+                starIcon.style.cursor = 'pointer';
+                starIcon.style.color = isStarred
+                    ? 'var(--vscode-icon-foreground)'
+                    : 'var(--vscode-descriptionForeground)';
+                starIcon.title = isStarred ? 'Unstar this key' : 'Star this key';
+                starIcon.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleStarredKey(key);
+                };
+
+                const label = document.createElement('label');
+                label.textContent = THEME_KEY_LABELS[key] || key;
+                label.style.fontSize = '12px';
+                label.style.color = 'var(--vscode-foreground)';
+                label.style.minWidth = '200px';
+                label.style.flexShrink = '0';
+
+                // Get current mapping value (handle both string and object formats)
+                const mappingValue = profile.mappings[key];
+                let currentSlot: string;
+                let currentOpacity: number | undefined;
+                let currentFixedColor: string | undefined;
+
+                if (typeof mappingValue === 'string') {
+                    currentSlot = mappingValue || 'none';
+                    currentOpacity = undefined;
+                    currentFixedColor = undefined;
+                } else if (mappingValue) {
+                    currentSlot = mappingValue.slot || 'none';
+                    currentOpacity = mappingValue.opacity;
+                    currentFixedColor = mappingValue.fixedColor;
+                } else {
+                    currentSlot = 'none';
+                    currentOpacity = undefined;
+                    currentFixedColor = undefined;
+                }
+
+                // Debug: Check what slot was determined
+                if (currentSlot !== 'none') {
+                    console.log(`[Mapping Debug] ${key}: currentSlot = ${currentSlot}`);
+                }
+
+                // Create warning indicator for uncolored keys in Starred tab
+                const warningIndicator = document.createElement('span');
+                const isUncolored = currentSlot === 'none';
+                const isStarredTab = sectionName === 'Starred';
+                if (isStarredTab && isUncolored) {
+                    warningIndicator.className = 'codicon codicon-warning';
+                    warningIndicator.style.color = 'var(--vscode-notificationsWarningIcon-foreground)';
+                    warningIndicator.style.fontSize = '14px';
+                    warningIndicator.title = 'No color assigned';
+                }
+
+                // Container for dropdown (and potentially fixed color picker)
+                const dropdownContainer = document.createElement('div');
+                dropdownContainer.style.flex = '1';
+                dropdownContainer.style.display = 'flex';
+                dropdownContainer.style.gap = '8px';
+                dropdownContainer.style.alignItems = 'center';
+
+                // Create custom dropdown with color swatches
+                const select = document.createElement('div');
+                select.className = 'custom-dropdown';
+                select.title = `Select palette color for ${key}`;
+                select.setAttribute('data-value', currentSlot);
+                select.setAttribute('data-mapping-key', key);
+                select.setAttribute('tabindex', '0');
+                select.setAttribute('role', 'combobox');
+                select.setAttribute('aria-expanded', 'false');
+                select.style.flex = '1';
+                select.style.minWidth = '200px';
+                select.style.position = 'relative';
+                select.style.cursor = 'pointer';
+
+                // Add drop event handlers
+                select.addEventListener('dragover', (e: DragEvent) => {
+                    e.preventDefault();
+                    if (e.dataTransfer) {
+                        e.dataTransfer.dropEffect = 'copy';
+                    }
+                    select.classList.add('drag-hover');
+                });
+
+                select.addEventListener('dragleave', () => {
+                    select.classList.remove('drag-hover');
+                });
+
+                select.addEventListener('drop', (e: DragEvent) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    select.classList.remove('drag-hover');
+
+                    if (!e.dataTransfer) return;
+
+                    const slotName =
+                        e.dataTransfer.getData('application/x-palette-slot') || e.dataTransfer.getData('text/plain');
+                    if (!slotName) return;
+
+                    // Set the dropdown value
+                    select.setAttribute('data-value', slotName);
+                    (select as any).value = slotName;
+
+                    // Trigger change event to update mapping
+                    const changeEvent = new Event('change', { bubbles: true });
+                    select.dispatchEvent(changeEvent);
+                });
+
+                // Selected value display
+                const selectedDisplay = document.createElement('div');
+                selectedDisplay.className = 'dropdown-selected';
+                selectedDisplay.style.background = 'var(--vscode-dropdown-background)';
+                selectedDisplay.style.color = 'var(--vscode-dropdown-foreground)';
+                selectedDisplay.style.border = '1px solid var(--vscode-dropdown-border)';
+                selectedDisplay.style.padding = '4px 20px 4px 4px';
+                selectedDisplay.style.fontSize = '12px';
+                selectedDisplay.style.display = 'flex';
+                selectedDisplay.style.alignItems = 'center';
+                selectedDisplay.style.gap = '6px';
+                selectedDisplay.style.position = 'relative';
+
+                // Arrow indicator
+                const arrow = document.createElement('span');
+                arrow.textContent = '▼';
+                arrow.style.position = 'absolute';
+                arrow.style.right = '4px';
+                arrow.style.fontSize = '8px';
+                arrow.style.pointerEvents = 'none';
+                selectedDisplay.appendChild(arrow);
+
+                // Dropdown options container
+                const optionsContainer = document.createElement('div');
+                optionsContainer.className = 'dropdown-options';
+                optionsContainer.style.display = 'none';
+                optionsContainer.style.position = 'absolute';
+                optionsContainer.style.top = '100%';
+                optionsContainer.style.left = '0';
+                optionsContainer.style.right = '0';
+                optionsContainer.style.background = 'var(--vscode-dropdown-background)';
+                optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
+                optionsContainer.style.maxHeight = '200px';
+                optionsContainer.style.overflowY = 'auto';
+                optionsContainer.style.zIndex = '1000';
+                optionsContainer.style.marginTop = '2px';
+
+                // Build options
+                type DropdownOption = { value: string; label: string; color?: string; isSeparator?: boolean };
+                const options: DropdownOption[] = [];
+
+                // Basic section
+                options.push({ value: '', label: 'Basic', isSeparator: true });
+
+                // Add 'none' option
+                options.push({ value: 'none', label: 'None' });
+
+                // Add 'Fixed Color' option
+                options.push({ value: '__fixed__', label: 'Fixed Color' });
+
+                // Palette Colors section
+                options.push({ value: '', label: 'Palette Colors', isSeparator: true });
+
+                // Add palette slot options (filtered)
+                const allPaletteOptions = Object.keys(profile.palette);
+                const filteredPaletteOptions = getFilteredPaletteOptions(key, allPaletteOptions, currentSlot);
+
+                // Debug: Check if current slot is in the filtered options
+                if (currentSlot !== 'none' && currentSlot !== '__fixed__') {
+                    const isInFiltered = filteredPaletteOptions.includes(currentSlot);
+                    console.log(
+                        `[Mapping Debug] ${key}: currentSlot "${currentSlot}" in filtered options?`,
+                        isInFiltered,
+                    );
+                    if (!isInFiltered) {
+                        console.log(`[Mapping Debug] ${key}: filtered options =`, filteredPaletteOptions);
+                        console.log(`[Mapping Debug] ${key}: all options =`, allPaletteOptions);
+                    }
+                }
+
+                filteredPaletteOptions.forEach((opt) => {
+                    const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
+                    const slotDef = profile.palette[opt];
+                    const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
+                    options.push({ value: opt, label, color });
+
+                    if (opt === currentSlot) {
+                        console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
+                    }
+                });
+
+                // Helper to create option element
+                const createOptionElement = (opt: DropdownOption, isSelected: boolean, index: number) => {
+                    if (opt.isSeparator) {
+                        const separatorDiv = document.createElement('div');
+                        separatorDiv.textContent = opt.label;
+                        separatorDiv.className = 'dropdown-separator';
+                        separatorDiv.style.padding = '4px 8px';
+                        separatorDiv.style.fontWeight = 'bold';
+                        separatorDiv.style.fontSize = '11px';
+                        // Use picker group colors for better visibility/theming
+                        separatorDiv.style.color = 'var(--vscode-pickerGroup-foreground)';
+                        separatorDiv.style.borderBottom = '1px solid var(--vscode-pickerGroup-border)';
+
+                        // Add margin for separation (except first item)
+                        separatorDiv.style.marginTop = index > 0 ? '8px' : '2px';
+                        separatorDiv.style.marginBottom = '2px';
+
+                        separatorDiv.style.textTransform = 'uppercase';
+                        separatorDiv.style.pointerEvents = 'none'; // Make unclickable
+                        return separatorDiv;
+                    }
+
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'dropdown-option';
+                    optionDiv.setAttribute('data-value', opt.value);
+                    optionDiv.style.padding = '4px 8px';
+                    optionDiv.style.cursor = 'pointer';
+                    optionDiv.style.display = 'flex';
+                    optionDiv.style.alignItems = 'center';
+                    optionDiv.style.gap = '8px';
+                    optionDiv.style.fontSize = '12px';
+                    optionDiv.style.whiteSpace = 'nowrap';
+
+                    if (isSelected) {
+                        optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
+                        optionDiv.style.color = 'var(--vscode-list-activeSelectionForeground)';
+                    }
+
+                    // Add color swatch if available
+                    if (opt.color) {
+                        const swatch = document.createElement('div');
+                        swatch.style.width = '16px';
+                        swatch.style.height = '16px';
+                        swatch.style.background = opt.color;
+                        swatch.style.border = '1px solid var(--vscode-panel-border)';
+                        swatch.style.borderRadius = '2px';
+                        swatch.style.flexShrink = '0';
+                        optionDiv.appendChild(swatch);
+                    }
+
+                    const text = document.createElement('span');
+                    text.textContent = opt.label;
+                    text.style.whiteSpace = 'nowrap';
+                    optionDiv.appendChild(text);
+
+                    // Hover effect
+                    optionDiv.addEventListener('mouseenter', () => {
+                        if (!isSelected) {
+                            optionDiv.style.background = 'var(--vscode-list-hoverBackground)';
+                        }
+                    });
+                    optionDiv.addEventListener('mouseleave', () => {
+                        if (!isSelected) {
+                            optionDiv.style.background = '';
+                        }
+                    });
+
+                    return optionDiv;
+                };
+
+                // Update selected display
+                const updateSelectedDisplay = (value: string) => {
+                    const opt = options.find((o) => o.value === value);
+                    if (!opt) return;
+
+                    // Clear current content (except arrow)
+                    while (selectedDisplay.firstChild && selectedDisplay.firstChild !== arrow) {
+                        selectedDisplay.removeChild(selectedDisplay.firstChild);
+                    }
+
+                    // Add color swatch if available
+                    if (opt.color) {
+                        const swatch = document.createElement('div');
+                        swatch.style.width = '16px';
+                        swatch.style.height = '16px';
+                        swatch.style.background = opt.color;
+                        swatch.style.border = '1px solid var(--vscode-panel-border)';
+                        swatch.style.borderRadius = '2px';
+                        swatch.style.flexShrink = '0';
+                        selectedDisplay.insertBefore(swatch, arrow);
+                    }
+
+                    // Add text
+                    const text = document.createElement('span');
+                    text.textContent = opt.label;
+                    selectedDisplay.insertBefore(text, arrow);
+                };
+
+                // Populate options container
+                options.forEach((opt, index) => {
+                    const optionElement = createOptionElement(opt, opt.value === currentSlot, index);
+                    if (!opt.isSeparator) {
+                        optionElement.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            select.setAttribute('data-value', opt.value);
+                            updateSelectedDisplay(opt.value);
+                            optionsContainer.style.display = 'none';
+                            select.setAttribute('aria-expanded', 'false');
+
+                            // Trigger change event
+                            const changeEvent = new Event('change', { bubbles: true });
+                            select.dispatchEvent(changeEvent);
+                        });
+                    }
+                    optionsContainer.appendChild(optionElement);
+                });
+
+                // Close on outside click handler
+                let outsideClickHandler: ((e: MouseEvent) => void) | null = null;
+
+                // Toggle dropdown
+                selectedDisplay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = optionsContainer.style.display === 'block';
+
+                    if (isOpen) {
+                        optionsContainer.style.display = 'none';
+                        select.setAttribute('aria-expanded', 'false');
+                        // Remove outside click handler when closing
+                        if (outsideClickHandler) {
+                            document.removeEventListener('click', outsideClickHandler);
+                            outsideClickHandler = null;
+                        }
+                    } else {
+                        optionsContainer.style.display = 'block';
+                        select.setAttribute('aria-expanded', 'true');
+                        // Add outside click handler when opening
+                        outsideClickHandler = (e: MouseEvent) => {
+                            if (!select.contains(e.target as Node)) {
+                                optionsContainer.style.display = 'none';
+                                select.setAttribute('aria-expanded', 'false');
+                                if (outsideClickHandler) {
+                                    document.removeEventListener('click', outsideClickHandler);
+                                    outsideClickHandler = null;
+                                }
+                            }
+                        };
+                        // Use setTimeout to avoid immediate triggering
+                        setTimeout(() => {
+                            if (outsideClickHandler) {
+                                document.addEventListener('click', outsideClickHandler);
+                            }
+                        }, 0);
+                    }
+                });
+
+                // Keyboard support
+                select.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        selectedDisplay.click();
+                    }
+                });
+
+                // Initialize display
+                updateSelectedDisplay(currentSlot);
+
+                select.appendChild(selectedDisplay);
+                select.appendChild(optionsContainer);
+
+                // Helper to get value like a select element
+                (select as any).value = currentSlot;
+                Object.defineProperty(select, 'value', {
+                    get() {
+                        return this.getAttribute('data-value');
+                    },
+                    set(val) {
+                        this.setAttribute('data-value', val);
+                        updateSelectedDisplay(val);
+                    },
+                });
+
+                // Create fixed color picker (hidden by default)
+                const fixedColorPicker = document.createElement('div');
+                fixedColorPicker.style.display = currentSlot === '__fixed__' ? 'flex' : 'none';
+                fixedColorPicker.style.alignItems = 'center';
+                fixedColorPicker.style.gap = '5px';
+                fixedColorPicker.style.flex = '1';
+
+                const colorInput = document.createElement('input');
+                colorInput.type = 'color';
+                colorInput.className = 'native-color-input';
+                colorInput.value = convertColorToHex(currentFixedColor || '#4A90E2');
+                colorInput.title = 'Click to use a color picker, shift-click to choose a random color';
+
+                const textInput = document.createElement('input');
+                textInput.type = 'text';
+                textInput.className = 'color-input text-input';
+                textInput.value = currentFixedColor || '#4A90E2';
+                textInput.placeholder = 'e.g., blue, #4A90E2';
+                textInput.style.flex = '1';
+                textInput.style.minWidth = '50px';
+                textInput.style.maxWidth = '90px';
+
+                fixedColorPicker.appendChild(colorInput);
+                fixedColorPicker.appendChild(textInput);
+
+                // Update select width when fixed color is shown/hidden
+                const updateSelectWidth = () => {
+                    if (select.getAttribute('data-value') === '__fixed__') {
+                        select.style.flex = '0 0 95px';
+                        select.style.width = '95px';
+                        fixedColorPicker.style.display = 'flex';
+                    } else {
+                        select.style.flex = '1';
+                        select.style.minWidth = 'auto';
+                        fixedColorPicker.style.display = 'none';
+                    }
+                };
+                updateSelectWidth();
+
+                dropdownContainer.appendChild(select);
+                dropdownContainer.appendChild(fixedColorPicker);
+
+                // Opacity control
+                const opacityContainer = document.createElement('div');
+                opacityContainer.style.display = 'flex';
+                opacityContainer.style.alignItems = 'center';
+                opacityContainer.style.gap = '6px';
+                opacityContainer.style.minWidth = '140px';
+
+                const opacityLabel = document.createElement('span');
+                opacityLabel.textContent = 'α:';
+                opacityLabel.style.fontSize = '11px';
+                opacityLabel.style.color = 'var(--vscode-descriptionForeground)';
+
+                const opacitySlider = document.createElement('input');
+                opacitySlider.type = 'range';
+                opacitySlider.className = 'opacity-slider';
+                opacitySlider.min = '0';
+                opacitySlider.max = '100';
+                opacitySlider.step = '5';
+                const initialOpacity = currentOpacity !== undefined ? currentOpacity : 1;
+                opacitySlider.value = Math.round(initialOpacity * 100).toString();
+                opacitySlider.style.flex = '1';
+                opacitySlider.style.minWidth = '70px';
+
+                // Get the color from the selected palette slot to create gradient
+                const updateSliderGradient = () => {
+                    const slotName = select.getAttribute('data-value') || 'none';
+                    if (slotName === 'none') {
+                        // Disable and gray out opacity controls when 'none' is selected
+                        opacitySlider.disabled = true;
+                        opacitySlider.style.opacity = '0.4';
+                        opacitySlider.style.cursor = 'not-allowed';
+                        opacitySlider.style.setProperty('--slider-color', '#808080');
+                        opacityValue.style.opacity = '0.4';
+                        opacityLabel.style.opacity = '0.4';
+                    } else {
+                        // Enable opacity controls
+                        opacitySlider.disabled = false;
+                        opacitySlider.style.opacity = '1';
+                        opacitySlider.style.cursor = 'pointer';
+                        opacityValue.style.opacity = '1';
+                        opacityLabel.style.opacity = '1';
+
+                        if (slotName === '__fixed__') {
+                            // Use the fixed color
+                            const color = convertColorToHex(textInput.value);
+                            opacitySlider.style.setProperty('--slider-color', color);
+                        } else if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                            const profile = currentConfig.advancedProfiles[selectedProfileName];
+                            const slotDef = profile.palette[slotName];
+                            if (slotDef && slotDef.value) {
+                                const color = convertColorToHex(slotDef.value);
+                                opacitySlider.style.setProperty('--slider-color', color);
+                            }
+                        }
+                    }
+                };
+
+                const opacityValue = document.createElement('span');
+                opacityValue.textContent = Math.round(initialOpacity * 100) + '%';
+                opacityValue.style.fontSize = '11px';
+                opacityValue.style.minWidth = '35px';
+                opacityValue.style.color = 'var(--vscode-descriptionForeground)';
+
+                // Call after all elements are created
+                updateSliderGradient();
+
+                opacityContainer.appendChild(opacityLabel);
+                opacityContainer.appendChild(opacitySlider);
+                opacityContainer.appendChild(opacityValue);
+
+                // Update function for both select and opacity
+                const updateMapping = () => {
+                    if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                        const newSlot = select.getAttribute('data-value') || 'none';
+                        const newOpacity = parseInt(opacitySlider.value) / 100;
+
+                        if (newSlot === 'none') {
+                            // Store 'none' explicitly to keep it in the Colored tab
+                            currentConfig.advancedProfiles[selectedProfileName].mappings[key] = 'none';
+                        } else if (newSlot === '__fixed__') {
+                            // Store fixed color
+                            const mappingData: MappingValue = {
+                                slot: '__fixed__',
+                                fixedColor: textInput.value,
+                            };
+                            if (newOpacity < 1 && newOpacity >= 0) {
+                                mappingData.opacity = newOpacity;
+                            }
+                            currentConfig.advancedProfiles[selectedProfileName].mappings[key] = mappingData;
+                        } else {
+                            // Only store opacity if it's not 1.0 (default)
+                            if (newOpacity < 1 && newOpacity >= 0) {
+                                currentConfig.advancedProfiles[selectedProfileName].mappings[key] = {
+                                    slot: newSlot,
+                                    opacity: newOpacity,
+                                };
+                            } else {
+                                // Store as simple string for backwards compatibility when opacity is 1.0
+                                currentConfig.advancedProfiles[selectedProfileName].mappings[key] = newSlot;
+                            }
+                        }
+                        saveProfiles();
+                    }
+                };
+
+                // Update display value when slider changes
+                opacitySlider.oninput = () => {
+                    opacityValue.textContent = opacitySlider.value + '%';
+                };
+
+                // Fixed color picker event handlers
+                colorInput.onchange = () => {
+                    textInput.value = colorInput.value;
+                    updateMapping();
+                    updateSliderGradient();
+                };
+
+                textInput.oninput = () => {
+                    const hexColor = convertColorToHex(textInput.value);
+                    if (hexColor) {
+                        colorInput.value = hexColor;
+                    }
+                };
+
+                textInput.onchange = () => {
+                    updateMapping();
+                    updateSliderGradient();
+                };
+
+                select.onchange = () => {
+                    updateSelectWidth();
+                    updateMapping();
+                    updateSliderGradient();
+
+                    // Update warning indicator visibility
+                    const newSlot = select.getAttribute('data-value') || 'none';
+                    if (isStarredTab) {
+                        if (newSlot === 'none') {
+                            warningIndicator.className = 'codicon codicon-warning';
+                            warningIndicator.style.color = 'var(--vscode-notificationsWarningIcon-foreground)';
+                            warningIndicator.style.fontSize = '14px';
+                            warningIndicator.title = 'No color assigned';
+                            if (!row.contains(warningIndicator)) {
+                                row.insertBefore(warningIndicator, dropdownContainer);
+                            }
+                        } else {
+                            if (row.contains(warningIndicator)) {
+                                row.removeChild(warningIndicator);
+                            }
+                        }
+                    }
+
+                    const keysToSync: string[] = [];
+
+                    // Only sync if the selected slot is congruous with the current key
+                    // This prevents syncing when user intentionally selects incongruous mappings
+                    const isFgBgCongruous = isSlotCongruousFgBg(key, newSlot);
+                    const isActiveInactiveCongruous = isSlotCongruousActiveInactive(key, newSlot);
+
+                    // Collect all keys to sync based on enabled options and congruity
+                    if (syncFgBgEnabled && isFgBgCongruous) {
+                        const fgBgKey = findCorrespondingFgBg(key);
+                        if (fgBgKey) keysToSync.push(fgBgKey);
+                    }
+
+                    if (syncActiveInactiveEnabled && isActiveInactiveCongruous) {
+                        const activeInactiveKey = findCorrespondingActiveInactive(key);
+                        if (activeInactiveKey) keysToSync.push(activeInactiveKey);
+                    }
+
+                    // If both syncs are enabled and slot is congruous for both, also sync the diagonal (e.g., activeFg -> inactiveBg)
+                    if (syncFgBgEnabled && syncActiveInactiveEnabled && isFgBgCongruous && isActiveInactiveCongruous) {
+                        const fgBgKey = findCorrespondingFgBg(key);
+                        if (fgBgKey) {
+                            const diagonalKey = findCorrespondingActiveInactive(fgBgKey);
+                            if (diagonalKey && !keysToSync.includes(diagonalKey)) {
+                                keysToSync.push(diagonalKey);
+                            }
+                        }
+                    }
+
+                    // Update all corresponding elements
+                    keysToSync.forEach((correspondingKey) => {
+                        let correspondingSlot = newSlot;
+
+                        // Map the slot appropriately based on the transformation
+                        if (correspondingSlot !== 'none' && correspondingSlot !== '__fixed__') {
+                            // Determine what transformation(s) are needed
+                            const isFgBgPair = findCorrespondingFgBg(key) === correspondingKey;
+                            const isActiveInactivePair = findCorrespondingActiveInactive(key) === correspondingKey;
+                            const isDiagonal = !isFgBgPair && !isActiveInactivePair; // The diagonal needs BOTH transformations
+
+                            // Apply fg/bg transformation if this is an fg/bg pair OR part of diagonal
+                            if (isFgBgPair || isDiagonal) {
+                                const fgBgSlot = getCorrespondingPaletteSlot(correspondingSlot);
+                                if (fgBgSlot) correspondingSlot = fgBgSlot;
+                            }
+
+                            // Apply active/inactive transformation if this is an active/inactive pair OR part of diagonal
+                            if (isActiveInactivePair || isDiagonal) {
+                                const activeInactiveSlot = getCorrespondingActiveInactiveSlot(correspondingSlot);
+                                if (activeInactiveSlot) correspondingSlot = activeInactiveSlot;
+                            }
+                        }
+
+                        // Find and update the corresponding select element
+                        const allSelects = document.querySelectorAll('.custom-dropdown');
+                        allSelects.forEach((otherSelect: any) => {
+                            if (otherSelect.title === `Select palette color for ${correspondingKey}`) {
+                                otherSelect.setAttribute('data-value', correspondingSlot);
+                                // Update display using the value property setter
+                                if (otherSelect.value !== undefined) {
+                                    otherSelect.value = correspondingSlot;
+                                }
+                                // Trigger change event to update the mapping (but prevent recursive syncing)
+                                const tempFgBg = syncFgBgEnabled;
+                                const tempActiveInactive = syncActiveInactiveEnabled;
+                                syncFgBgEnabled = false;
+                                syncActiveInactiveEnabled = false;
+                                otherSelect.dispatchEvent(new Event('change'));
+                                syncFgBgEnabled = tempFgBg;
+                                syncActiveInactiveEnabled = tempActiveInactive;
+                            }
+                        });
+                    });
+                };
+                opacitySlider.onchange = updateMapping;
+
+                row.appendChild(starIcon);
+                row.appendChild(label);
+                if (isStarredTab && isUncolored) {
+                    row.appendChild(warningIndicator);
+                }
+                row.appendChild(dropdownContainer);
+                row.appendChild(opacityContainer);
+                grid.appendChild(row);
+
+                // Add separator after every odd-indexed item (after first column items)
+                const index = keys.indexOf(key);
+                if (index % 2 === 0 && index < keys.length - 1) {
+                    const separator = document.createElement('div');
+                    separator.style.gridRow = `${Math.floor(index / 2) + 1} / span 1`;
+                    separator.style.gridColumn = '2';
+                    separator.style.background = 'var(--vscode-panel-border)';
+                    separator.style.width = '1px';
+                    separator.style.height = '100%';
+                    separator.style.marginLeft = '10px';
+                    separator.style.marginRight = '10px';
+                    grid.appendChild(separator);
+                }
+            });
+            contentDiv.appendChild(grid);
+            tabsContent.appendChild(contentDiv);
+        });
+
+        mappingsContainer.appendChild(tabsHeader);
+        mappingsContainer.appendChild(tabsContent);
+
+        // Activate the selected tab
+        if (tabToActivate) {
+            tabToActivate.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+            tabToActivate.style.fontWeight = 'bold';
+        }
+
+        // Update checkbox states (but don't re-add event listeners)
+        updateProfileEditorCheckboxStates();
+    }
+}
+
+function updateProfileEditorCheckboxStates() {
+    const syncFgBgCheckbox = document.getElementById('syncFgBgCheckbox') as HTMLInputElement;
+    if (syncFgBgCheckbox) {
+        syncFgBgCheckbox.checked = syncFgBgEnabled;
+    }
+
+    const syncActiveInactiveCheckbox = document.getElementById('syncActiveInactiveCheckbox') as HTMLInputElement;
+    if (syncActiveInactiveCheckbox) {
+        syncActiveInactiveCheckbox.checked = syncActiveInactiveEnabled;
+    }
+
+    const limitOptionsCheckbox = document.getElementById('limitOptionsCheckbox') as HTMLInputElement;
+    if (limitOptionsCheckbox) {
+        limitOptionsCheckbox.checked = limitOptionsEnabled;
+    }
+}
+
+function initializeProfileEditorCheckboxListeners() {
+    // Set up sync checkbox event listeners (only called once during initialization)
+    const syncFgBgCheckbox = document.getElementById('syncFgBgCheckbox') as HTMLInputElement;
+    if (syncFgBgCheckbox && !syncFgBgCheckbox.dataset.listenerAttached) {
+        syncFgBgCheckbox.dataset.listenerAttached = 'true';
+        syncFgBgCheckbox.addEventListener('change', () => {
+            syncFgBgEnabled = syncFgBgCheckbox.checked;
+            localStorage.setItem('syncFgBgEnabled', syncFgBgEnabled.toString());
+        });
+    }
+
+    const syncActiveInactiveCheckbox = document.getElementById('syncActiveInactiveCheckbox') as HTMLInputElement;
+    if (syncActiveInactiveCheckbox && !syncActiveInactiveCheckbox.dataset.listenerAttached) {
+        syncActiveInactiveCheckbox.dataset.listenerAttached = 'true';
+        syncActiveInactiveCheckbox.addEventListener('change', () => {
+            syncActiveInactiveEnabled = syncActiveInactiveCheckbox.checked;
+            localStorage.setItem('syncActiveInactiveEnabled', syncActiveInactiveEnabled.toString());
+        });
+    }
+
+    const limitOptionsCheckbox = document.getElementById('limitOptionsCheckbox') as HTMLInputElement;
+    if (limitOptionsCheckbox && !limitOptionsCheckbox.dataset.listenerAttached) {
+        limitOptionsCheckbox.dataset.listenerAttached = 'true';
+        limitOptionsCheckbox.addEventListener('change', () => {
+            limitOptionsEnabled = limitOptionsCheckbox.checked;
+            localStorage.setItem('limitOptionsEnabled', limitOptionsEnabled.toString());
+            // Re-render the profile editor to update all dropdowns
+            if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
+                renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+            }
+        });
+    }
+}
+
+function createPaletteSlotElement(
+    key: string,
+    def: PaletteSlotDefinition,
+    onChange: (d: PaletteSlotDefinition) => void,
+): HTMLElement {
+    const el = document.createElement('div');
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.gap = '2px';
+    el.className = 'palette-slot-draggable';
+    el.setAttribute('draggable', 'true');
+    el.setAttribute('data-slot-name', key);
+    el.style.cursor = 'grab';
+
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.justifyContent = 'space-between';
+    row.style.gap = '5px';
+
+    const title = document.createElement('span');
+    title.textContent = (PALETTE_SLOT_LABELS[key] || key) + ':';
+    title.style.fontWeight = 'bold';
+    title.style.fontSize = '12px';
+    row.appendChild(title);
+
+    // Add drag event handlers
+    el.addEventListener('dragstart', (e: DragEvent) => {
+        if (!e.dataTransfer) return;
+
+        el.style.opacity = '0.5';
+        el.style.cursor = 'grabbing';
+
+        // Store slot name and color
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', key);
+        e.dataTransfer.setData('application/x-palette-slot', key);
+        e.dataTransfer.setData('application/x-palette-color', convertColorToHex(def.value || '#000000'));
+
+        // Create drag preview
+        const dragPreview = document.createElement('div');
+        dragPreview.style.position = 'absolute';
+        dragPreview.style.left = '-1000px';
+        dragPreview.style.padding = '8px 12px';
+        dragPreview.style.background = 'var(--vscode-editor-background)';
+        dragPreview.style.border = '2px solid var(--vscode-focusBorder)';
+        dragPreview.style.borderRadius = '4px';
+        dragPreview.style.display = 'flex';
+        dragPreview.style.alignItems = 'center';
+        dragPreview.style.gap = '8px';
+        dragPreview.style.fontSize = '12px';
+
+        const colorBox = document.createElement('div');
+        colorBox.style.width = '20px';
+        colorBox.style.height = '20px';
+        colorBox.style.backgroundColor = convertColorToHex(def.value || '#000000');
+        colorBox.style.border = '1px solid var(--vscode-panel-border)';
+        colorBox.style.borderRadius = '2px';
+
+        const label = document.createElement('span');
+        label.textContent = PALETTE_SLOT_LABELS[key] || key;
+        label.style.color = 'var(--vscode-foreground)';
+
+        dragPreview.appendChild(colorBox);
+        dragPreview.appendChild(label);
+        document.body.appendChild(dragPreview);
+        e.dataTransfer.setDragImage(dragPreview, 0, 0);
+
+        // Clean up drag preview after drag starts
+        setTimeout(() => dragPreview.remove(), 0);
+
+        // Highlight compatible drop zones
+        highlightCompatibleDropZones(key, true);
+    });
+
+    el.addEventListener('dragend', () => {
+        el.style.opacity = '1';
+        el.style.cursor = 'grab';
+        highlightCompatibleDropZones('', false);
+    });
+
+    // Color input controls (matching the Rules tab)
+    const colorContainer = document.createElement('div');
+    colorContainer.className = 'color-input-container native-picker';
+    colorContainer.style.display = 'flex';
+    colorContainer.style.alignItems = 'center';
+    colorContainer.style.gap = '5px';
+    colorContainer.style.justifyContent = 'flex-end';
+    colorContainer.style.flex = '1';
+
+    // Native color picker
+    const colorPicker = document.createElement('input');
+    colorPicker.type = 'color';
+    colorPicker.className = 'native-color-input';
+    colorPicker.value = convertColorToHex(def.value || '#000000');
+    colorPicker.title = 'Click to use a color picker, shift-click to choose a random color';
+    colorPicker.onchange = () => {
+        def.value = colorPicker.value;
+        def.source = 'fixed';
+        textInput.value = colorPicker.value;
+        onChange(def);
+    };
+
+    // Text input
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.className = 'color-input text-input';
+    textInput.value = def.value || '#000000';
+    textInput.placeholder = 'e.g., blue, #4A90E2'; // No profile example here - palette slots are color definitions
+    textInput.style.maxWidth = '90px';
+    textInput.setAttribute('data-palette-slot', 'true'); // Mark as palette slot input
+
+    textInput.oninput = () => {
+        const hexColor = convertColorToHex(textInput.value);
+        if (hexColor) {
+            colorPicker.value = hexColor;
+        }
+    };
+
+    textInput.onchange = () => {
+        def.value = textInput.value;
+        def.source = 'fixed';
+        onChange(def);
+    };
+
+    colorContainer.appendChild(colorPicker);
+    colorContainer.appendChild(textInput);
+
+    row.appendChild(colorContainer);
+    el.appendChild(row);
+
+    return el;
+}
+
+// Helper function to update a combined pair swatch
+function updatePairSwatch(swatch: HTMLElement, bgColor: string, fgColor: string) {
+    const bgHex = convertColorToHex(bgColor);
+    const fgHex = convertColorToHex(fgColor);
+
+    swatch.style.backgroundColor = bgHex;
+    swatch.style.color = fgHex;
+    swatch.textContent = 'Sample';
+}
+
+// Helper function to get contrasting text color (black or white)
+function getContrastingColor(hexColor: string): string {
+    // Convert hex to RGB
+    const r = parseInt(hexColor.slice(1, 3), 16);
+    const g = parseInt(hexColor.slice(3, 5), 16);
+    const b = parseInt(hexColor.slice(5, 7), 16);
+
+    // Calculate relative luminance
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    // Return black for light colors, white for dark colors
+    return luminance > 0.5 ? '#000000' : '#FFFFFF';
+}
+
+function renameProfile(oldName: string, newName: string) {
+    if (oldName === newName) return;
+    if (!newName) return;
+
+    // Check if new name is a valid HTML color
+    if (isHtmlColor(newName)) {
+        vscode.postMessage({
+            command: 'showError',
+            data: { message: 'Profile name cannot be a valid HTML color name (e.g., "red", "blue", "#fff", etc.)' },
+        });
+        // Reset the input to old name
+        const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
+        if (nameInput) nameInput.value = oldName;
+        return;
+    }
+
+    if (currentConfig.advancedProfiles[newName]) {
+        vscode.postMessage({
+            command: 'showError',
+            data: { message: 'A profile with this name already exists.' },
+        });
+        // Reset the input to old name
+        const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
+        if (nameInput) nameInput.value = oldName;
+        return;
+    }
+
+    currentConfig.advancedProfiles[newName] = currentConfig.advancedProfiles[oldName];
+    delete currentConfig.advancedProfiles[oldName];
+    selectedProfileName = newName;
+
+    // Update all references to the old profile name in repo rules
+    if (currentConfig.repoRules) {
+        currentConfig.repoRules.forEach((rule) => {
+            if (rule.profileName === oldName) {
+                rule.profileName = newName;
+            }
+            if (rule.primaryColor === oldName) {
+                rule.primaryColor = newName;
+            }
+            if (rule.branchColor === oldName) {
+                rule.branchColor = newName;
+            }
+        });
+    }
+
+    // Update all references in shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                table.rules.forEach((rule) => {
+                    if (rule.profileName === oldName) {
+                        rule.profileName = newName;
+                    }
+                    if (rule.color === oldName) {
+                        rule.color = newName;
+                    }
+                });
+            }
+        }
+    }
+
+    saveProfiles();
+    sendConfiguration();
+    renderProfiles(currentConfig.advancedProfiles);
+    selectProfile(newName);
+
+    // Re-render rules to update any references to the renamed profile
+    if (currentConfig.repoRules) {
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+    }
+    renderBranchRulesForSelectedRepo();
+}
+
+function deleteProfile(profileName: string) {
+    if (!profileName || !currentConfig.advancedProfiles[profileName]) return;
+
+    // Confirm deletion
+    vscode.postMessage({
+        command: 'confirmDelete',
+        data: {
+            type: 'profile',
+            name: profileName,
+        },
+    });
+}
+
+function duplicateProfile(profileName: string) {
+    if (!profileName || !currentConfig.advancedProfiles[profileName]) return;
+
+    // Create a new profile name
+    let newName = profileName + ' (copy)';
+    let counter = 1;
+    while (currentConfig.advancedProfiles[newName]) {
+        counter++;
+        newName = profileName + ' (copy ' + counter + ')';
+    }
+
+    // Deep clone the profile
+    const originalProfile = currentConfig.advancedProfiles[profileName];
+    currentConfig.advancedProfiles[newName] = JSON.parse(JSON.stringify(originalProfile));
+
+    selectedProfileName = newName;
+    saveProfiles();
+    renderProfiles(currentConfig.advancedProfiles);
+    selectProfile(newName);
+}
+
+function confirmDeleteProfile(profileName: string) {
+    if (!profileName || !currentConfig.advancedProfiles[profileName]) return;
+
+    delete currentConfig.advancedProfiles[profileName];
+
+    // Select another profile if available
+    const remainingProfiles = Object.keys(currentConfig.advancedProfiles);
+    if (remainingProfiles.length > 0) {
+        selectedProfileName = remainingProfiles[0];
+    } else {
+        selectedProfileName = null;
+    }
+
+    saveProfiles();
+    renderProfiles(currentConfig.advancedProfiles);
+    if (selectedProfileName) {
+        selectProfile(selectedProfileName);
+    }
+}
+
+function saveProfiles() {
+    vscode.postMessage({
+        command: 'updateAdvancedProfiles',
+        data: {
+            advancedProfiles: currentConfig.advancedProfiles,
+        },
+    });
+}

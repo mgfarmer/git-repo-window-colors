@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
     "icon": "img/grwc-icon.png",
-    "version": "1.5.4",
+    "version": "1.5.16",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -57,6 +57,11 @@
                 "category": "GRWC"
             },
             {
+                "command": "windowColors.clearFirstTimeFlag",
+                "title": "Clear First Time Flag (Debug)",
+                "category": "GRWC"
+            },
+            {
                 "command": "windowColors.exportConfig",
                 "title": "Export Configuration",
                 "category": "GRWC"
@@ -74,10 +79,49 @@
                 "properties": {
                     "windowColors.repoConfigurationList": {
                         "order": 1,
-                        "markdownDescription": "Entries in this list are optional. Each entry in the ordered list has the form `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]` (i.e. `myrepo:blue` or `myrepo/main:blue/green`).  The `repo-qualifier` is required. The repository qualifier is a simple string. If this string is found in the repository URL as given by `git config --get remote.origin.url`, then a match is made.  The first match found  will be used.  The `primary-color` is the color associated with the repository.  This color will be used to color the window title bar and activity bar (when not using branch colors).\n\nThe `default-branch` is optional and represents the default GitHub branch for the repository. If the `default-branch` is specified then the activity bar will be shown in a different color when you are not working on the default branch. This other color is specified either by the `branch-color` setting, if provided, or automatically determined using the `#windowColors.automaticBranchIndicatorColorKnob#` setting. You can invert the branch coloring logic using `#windowColors.invertBranchColorLogic#`\n\nColors can be specified in any form recognized by the Javascript Color class.  See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).\n\nYou can use whitespace to make the list more readable.  All whitespace will be stripped for processing.\n\nFormat Reference: `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]`",
+                        "markdownDescription": "Repository-specific color rules. Each rule can be defined as a JSON object with properties `repoQualifier` (required), `primaryColor` (required), `profileName`, and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"repoQualifier\": \"myrepo\",\n  \"primaryColor\": \"blue\",\n  \"enabled\": true,\n  \"branchRules\": [\n    {\"pattern\": \"^main$\", \"color\": \"green\"}\n  ]\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<repo-qualifier>:<primary-color>` (e.g., `myrepo:blue`)\n\nThe `repoQualifier` is matched against the repository URL from `git config --get remote.origin.url`. The first matching rule is used. Colors can be CSS color names, hex values, or profile names. See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).",
                         "type": "array",
                         "items": {
-                            "type": "string"
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "description": "Legacy format: <repo-qualifier>:<primary-color>"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "repoQualifier": {
+                                            "type": "string",
+                                            "description": "Repository identifier (matched against git remote URL)"
+                                        },
+                                        "primaryColor": {
+                                            "type": "string",
+                                            "description": "Primary color for title bar and activity bar (CSS color or profile name)"
+                                        },
+                                        "profileName": {
+                                            "type": "string",
+                                            "description": "Advanced profile name to use"
+                                        },
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "default": true,
+                                            "description": "Whether this rule is enabled"
+                                        },
+                                        "branchTableName": {
+                                            "type": "string",
+                                            "description": "Name of the shared branch table to use for this repository"
+                                        },
+                                        "branchRules": {
+                                            "type": "array",
+                                            "description": "Legacy local branch rules for this repository (deprecated, use branchTableName instead)"
+                                        }
+                                    },
+                                    "required": [
+                                        "repoQualifier",
+                                        "primaryColor"
+                                    ]
+                                }
+                            ]
                         },
                         "scope": "application",
                         "uniqueItems": true
@@ -89,19 +133,39 @@
                         "description": "When no rules match, remove any colors that were set by this extension.  This is useful if you want to use the default colors for a repo that is not in the list. If this is unchecked, then you will need to remove any managed colors manually.",
                         "scope": "application"
                     },
-                    "windowColors.invertBranchColorLogic": {
-                        "order": 3,
-                        "type": "boolean",
-                        "default": "false",
-                        "description": "Use the branch color to indicate when you are working in the default branch.  This is only used when a default branch is specified for the repo and does not apply to the branch colors defined in `#windowColors.branchConfigurationList#`",
-                        "scope": "application"
-                    },
                     "windowColors.branchConfigurationList": {
                         "order": 4,
-                        "markdownDescription": "Each entry in the ordered list has the form `<branch-pattern>:<branch-color>` (i.e. `feature-.*:blue` or 'bug-.*:red' or 'mybranch').  If a branch pattern in this table is matched against the current working branch, then this setting will override any branch coloring from the repo configuration list above.  The first match found is used. Branches defined in this list are not tied to a repo, meaning that if you are working on any repo whos working branch matches the pattern the coloring will be applied.\n\nFormat Reference: `<branch-pattern>:<branch-color>`",
+                        "markdownDescription": "Branch-specific color rules that override repository rules. Each rule can be defined as a JSON object with properties `pattern` (required, regex), `color` (required), and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"pattern\": \"^feature/.*\",\n  \"color\": \"green\",\n  \"enabled\": true\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<branch-pattern>:<branch-color>` (e.g., `feature-.*:blue` or `bug-.*:red`)\n\nBranch patterns are regex expressions matched against the current branch name. The first matching rule is used. These rules apply to all repositories.",
                         "type": "array",
                         "items": {
-                            "type": "string"
+                            "anyOf": [
+                                {
+                                    "type": "string",
+                                    "description": "Legacy format: <branch-pattern>:<branch-color>"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "pattern": {
+                                            "type": "string",
+                                            "description": "Regex pattern to match branch name"
+                                        },
+                                        "color": {
+                                            "type": "string",
+                                            "description": "Branch color (CSS color or profile name)"
+                                        },
+                                        "enabled": {
+                                            "type": "boolean",
+                                            "default": true,
+                                            "description": "Whether this rule is enabled"
+                                        }
+                                    },
+                                    "required": [
+                                        "pattern",
+                                        "color"
+                                    ]
+                                }
+                            ]
                         },
                         "default": [
                             "^(bug/|bug-.*):red",
@@ -110,6 +174,47 @@
                         ],
                         "scope": "application",
                         "uniqueItems": true
+                    },
+                    "windowColors.sharedBranchTables": {
+                        "order": 5,
+                        "markdownDescription": "Shared branch rule tables that can be referenced by repository rules. Each table contains a set of branch rules that can be reused across multiple repositories.\n\n**Format:**\n```json\n{\n  \"Default Rules\": {\n    \"rules\": [\n      {\"pattern\": \"^main$\", \"color\": \"blue\", \"enabled\": true},\n      {\"pattern\": \"^feature/.*\", \"color\": \"green\", \"enabled\": true}\n    ]\n  },\n  \"Custom Table\": {\n    \"rules\": [\n      {\"pattern\": \"^dev$\", \"color\": \"orange\", \"enabled\": true}\n    ]\n  }\n}\n```\n\nRepository rules reference tables using the `branchTableName` property. Tables can be created, renamed, and deleted through the configuration UI.",
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "rules": {
+                                    "type": "array",
+                                    "description": "Array of branch rules in this table",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "pattern": {
+                                                "type": "string",
+                                                "description": "Regex pattern to match branch name"
+                                            },
+                                            "color": {
+                                                "type": "string",
+                                                "description": "Branch color (CSS color or profile name)"
+                                            },
+                                            "enabled": {
+                                                "type": "boolean",
+                                                "default": true,
+                                                "description": "Whether this rule is enabled"
+                                            }
+                                        },
+                                        "required": [
+                                            "pattern",
+                                            "color"
+                                        ]
+                                    }
+                                }
+                            },
+                            "required": [
+                                "rules"
+                            ]
+                        },
+                        "default": {},
+                        "scope": "application"
                     },
                     "windowColors.colorInactiveTitlebar": {
                         "order": 8,
@@ -141,27 +246,18 @@
                         "description": "Lighten or darken the non-title bar colors by this factor between -10 and 10. A value of zero is no difference.",
                         "scope": "application"
                     },
+                    "windowColors.configSchemaVersion": {
+                        "type": "number",
+                        "default": 1,
+                        "markdownDescription": "**Internal use only.** Current configuration schema version. Do not modify manually.",
+                        "scope": "application",
+                        "order": 9999
+                    },
                     "windowColors.applyBranchColorToTabsAndStatusBar": {
                         "order": 19,
                         "type": "boolean",
                         "default": "false",
                         "description": "In addition to the Activity Bar, apply the branch color to the editor tabs and status bar",
-                        "scope": "application"
-                    },
-                    "windowColors.automaticBranchIndicatorColorKnob": {
-                        "order": 24,
-                        "type": "number",
-                        "maximum": 359,
-                        "minimum": -359,
-                        "default": 60,
-                        "description": "When repository settings does not spcify a branch color, use this knob to control the hue rotation of the repository color to automatically set the branch color.  Smaller values will be similar to the repository color.  A value of 180 is the 'opposite' of the repository color on the color wheel.",
-                        "scope": "application"
-                    },
-                    "windowColors.showBranchColumns": {
-                        "order": 25,
-                        "type": "boolean",
-                        "default": false,
-                        "description": "Show the Default Branch and Branch Color columns in the Repository Rules table. When unchecked, these branch-related columns are hidden to provide a more compact view.",
                         "scope": "application"
                     },
                     "windowColors.showStatusIconWhenNoRuleMatches": {
@@ -178,19 +274,74 @@
                         "description": "When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules.",
                         "scope": "application"
                     },
-                    "windowColors.lastExportPath": {
+                    "windowColors.enableProfilesAdvanced": {
                         "order": 28,
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Enable the advanced Profiles feature. When enabled, the Profiles tab will be visible in the configuration interface, allowing you to define reusable color palettes and map them to specific UI elements.",
+                        "scope": "application"
+                    },
+                    "windowColors.previewSelectedRepoRule": {
+                        "order": 29,
+                        "type": "boolean",
+                        "default": false,
+                        "description": "When enabled, the currently selected repository rule will be previewed in the current window, regardless of whether the workspace matches that rule. This allows you to test how a rule looks before applying it to a repository.",
+                        "scope": "application"
+                    },
+                    "windowColors.lastExportPath": {
+                        "order": 30,
                         "type": "string",
                         "default": "",
                         "description": "Last directory used for exporting configuration (internal setting)",
                         "scope": "application"
                     },
                     "windowColors.lastImportPath": {
-                        "order": 29,
+                        "order": 31,
                         "type": "string",
                         "default": "",
                         "description": "Last directory used for importing configuration (internal setting)",
                         "scope": "application"
+                    },
+                    "windowColors.advancedProfiles": {
+                        "order": 32,
+                        "markdownDescription": "Named configuration profiles for Advanced Mode.",
+                        "type": "object",
+                        "default": {},
+                        "scope": "application",
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "palette": {
+                                    "type": "object",
+                                    "description": "Definitions for the reference color slots",
+                                    "additionalProperties": {
+                                        "type": "object",
+                                        "properties": {
+                                            "source": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "fixed"
+                                                ]
+                                            },
+                                            "value": {
+                                                "type": "string",
+                                                "description": "Hex color value (for source='fixed')"
+                                            }
+                                        },
+                                        "required": [
+                                            "source"
+                                        ]
+                                    }
+                                },
+                                "mappings": {
+                                    "type": "object",
+                                    "description": "Maps VS Code keys to palette slots",
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -206,6 +357,7 @@
         "publish-prerelease": "yarn version --patch --no-git-tag-version && yarn vsce publish --pre-release"
     },
     "devDependencies": {
+        "@types/chroma-js": "^2.4.4",
         "@types/color": "^4.2.0",
         "@types/fs-extra": "^11.0.4",
         "@types/mocha": "^10.0.7",
@@ -219,7 +371,9 @@
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
+        "@vscode/codicons": "^0.0.44",
         "@vscode/vsce": "^3.2.1",
+        "chroma-js": "^3.1.2",
         "color": "^3.2.1",
         "fs-extra": "^11.2.0"
     }

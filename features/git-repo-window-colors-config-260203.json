@@ -1,0 +1,164 @@
+{
+  "repoConfigurationList": [
+    {
+      "repoQualifier": "mgfarmer",
+      "primaryColor": "#400000",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "gyrfalcon-ui",
+      "primaryColor": "#003000",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "gyrfalcon-cloud",
+      "primaryColor": "darkblue",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "gyrfalcon-cdk-global",
+      "primaryColor": "darkred",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "gyrfalcon-tools",
+      "primaryColor": "darkmagenta",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "gyrfalcon-binutils",
+      "primaryColor": "#008080",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "gyrfalcon-stf",
+      "primaryColor": "#00b000",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "baremetal",
+      "primaryColor": "orange",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "pylib",
+      "primaryColor": "#400000",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "gyrfalcon",
+      "primaryColor": "#633e02",
+      "enabled": true,
+      "branchTableName": "Default Rules"
+    },
+    {
+      "repoQualifier": "MIPS/atlas-explorer-samples.git",
+      "primaryColor": "MyProfile",
+      "enabled": true,
+      "branchTableName": "Default Rules",
+      "profileName": "MyProfile"
+    }
+  ],
+  "branchConfigurationList": [
+    {
+      "pattern": "^(?!.*(main|master)).*",
+      "color": "darkred",
+      "enabled": true
+    }
+  ],
+  "removeManagedColors": "true",
+  "colorInactiveTitlebar": true,
+  "colorEditorTabs": true,
+  "colorStatusBar": true,
+  "activityBarColorKnob": -10,
+  "applyBranchColorToTabsAndStatusBar": false,
+  "showStatusIconWhenNoRuleMatches": false,
+  "askToColorizeRepoWhenOpened": true,
+  "enableProfilesAdvanced": true,
+  "advancedProfiles": {
+    "MyProfile": {
+      "palette": {
+        "primaryActiveBg": {
+          "source": "fixed",
+          "value": "#02008f",
+          "opacity": 1
+        },
+        "primaryActiveFg": {
+          "source": "fixed",
+          "value": "#f5f5f5",
+          "opacity": 1
+        },
+        "primaryInactiveBg": {
+          "source": "fixed",
+          "value": "#00007f",
+          "opacity": 1
+        },
+        "primaryInactiveFg": {
+          "source": "fixed",
+          "value": "#f5f5f5"
+        },
+        "secondaryActiveBg": {
+          "source": "fixed",
+          "value": "#d77564",
+          "opacity": 1
+        },
+        "secondaryActiveFg": {
+          "source": "fixed",
+          "value": "#1a1a1a",
+          "opacity": 1
+        },
+        "secondaryInactiveBg": {
+          "source": "fixed",
+          "value": "#90392c",
+          "opacity": 1
+        },
+        "secondaryInactiveFg": {
+          "source": "fixed",
+          "value": "#1a1a1a"
+        },
+        "tertiaryBg": {
+          "source": "fixed",
+          "value": "#789b52",
+          "opacity": 1
+        },
+        "tertiaryFg": {
+          "source": "fixed",
+          "value": "#1a1a1a",
+          "opacity": 1
+        },
+        "quaternaryBg": {
+          "source": "fixed",
+          "value": "#00a4c1",
+          "opacity": 1
+        },
+        "quaternaryFg": {
+          "source": "fixed",
+          "value": "#1a1a1a",
+          "opacity": 1
+        }
+      },
+      "mappings": {
+        "activityBar.background": "primaryActiveBg",
+        "activityBar.foreground": "primaryActiveFg",
+        "activityBar.inactiveForeground": "primaryInactiveFg",
+        "statusBar.background": "primaryActiveBg",
+        "statusBar.foreground": "primaryActiveFg",
+        "titleBar.activeBackground": "primaryActiveBg",
+        "titleBar.activeForeground": "primaryActiveFg",
+        "titleBar.inactiveBackground": "primaryInactiveBg",
+        "titleBar.inactiveForeground": "primaryInactiveFg"
+      }
+    }
+  },
+  "exportedAt": "2026-02-03T19:56:51.199Z",
+  "version": "1.5.0"
+}

@@ -2,9 +2,15 @@
 .vscode-test/**
 out/test/**
 out/**/*.map
+!out/webview/*.css
+!out/webview/*.html
+!out/webview/*.ttf
 src/**
 .gitignore
 tsconfig.json
 vsc-extension-quickstart.md
 tslint.json
 node_modules/**
+**/*.psd
+features/
+copilot-instructions.md

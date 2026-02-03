@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="help.css">
+</head>
+<body>
+    <div class="help-content">
+    <div class="help-toc">
+        <h3>Help Topics</h3>
+        <ul>
+            <li><a href="#" data-switch-help="getting-started">Getting Started</a></li>
+            <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+            <li><a href="#" data-switch-help="branch-modes">Shared Branch Tables Guide</a></li>
+            <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+            <li><a href="#" data-switch-help="starred">Starred Keys Guide</a></li>
+            <li><a href="#" data-switch-help="colored">Colored Keys Guide</a></li>
+            <li><a class="current">Color Report Guide</a> (current)</li>
+        </ul>
+    </div>
+    <h1>Color Report Help</h1>
+    
+    <p>The Color Report shows all VS Code theme keys currently being colored by this extension, along with their applied colors and the source rule or profile applying them.</p>
+
+    <h2>Understanding the Report</h2>
+    
+    <h3>Column Descriptions</h3>
+    <table>
+        <tr>
+            <th>Column</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td><strong>Theme Key</strong></td>
+            <td>The VS Code theme key being colored (e.g., <code>titleBar.activeBackground</code>). Click on a theme key to jump to its source.</td>
+        </tr>
+        <tr>
+            <td><strong>Applied Color</strong></td>
+            <td>The color value currently applied, shown with a color swatch and hex/rgb value.</td>
+        </tr>
+        <tr>
+            <td><strong>Applied By</strong></td>
+            <td>The rule or profile that is applying this color. Shows whether it came from a repository rule, branch rule, or profile.</td>
+        </tr>
+    </table>
+
+    <h2>Interactive Hyperlinks</h2>
+    
+    <p>The Color Report includes clickable links that allow you to navigate directly to the source of each color. Click on any <span class="link-example">Theme Key</span> to jump to its source.</p>
+
+    <h3>Repository Rule Links</h3>
+    <p><strong>What they look like:</strong> Theme keys with colors from repository rules</p>
+    <p><strong>Where they take you:</strong> Clicking on the theme key will:</p>
+    <ul>
+        <li>Switch to the <strong>Rules</strong> tab</li>
+        <li>Scroll to and highlight the specific repository rule that is applying the color</li>
+        <li>If the rule uses a profile, it will take you to the profile instead (see below)</li>
+    </ul>
+
+    <h3>Branch Rule Links</h3>
+    <p><strong>What they look like:</strong> Theme keys with colors from branch rules (typically <code>activityBar.*</code> keys)</p>
+    <p><strong>Where they take you:</strong> Clicking on the theme key will:</p>
+    <ul>
+        <li>Switch to the <strong>Rules</strong> tab</li>
+        <li>Scroll to and highlight the specific branch rule that is applying the color</li>
+        <li>If the rule uses a profile, it will take you to the profile instead (see below)</li>
+    </ul>
+
+    <h3>Profile Links</h3>
+    <p><strong>What they look like:</strong> Theme keys where the rule references a profile name</p>
+    <p><strong>Where they take you:</strong> Clicking on the theme key will:</p>
+    <ul>
+        <li>Switch to the <strong>Profiles</strong> tab</li>
+        <li>Open the specific profile being used</li>
+        <li>Scroll to and highlight the exact theme key mapping within that profile</li>
+    </ul>
+    <p>This is useful for understanding which palette slot and settings are controlling a particular UI element.</p>
+
+    <h2>Common Theme Keys</h2>
+    
+    <table>
+        <tr>
+            <th>Theme Key</th>
+            <th>UI Element</th>
+        </tr>
+        <tr>
+            <td><code>titleBar.activeBackground</code></td>
+            <td>Title bar background when window is focused</td>
+        </tr>
+        <tr>
+            <td><code>titleBar.activeForeground</code></td>
+            <td>Title bar text when window is focused</td>
+        </tr>
+        <tr>
+            <td><code>activityBar.background</code></td>
+            <td>Activity bar (left sidebar) background</td>
+        </tr>
+        <tr>
+            <td><code>activityBar.foreground</code></td>
+            <td>Activity bar icon color</td>
+        </tr>
+        <tr>
+            <td><code>statusBar.background</code></td>
+            <td>Status bar (bottom) background</td>
+        </tr>
+        <tr>
+            <td><code>tab.activeBackground</code></td>
+            <td>Active editor tab background</td>
+        </tr>
+    </table>
+
+    <h2>Tips</h2>
+    
+    <ul>
+        <li><strong>Quick Navigation:</strong> Use the theme key links to quickly find and edit the source of any color you see in your VS Code window.</li>
+        <li><strong>Debugging:</strong> If a color isn't what you expect, check the "Applied By" column to see which rule or profile is responsible.</li>
+        <li><strong>Profile Details:</strong> When a profile is used, clicking the theme key will show you the exact mapping, including which palette slot, opacity, and adjustments are being applied.</li>
+        <li><strong>No Colors?</strong> If the report is empty, it means no repository or branch rules are currently matching your workspace.</li>
+    </ul>
+
+    <div class="note">
+        <strong>Note:</strong> The Color Report only shows colors managed by the Git Repo Window Colors extension. Other color customizations from your VS Code settings or active theme are not included.
+    </div>
+
+    <h2>Workflow Example</h2>
+    
+    <ol>
+        <li>Open the Color Report to see all applied colors</li>
+        <li>Find a color you want to adjust (e.g., <code>titleBar.activeBackground</code>)</li>
+        <li>Click on the theme key to jump to its source</li>
+        <li>Modify the color, palette slot, or mapping as needed</li>
+        <li>Return to the Color Report to verify your changes</li>
+    </ol>
+</body>
+</html>

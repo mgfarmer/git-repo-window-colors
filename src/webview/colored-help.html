@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colored Keys Guide</title>
+    <link rel="stylesheet" href="help.css">
+</head>
+<body>
+    <div class="help-content">
+        <div class="help-toc">
+            <h3>Help Topics</h3>
+            <ul>
+                <li><a href="#" data-switch-help="getting-started">Getting Started</a></li>
+                <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
+                <li><a href="#" data-switch-help="branch-modes">Shared Branch Tables Guide</a></li>
+                <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a href="#" data-switch-help="starred">Starred Keys Guide</a></li>
+                <li><a class="current">Colored Keys Guide</a> (current)</li>
+                <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
+            </ul>
+        </div>
+
+        <h1>⚡ Colored Keys Guide</h1>
+
+        <p>
+            The <strong>Colored</strong> tab is a dynamic overview that automatically shows all VS Code theme keys 
+            you've assigned colors to in the current profile. It provides a centralized view of your active 
+            customizations, making it easy to review all your color assignments in one place.
+        </p>
+
+        <h2>What is the Colored Tab?</h2>
+
+        <p>
+            Unlike the other mapping tabs (Titlebar, Activitybar, Statusbar, etc.) which show all available keys 
+            in their respective sections, the Colored tab is a <strong>filtered view</strong> that displays only 
+            the keys you've explicitly customized in the current profile.
+        </p>
+
+        <div class="tip">
+            <strong>⚡ Key Difference:</strong> The Colored tab is read-only in the sense that you cannot 
+            add new keys to it directly. It automatically populates as you assign colors to keys in other tabs. 
+        </div>
+
+        <h2>How Keys Appear in the Colored Tab</h2>
+
+        <p>
+            A theme key appears in the Colored tab when you:
+        </p>
+
+        <ol>
+            <li>Assign a <strong>Palette Slot</strong> (Primary, Secondary, Accent1-3, etc.) to it</li>
+            <li>Set a <strong>Fixed Color</strong> for it</li>
+            <li>Adjust its <strong>Opacity</strong> from the default</li>
+        </ol>
+
+        <div class="note">
+            <strong>Note:</strong> Keys with no assignment (default state) do NOT appear in the Colored tab. 
+            Only keys you've explicitly configured are shown.
+        </div>
+
+        <h2>Understanding the Tab Badge</h2>
+
+        <p>
+            The badge on the Colored tab shows the total number of keys you've customized in the current profile:
+        </p>
+
+        <ul>
+            <li><strong>⚡ 15</strong> means you've assigned colors to 15 different theme keys</li>
+            <li>The badge updates in real-time as you add or remove color assignments</li>
+            <li>Setting a key to "none" still counts as a customization (it's an explicit choice)</li>
+        </ul>
+
+        <h2>Working with Colored Keys</h2>
+
+        <h3>Viewing Your Customizations</h3>
+
+        <p>
+            Click on the <strong>⚡ Colored</strong> tab to see all your active color assignments grouped by section. 
+            Keys appear in the same order and organization as the regular tabs, but only showing what you've customized.
+        </p>
+
+        <h2>Empty Colored Tab</h2>
+
+        <p>
+            If you haven't assigned any colors yet, the Colored tab displays:
+        </p>
+
+        <div class="example">
+            <em>"No color mappings yet. Assign colors in other tabs to see them here."</em>
+        </div>
+
+        <p>
+            Navigate to any other tab (Titlebar, Activitybar, etc.) and start assigning colors. Those keys will 
+            automatically appear in the Colored tab.
+        </p>
+
+        <h2>Use Cases and Workflows</h2>
+
+        <h3>Quick Profile Review</h3>
+
+        <p>
+            When you want to see what you've customized in a profile without browsing through all the sections, 
+            the Colored tab gives you an instant overview of all your active changes with hyperlinke to take you 
+            directly to each key's source.
+        </p>
+
+        <h2>Colored vs. Starred Tabs</h2>
+
+        <p>
+            While both tabs provide filtered views, they serve different purposes:
+        </p>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+            <tr style="border-bottom: 1px solid var(--vscode-panel-border);">
+                <th style="text-align: left; padding: 8px;">Colored Tab</th>
+                <th style="text-align: left; padding: 8px;">Starred Tab</th>
+            </tr>
+            <tr>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Automatic:</strong> Shows keys you've assigned colors to
+                </td>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Manual:</strong> Shows keys you've manually starred
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Profile-Specific:</strong> Different profiles show different keys
+                </td>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Global:</strong> Same starred keys across all profiles
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Dynamic:</strong> Keys appear/disappear based on assignments
+                </td>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Persistent:</strong> Keys remain until you unstar them
+                </td>
+            </tr>
+            <tr>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Purpose:</strong> See what you've customized
+                </td>
+                <td style="padding: 8px; vertical-align: top;">
+                    <strong>Purpose:</strong> Quick access to frequently used keys
+                </td>
+            </tr>
+        </table>
+
+        <div class="example">
+            <strong>Example Workflow:</strong><br>
+            You might have a "Work" profile with 20 customized keys (shown in Colored tab) and 10 starred 
+            keys. The starred keys are the ones you customize across all profiles, while the Colored tab 
+            shows what you've actually configured in this specific profile.
+        </div>
+
+        <h2>Technical Details</h2>
+
+        <h3>What Gets Included</h3>
+
+        <p>
+            The Colored tab includes keys with:
+        </p>
+
+        <ul>
+            <li>Palette slot assignments (Primary, Secondary, etc.)</li>
+            <li>Fixed color values (hex colors like #FF5733)</li>
+        </ul>
+
+        <h2>Common Questions</h2>
+        <div class="tip">
+            <strong>Related Topics:</strong>
+            <ul>
+                <li>Learn about starring keys in the <a href="#" data-switch-help="starred">Starred Keys Guide</a></li>
+                <li>Understand palette slots in the <a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li>See current colors in the <a href="#" data-switch-help="report">Color Report</a></li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

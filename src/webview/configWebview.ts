@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
+import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
+import { generatePalette, PaletteAlgorithm } from '../paletteGenerator';
+import { getRepoRuleErrors, getBranchRuleErrors, validateRules } from '../extension';
 //import { outputChannel } from '../extension';
 
 // Build-time configuration for color picker type
@@ -30,13 +33,18 @@ function getNonce(): string {
 export class ConfigWebviewProvider implements vscode.Disposable {
     private _panel: vscode.WebviewPanel | undefined;
     private readonly _extensionUri: vscode.Uri;
+    private readonly _context: vscode.ExtensionContext;
     private _disposables: vscode.Disposable[] = [];
     private _workspaceInfo: { repositoryUrl: string; currentBranch: string } = { repositoryUrl: '', currentBranch: '' };
     private currentConfig: any = null;
     private _configurationListener: vscode.Disposable | undefined;
+    private _previewRepoRuleIndex: number | null = null;
+    private _previewBranchRuleContext: { index: number; tableName: string } | null = null;
+    private _previewModeEnabled: boolean = false;
 
-    constructor(extensionUri: vscode.Uri) {
+    constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
+        this._context = context;
 
         // Set up configuration listener once
         this._configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
@@ -53,6 +61,34 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         if (this._panel) {
             this._sendConfigurationToWebview();
         }
+    }
+
+    public getPreviewRepoRuleIndex(): number | null {
+        return this._previewRepoRuleIndex;
+    }
+
+    public getPreviewBranchRuleContext(): { index: number; tableName: string } | null {
+        return this._previewBranchRuleContext;
+    }
+
+    public isPreviewModeEnabled(): boolean {
+        return this._previewModeEnabled;
+    }
+
+    private async _waitForColorCustomizationsUpdate(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const disposable = vscode.workspace.onDidChangeConfiguration((event) => {
+                if (event.affectsConfiguration('workbench.colorCustomizations')) {
+                    disposable.dispose();
+                    resolve();
+                }
+            });
+            // Timeout after 1 second in case the event doesn't fire
+            setTimeout(() => {
+                disposable.dispose();
+                resolve();
+            }, 1000);
+        });
     }
 
     public showAndAddRepoRule(extensionUri: vscode.Uri, repoQualifier: string, primaryColor: string = ''): void {
@@ -113,6 +149,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Send initial configuration to webview
         this._sendConfigurationToWebview();
+
+        // Apply colors for the selected rule when opening the configurator
+        // This ensures preview mode actually shows colors, and for matched rules
+        // it's essentially a no-op reapplication
+        const usePreview = this._previewModeEnabled;
+        vscode.commands.executeCommand('_grwc.internal.applyColors', 'config panel opened', usePreview);
+
+        // Check if this is the first time showing the webview
+        this._checkAndShowGettingStarted();
     }
 
     private async _handleMessage(message: WebviewMessage): Promise<void> {
@@ -127,13 +172,88 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 this._openColorPicker(message.data.colorPickerData!);
                 break;
             case 'confirmDelete':
-                await this._handleDeleteConfirmation(message.data.deleteData!);
+                if (message.data && (message.data as any).type === 'profile') {
+                    await this._handleProfileDeleteConfirmation((message.data as any).name);
+                } else if (message.data && message.data.deleteData) {
+                    await this._handleDeleteConfirmation(message.data.deleteData);
+                }
                 break;
             case 'exportConfig':
                 await vscode.commands.executeCommand('windowColors.exportConfig');
                 break;
             case 'importConfig':
                 await vscode.commands.executeCommand('windowColors.importConfig');
+                break;
+            case 'updateAdvancedProfiles':
+                await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                break;
+            case 'requestHelp':
+                await this._sendHelpContent(message.data.helpType || 'getting-started');
+                break;
+            case 'previewRepoRule':
+                this._previewRepoRuleIndex = (message.data as any).index;
+                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
+                // Clear branch preview if requested (avoids double doit() call)
+                if ((message.data as any).clearBranchPreview) {
+                    this._previewBranchRuleContext = null;
+                }
+                console.log(
+                    '[configWebview] previewRepoRule received - index:',
+                    this._previewRepoRuleIndex,
+                    'previewEnabled:',
+                    this._previewModeEnabled,
+                    'clearBranchPreview:',
+                    (message.data as any).clearBranchPreview,
+                );
+                // Pass preview mode as true
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
+            case 'previewBranchRule':
+                this._previewBranchRuleContext = {
+                    index: (message.data as any).index,
+                    tableName: (message.data as any).tableName || 'Default Rules',
+                };
+                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
+                // Pass preview mode as true
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
+            case 'clearPreview':
+                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
+                // Pass preview mode as false to use matching rules
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview', false);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
+            case 'clearBranchPreview':
+                // Clear branch preview context while keeping repo preview active
+                this._previewBranchRuleContext = null;
+                // Reapply colors with the current repo preview but no branch preview
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared branch preview', true);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
+            case 'generatePalette':
+                await this._handlePaletteGeneration(message.data.paletteData!);
+                break;
+            case 'toggleStarredKey':
+                await this._handleToggleStarredKey(message.data.mappingKey!);
+                break;
+            case 'createBranchTable':
+                await this._handleCreateBranchTable(message.data.tableName!, message.data.repoRuleIndex);
+                break;
+            case 'deleteBranchTable':
+                await this._handleDeleteBranchTable(message.data.tableName!);
+                break;
+            case 'renameBranchTable':
+                await this._handleRenameBranchTable(message.data.oldTableName!, message.data.newTableName!);
                 break;
         }
     }
@@ -144,32 +264,100 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         const repoRules = this._getRepoRules();
-        const branchRules = this._getBranchRules();
+        const sharedBranchTables = this._getSharedBranchTables();
         const otherSettings = this._getOtherSettings();
+        const advancedProfiles = this._getAdvancedProfiles();
         const workspaceInfo = this._getWorkspaceInfo();
+        const starredKeys = this._getStarredKeys();
+
+        // Trigger validation to populate error maps
+        validateRules();
+
+        // Get validation errors from extension
+        const repoRuleErrors = getRepoRuleErrors();
+        const branchRuleErrors = getBranchRuleErrors();
+
+        // Convert error maps to plain objects for JSON serialization
+        const repoRuleErrorsObj: { [index: number]: string } = {};
+        repoRuleErrors.forEach((msg, index) => {
+            repoRuleErrorsObj[index] = msg;
+        });
+
+        const branchRuleErrorsObj: { [index: number]: string } = {};
+        branchRuleErrors.forEach((msg, index) => {
+            branchRuleErrorsObj[index] = msg;
+        });
+
+        // Get currently applied color customizations
+        const colorCustomizations = vscode.workspace.getConfiguration('workbench').get('colorCustomizations', {});
 
         // Calculate matching rule indexes using the same logic as the extension
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
-        const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(branchRules, workspaceInfo.currentBranch);
+
+        // Get the actual branch rules from the shared table assigned to the matched repo rule
+        let actualBranchRules: BranchRule[] = [];
+        let repoIndexForBranchRule = -1; // Always -1 since we only use shared tables
+
+        if (matchingRepoRuleIndex >= 0 && matchingRepoRuleIndex < repoRules.length) {
+            const matchedRepoRule = repoRules[matchingRepoRuleIndex];
+            if (matchedRepoRule.branchTableName && sharedBranchTables[matchedRepoRule.branchTableName]) {
+                actualBranchRules = sharedBranchTables[matchedRepoRule.branchTableName].rules;
+            }
+        }
+
+        // Now match against the actual branch rules
+        const matchingBranchRuleIndex = this._getMatchingBranchRuleIndex(
+            actualBranchRules,
+            workspaceInfo.currentBranch,
+        );
 
         // console.log('[DEBUG] Sending matching indexes:', {
         //     repoRule: matchingRepoRuleIndex,
         //     branchRule: matchingBranchRuleIndex,
+        //     actualBranchRulesCount: actualBranchRules.length,
         // });
 
         this.currentConfig = {
             repoRules,
-            branchRules,
+            sharedBranchTables,
             otherSettings,
+            advancedProfiles,
         };
+
+        // If preview indexes are not set, initialize them to the matching indexes
+        if (this._previewRepoRuleIndex === null && matchingRepoRuleIndex >= 0) {
+            this._previewRepoRuleIndex = matchingRepoRuleIndex;
+        }
+
+        if (this._previewBranchRuleContext === null && matchingBranchRuleIndex >= 0) {
+            // Get the table name from the matched repo rule
+            let tableName = 'Default Rules';
+            if (matchingRepoRuleIndex >= 0 && repoRules[matchingRepoRuleIndex]) {
+                tableName = repoRules[matchingRepoRuleIndex].branchTableName || 'Default Rules';
+            }
+
+            this._previewBranchRuleContext = {
+                index: matchingBranchRuleIndex,
+                tableName,
+            };
+        }
 
         const msgData = {
             ...this.currentConfig,
             workspaceInfo,
+            colorCustomizations,
+            starredKeys,
+            validationErrors: {
+                repoRules: repoRuleErrorsObj,
+                branchRules: branchRuleErrorsObj,
+            },
             matchingIndexes: {
                 repoRule: matchingRepoRuleIndex,
                 branchRule: matchingBranchRuleIndex,
+                repoIndexForBranchRule,
             },
+            previewRepoRuleIndex: this._previewRepoRuleIndex,
+            previewBranchRuleContext: this._previewBranchRuleContext,
         };
 
         //console.log('[DEBUG] Sending configuration to webview: ', msgData);
@@ -183,12 +371,59 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _getRepoRules(): RepoRule[] {
         const config = vscode.workspace.getConfiguration('windowColors');
         const repoConfigList = config.get<string[]>('repoConfigurationList', []);
+        const advancedProfiles = this._getAdvancedProfiles();
 
-        return repoConfigList.map((rule) => this._parseRepoRule(rule)).filter((rule) => rule !== null) as RepoRule[];
+        const rules = repoConfigList
+            .map((rule) => this._parseRepoRule(rule))
+            .filter((rule) => rule !== null) as RepoRule[];
+
+        // Migrate old configs: if primaryColor matches a profile but profileName is not set, set it
+        for (const rule of rules) {
+            if (rule.primaryColor && !rule.profileName && advancedProfiles[rule.primaryColor]) {
+                rule.profileName = rule.primaryColor;
+            }
+        }
+
+        return rules;
     }
 
-    private _parseRepoRule(ruleString: string): RepoRule | null {
+    private _parseRepoRule(rule: string | any): RepoRule | null {
         try {
+            // Handle JSON object format (new format)
+            if (typeof rule === 'object' && rule !== null) {
+                return {
+                    repoQualifier: rule.repoQualifier || '',
+                    defaultBranch: rule.defaultBranch,
+                    primaryColor: rule.primaryColor || '',
+                    branchColor: rule.branchColor,
+                    profileName: rule.profileName,
+                    enabled: rule.enabled !== undefined ? rule.enabled : true,
+                    branchTableName: rule.branchTableName,
+                } as any;
+            }
+
+            // Handle string formats
+            if (typeof rule !== 'string') {
+                return null;
+            }
+
+            const ruleString = rule;
+
+            // Try parsing as JSON string (for backward compatibility)
+            if (ruleString.trim().startsWith('{')) {
+                const obj = JSON.parse(ruleString);
+                return {
+                    repoQualifier: obj.repoQualifier || '',
+                    defaultBranch: obj.defaultBranch,
+                    primaryColor: obj.primaryColor || '',
+                    branchColor: obj.branchColor,
+                    profileName: obj.profileName,
+                    enabled: obj.enabled !== undefined ? obj.enabled : true,
+                    branchTableName: obj.branchTableName,
+                } as any;
+            }
+
+            // Otherwise parse legacy string format
             // Format: <repo-qualifier>[|<default-branch>]:<primary-color>[|<branch-color>]
             // Example: "myrepo|main:blue|green" or "myrepo:blue"
             const colonIndex = ruleString.indexOf(':');
@@ -203,50 +438,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 return null;
             }
 
-            // Parse repo section: repo-qualifier[|default-branch]
-            const repoPipeIndex = repoSection.indexOf('|');
-            const repoQualifier = repoPipeIndex === -1 ? repoSection : repoSection.substring(0, repoPipeIndex);
-            const defaultBranch = repoPipeIndex === -1 ? undefined : repoSection.substring(repoPipeIndex + 1);
+            // Parse repo section: repo-qualifier
+            const repoQualifier = repoSection.trim();
 
-            // Parse color section: primary-color[|branch-color]
-            const colorPipeIndex = colorSection.indexOf('|');
-            const primaryColor = colorPipeIndex === -1 ? colorSection : colorSection.substring(0, colorPipeIndex);
-            const branchColor = colorPipeIndex === -1 ? undefined : colorSection.substring(colorPipeIndex + 1);
+            // Parse color section: primary-color
+            const primaryColor = colorSection.trim();
 
             return {
                 repoQualifier: repoQualifier.trim(),
-                defaultBranch: defaultBranch ? defaultBranch.trim() : undefined,
-                primaryColor: primaryColor.trim(),
-                branchColor: branchColor ? branchColor.trim() : undefined,
+                primaryColor: primaryColor,
+                enabled: true,
             };
         } catch (error) {
-            console.warn('Failed to parse repo rule:', ruleString, error);
-            return null;
-        }
-    }
-
-    private _getBranchRules(): BranchRule[] {
-        const config = vscode.workspace.getConfiguration('windowColors');
-        const branchConfigList = config.get<string[]>('branchConfigurationList', []);
-
-        return branchConfigList
-            .map((rule) => this._parseBranchRule(rule))
-            .filter((rule) => rule !== null) as BranchRule[];
-    }
-
-    private _parseBranchRule(ruleString: string): BranchRule | null {
-        try {
-            const parts = ruleString.split(':');
-            if (parts.length < 2) {
-                return null;
-            }
-
-            return {
-                pattern: parts[0].trim(),
-                color: parts[1].trim(),
-            };
-        } catch (error) {
-            console.warn('Failed to parse branch rule:', ruleString, error);
+            console.warn('Failed to parse repo rule:', rule, error);
             return null;
         }
     }
@@ -256,17 +460,130 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         return {
             removeManagedColors: config.get<boolean>('removeManagedColors', true),
-            invertBranchColorLogic: config.get<boolean>('invertBranchColorLogic', false),
             colorInactiveTitlebar: config.get<boolean>('colorInactiveTitlebar', true),
             colorEditorTabs: config.get<boolean>('colorEditorTabs', false),
             colorStatusBar: config.get<boolean>('colorStatusBar', false),
             applyBranchColorToTabsAndStatusBar: config.get<boolean>('applyBranchColorToTabsAndStatusBar', false),
             activityBarColorKnob: config.get<number>('activityBarColorKnob', 0),
-            automaticBranchIndicatorColorKnob: config.get<number>('automaticBranchIndicatorColorKnob', 60),
-            showBranchColumns: config.get<boolean>('showBranchColumns', true),
             showStatusIconWhenNoRuleMatches: config.get<boolean>('showStatusIconWhenNoRuleMatches', true),
             askToColorizeRepoWhenOpened: config.get<boolean>('askToColorizeRepoWhenOpened', true),
+            enableProfilesAdvanced: config.get<boolean>('enableProfilesAdvanced', false),
+            previewSelectedRepoRule: config.get<boolean>('previewSelectedRepoRule', false),
         };
+    }
+
+    private _getAdvancedProfiles(): { [key: string]: AdvancedProfile } {
+        const config = vscode.workspace.getConfiguration('windowColors');
+        return config.get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+    }
+
+    private _getStarredKeys(): string[] {
+        return this._context.globalState.get<string[]>('grwc.starredKeys', []);
+    }
+
+    private _getSharedBranchTables(): { [key: string]: { rules: BranchRule[] } } {
+        const config = vscode.workspace.getConfiguration('windowColors');
+        const sharedTables = config.get<{ [key: string]: { rules: BranchRule[] } } | undefined>('sharedBranchTables');
+
+        // If sharedBranchTables doesn't exist, initialize with empty Default Rules table
+        if (!sharedTables || Object.keys(sharedTables).length === 0) {
+            return {
+                'Default Rules': { rules: [] },
+            };
+        }
+
+        return sharedTables;
+    }
+
+    private async _handleToggleStarredKey(mappingKey: string): Promise<void> {
+        const starredKeys = this._getStarredKeys();
+        const index = starredKeys.indexOf(mappingKey);
+
+        if (index > -1) {
+            // Key is already starred, unstar it
+            starredKeys.splice(index, 1);
+        } else {
+            // Key is not starred, star it
+            starredKeys.push(mappingKey);
+        }
+
+        await this._context.globalState.update('grwc.starredKeys', starredKeys);
+
+        // Send updated starred keys back to webview
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'starredKeysUpdated',
+                data: { starredKeys },
+            });
+        }
+    }
+
+    private async _handleCreateBranchTable(tableName: string, repoRuleIndex?: number): Promise<void> {
+        console.log('[Backend] _handleCreateBranchTable called with:', tableName, 'repoRuleIndex:', repoRuleIndex);
+        const result = await vscode.commands.executeCommand('_grwc.internal.createBranchTable', tableName);
+        console.log('[Backend] _handleCreateBranchTable result:', result);
+        if (result) {
+            // If repoRuleIndex provided, update that repo rule to use the new table
+            if (repoRuleIndex !== undefined) {
+                console.log('[Backend] Updating repo rule', repoRuleIndex, 'to use table:', tableName);
+                const config = vscode.workspace.getConfiguration('windowColors');
+                const repoRules = this._getRepoRules();
+
+                if (repoRules[repoRuleIndex]) {
+                    repoRules[repoRuleIndex].branchTableName = tableName;
+                    const formattedRules = repoRules.map((rule) => this._formatRepoRule(rule));
+                    await config.update('repoConfigurationList', formattedRules, vscode.ConfigurationTarget.Global);
+                    console.log('[Backend] Repo rule updated successfully');
+                }
+            }
+
+            // Refresh webview with updated config
+            console.log('[Backend] Sending updated config to webview');
+            this._sendConfigurationToWebview();
+        } else {
+            vscode.window.showErrorMessage(`Failed to create branch table "${tableName}". Name may already exist.`);
+        }
+    }
+
+    private async _handleDeleteBranchTable(tableName: string): Promise<void> {
+        // Get usage count to show in confirmation
+        const usageCount = (await vscode.commands.executeCommand(
+            '_grwc.internal.getBranchTableUsageCount',
+            tableName,
+        )) as number;
+
+        if (usageCount > 0) {
+            const answer = await vscode.window.showWarningMessage(
+                `Delete branch table "${tableName}"? ${usageCount} repository ${usageCount === 1 ? 'rule' : 'rules'} will be migrated to "Default Rules".`,
+                { modal: true },
+                'Delete',
+                'Cancel',
+            );
+
+            if (answer !== 'Delete') {
+                return;
+            }
+        }
+
+        const result = await vscode.commands.executeCommand('_grwc.internal.deleteBranchTable', tableName);
+        if (result) {
+            // Refresh webview with updated config
+            this._sendConfigurationToWebview();
+        } else {
+            vscode.window.showErrorMessage(`Failed to delete branch table "${tableName}".`);
+        }
+    }
+
+    private async _handleRenameBranchTable(oldName: string, newName: string): Promise<void> {
+        const result = await vscode.commands.executeCommand('_grwc.internal.renameBranchTable', oldName, newName);
+        if (result) {
+            // Refresh webview with updated config
+            this._sendConfigurationToWebview();
+        } else {
+            vscode.window.showErrorMessage(
+                `Failed to rename branch table from "${oldName}" to "${newName}". New name may already exist or table may be fixed.`,
+            );
+        }
     }
 
     private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string } {
@@ -284,6 +601,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // });
 
         for (let i = 0; i < repoRules.length; i++) {
+            // Skip disabled rules
+            if ((repoRules[i] as any).enabled === false) continue;
+
             // console.log(`[DEBUG] Testing repo rule ${i}: "${repoRules[i].repoQualifier}" against "${repositoryUrl}"`);
             if (repositoryUrl.includes(repoRules[i].repoQualifier)) {
                 // console.log(`[DEBUG] Repo rule ${i} matched! Returning index ${i}`);
@@ -306,6 +626,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // });
 
         for (let i = 0; i < branchRules.length; i++) {
+            // Skip disabled rules
+            if ((branchRules[i] as any).enabled === false) continue;
+
             // outputChannel.appendLine(
             //     `[DEBUG] Testing branch rule ${i}: "${branchRules[i].pattern}" against "${currentBranch}"`,
             // );
@@ -354,11 +677,26 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // Update branch rules
             if (data.branchRules) {
                 // console.log('[DEBUG] Updating branch rules:', data.branchRules);
-                const branchRulesArray = data.branchRules.map((rule: BranchRule) => {
+                const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
                     // console.log('[DEBUG]   branch rule:', rule);
-                    return `${rule.pattern}:${rule.color}`;
+                    // Always return JSON object format
+                    return {
+                        pattern: rule.pattern,
+                        color: rule.color,
+                        enabled: rule.enabled !== undefined ? rule.enabled : true,
+                    };
                 });
                 updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
+            }
+
+            // Update shared branch tables
+            if (data.sharedBranchTables) {
+                updatePromises.push(config.update('sharedBranchTables', data.sharedBranchTables, true));
+            }
+
+            // Update advanced profiles
+            if (data.advancedProfiles) {
+                updatePromises.push(config.update('advancedProfiles', data.advancedProfiles, true));
             }
 
             // Update other settings
@@ -373,21 +711,44 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // console.log('[DEBUG] Waiting for', updatePromises.length, 'configuration updates to complete...');
             await Promise.all(updatePromises);
             // console.log('[DEBUG] All configuration updates completed results:', promiseResult);
+
+            // If preview mode is active, re-apply the preview after configuration update
+            // This ensures that color changes during preview mode are immediately reflected
+            if (this._previewModeEnabled) {
+                await vscode.commands.executeCommand(
+                    '_grwc.internal.applyColors',
+                    'config update during preview',
+                    true,
+                );
+                await this._waitForColorCustomizationsUpdate();
+            }
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);
         }
     }
 
-    private _formatRepoRule(rule: RepoRule): string {
-        let result = rule.repoQualifier;
+    private _formatRepoRule(rule: RepoRule | any): any {
+        // Always return JSON object format
+        const result: any = {
+            repoQualifier: rule.repoQualifier,
+            primaryColor: rule.primaryColor,
+            enabled: rule.enabled !== undefined ? rule.enabled : true,
+        };
+
+        // branchTableName is required - default to '__none__' if not set
+        result.branchTableName = rule.branchTableName || '__none__';
+
         if (rule.defaultBranch) {
-            result += `|${rule.defaultBranch}`;
+            result.defaultBranch = rule.defaultBranch;
         }
-        result += `:${rule.primaryColor}`;
         if (rule.branchColor) {
-            result += `|${rule.branchColor}`;
+            result.branchColor = rule.branchColor;
         }
+        if (rule.profileName) {
+            result.profileName = rule.profileName;
+        }
+
         return result;
     }
 
@@ -395,6 +756,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         ruleType: 'repo' | 'branch';
         index: number;
         ruleDescription: string;
+        tableName?: string;
     }): Promise<void> {
         const { ruleType, index, ruleDescription } = deleteData;
 
@@ -407,14 +769,32 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         if (result === 'Delete') {
             // Perform the deletion
             const repoRules = this._getRepoRules();
-            const branchRules = this._getBranchRules();
 
             if (ruleType === 'repo' && repoRules[index]) {
                 repoRules.splice(index, 1);
                 await this._updateConfiguration({ repoRules });
-            } else if (ruleType === 'branch' && branchRules[index]) {
-                branchRules.splice(index, 1);
-                await this._updateConfiguration({ branchRules });
+
+                // Recompute and apply colors after repo rule deletion
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'repo rule deleted', false);
+            } else if (ruleType === 'branch') {
+                // Delete from shared branch table
+                const tableName = (deleteData as any).tableName;
+                if (tableName && tableName !== '__none__') {
+                    const sharedBranchTables = this._getSharedBranchTables();
+                    if (sharedBranchTables[tableName]?.rules?.[index]) {
+                        // Create a deep copy to ensure VS Code detects the change
+                        const updatedTables = JSON.parse(JSON.stringify(sharedBranchTables));
+                        updatedTables[tableName].rules.splice(index, 1);
+                        await this._updateConfiguration({ sharedBranchTables: updatedTables });
+
+                        // Recompute and apply colors after branch rule deletion
+                        await vscode.commands.executeCommand(
+                            '_grwc.internal.applyColors',
+                            'branch rule deleted',
+                            false,
+                        );
+                    }
+                }
             }
 
             // Send confirmation back to webview
@@ -432,6 +812,152 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     data: { success: false },
                 });
             }
+        }
+    }
+
+    private async _handleProfileDeleteConfirmation(profileName: string): Promise<void> {
+        const result = await vscode.window.showWarningMessage(
+            `Are you sure you want to delete the profile "${profileName}"?`,
+            { modal: true },
+            'Delete',
+        );
+
+        if (result === 'Delete') {
+            // Send confirmation back to webview to perform the deletion
+            if (this._panel) {
+                this._panel.webview.postMessage({
+                    command: 'confirmDeleteProfile',
+                    data: { profileName },
+                });
+            }
+        }
+    }
+
+    private async _sendGettingStartedHelpContent(): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'getting-started-help.html');
+            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
+            let contentString = Buffer.from(helpContent).toString('utf8');
+
+            // Extract only the body content
+            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch) {
+                contentString = bodyMatch[1];
+            }
+
+            this._panel.webview.postMessage({
+                command: 'gettingStartedHelpContent',
+                data: { content: contentString },
+            });
+        } catch (error) {
+            console.error('Failed to load getting started help content:', error);
+            vscode.window.showErrorMessage('Failed to load help content');
+        }
+    }
+
+    private async _sendHelpContent(helpType: string): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const helpFilePath = vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', `${helpType}-help.html`);
+            const helpContent = await vscode.workspace.fs.readFile(helpFilePath);
+            let contentString = Buffer.from(helpContent).toString('utf8');
+
+            // Extract only the body content
+            const bodyMatch = contentString.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+            if (bodyMatch) {
+                contentString = bodyMatch[1];
+            }
+
+            this._panel.webview.postMessage({
+                command: 'helpContent',
+                data: { helpType, content: contentString },
+            });
+        } catch (error) {
+            console.error(`Failed to load ${helpType} help content:`, error);
+            vscode.window.showErrorMessage('Failed to load help content');
+        }
+    }
+
+    private async _handlePaletteGeneration(paletteData: {
+        profileName: string;
+        primaryBg: string;
+        algorithm: string;
+    }): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            const { profileName, primaryBg, algorithm } = paletteData;
+
+            // Generate the palette using the palette generator
+            const generatedPalette = generatePalette(primaryBg, algorithm as PaletteAlgorithm);
+
+            // Get the current profiles
+            const profiles = this._getAdvancedProfiles();
+            const profile = profiles[profileName];
+
+            if (!profile) {
+                vscode.window.showErrorMessage(`Profile "${profileName}" not found`);
+                return;
+            }
+
+            // Update the profile's palette with the generated colors
+            profile.palette.primaryActiveBg = { source: 'fixed', value: generatedPalette.primaryActiveBg, opacity: 1 };
+            profile.palette.primaryActiveFg = { source: 'fixed', value: generatedPalette.primaryActiveFg, opacity: 1 };
+            profile.palette.primaryInactiveBg = {
+                source: 'fixed',
+                value: generatedPalette.primaryInactiveBg,
+                opacity: 1,
+            };
+            profile.palette.primaryInactiveFg = { source: 'fixed', value: generatedPalette.primaryInactiveFg };
+
+            profile.palette.secondaryActiveBg = {
+                source: 'fixed',
+                value: generatedPalette.secondaryActiveBg,
+                opacity: 1,
+            };
+            profile.palette.secondaryActiveFg = {
+                source: 'fixed',
+                value: generatedPalette.secondaryActiveFg,
+                opacity: 1,
+            };
+            profile.palette.secondaryInactiveBg = {
+                source: 'fixed',
+                value: generatedPalette.secondaryInactiveBg,
+                opacity: 1,
+            };
+            profile.palette.secondaryInactiveFg = { source: 'fixed', value: generatedPalette.secondaryInactiveFg };
+
+            profile.palette.tertiaryBg = { source: 'fixed', value: generatedPalette.tertiaryActiveBg, opacity: 1 };
+            profile.palette.tertiaryFg = { source: 'fixed', value: generatedPalette.tertiaryActiveFg, opacity: 1 };
+
+            profile.palette.quaternaryBg = { source: 'fixed', value: generatedPalette.quaternaryActiveBg, opacity: 1 };
+            profile.palette.quaternaryFg = { source: 'fixed', value: generatedPalette.quaternaryActiveFg, opacity: 1 };
+
+            // Save the updated profiles
+            profiles[profileName] = profile;
+            await this._updateConfiguration({ advancedProfiles: profiles });
+
+            // Send the updated profile back to the webview with generated palette for toast styling
+            this._panel.webview.postMessage({
+                command: 'paletteGenerated',
+                data: {
+                    advancedProfiles: profiles,
+                    generatedPalette: generatedPalette,
+                    profileName: profileName,
+                },
+            });
+        } catch (error) {
+            console.error('Failed to generate palette:', error);
+            vscode.window.showErrorMessage(`Failed to generate palette: ${error}`);
         }
     }
 
@@ -489,9 +1015,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'configWebview.css'),
         );
 
+        // Get the help CSS file URI
+        const helpCssUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'help.css'));
+
         // Get the JavaScript file URI
         const jsUri = webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'wvConfigWebview.js'),
+        );
+
+        // Get the Codicon font URI (copied by webpack to out/webview)
+        const codiconUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'codicon.css'),
         );
 
         // Generate nonce for CSP
@@ -515,96 +1049,162 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Git Repo Window Colors Configuration</title>
+            <link href="${codiconUri}" rel="stylesheet">
             <link href="${cssUri}" rel="stylesheet">
+            <link href="${helpCssUri}" rel="stylesheet">
         </head>
         <body>
+            <!-- Preview Mode Toast -->
+            <div id="preview-toast" class="preview-toast" role="status" aria-live="polite" title="You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.">
+                <span class="preview-toast-text">PREVIEW MODE</span>
+                <button class="preview-toast-reset-btn" data-action="resetToMatchingRules">reset</button>
+            </div>
+            
+            <div class="tabs-header" role="tablist" aria-label="Configuration Sections">
+                <button class="tab-button active" role="tab" aria-selected="true" aria-controls="rules-tab" id="tab-rules">Rules</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="branch-tables-tab" id="tab-branch-tables">Branch Tables</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
+                <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
+                <button type="button" class="help-button-global" data-action="openContextualHelp" title="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
+            </div>
+            
             <div class="config-container" role="main" aria-label="Git Repository Window Colors Configuration">
-                <div class="top-panels">
-                    <section class="repo-panel" aria-labelledby="repo-rules-heading">
-                        <div class="panel-header">
-                            <h2 id="repo-rules-heading">Repository Rules 
-                                <button class="tooltip panel-tooltip help-icon" 
-                                        type="button"
-                                        aria-label="Help for Repository Rules"
-                                        aria-describedby="repo-rules-tooltip"
-                                        tabindex="0">ℹ️
-                                    <span class="tooltiptext" 
-                                          id="repo-rules-tooltip" 
-                                          role="tooltip" 
-                                          aria-hidden="true">
-                                        <strong>Repository Rules</strong><br>
-                                        Configure colors for specific repositories. Rules are matched in order from top to bottom.<br><br>
-                                        <strong>Repository Qualifier:</strong> Part of your repo URL (e.g., "myrepo", "github.com/user/repo")<br>
-                                        <strong>Default Branch:</strong> Optional. Specify main branch name for branch-specific coloring<br>
-                                        <strong>Primary Color:</strong> Main window color for this repository<br>
-                                        <strong>Branch Color:</strong> Optional. Color used when not on the default branch<br><br>
-                                        <strong>Note:</strong> Branch-related columns (Default Branch, Branch Color) can be hidden using the setting in Other Settings.
-                                    </span>
-                                </button>
-                            </h2>
-                            <button type="button" 
-                                    class="header-add-button tooltip panel-tooltip" 
-                                    data-action="addRepoRule" 
-                                    title="Add a new repository rule"
-                                    aria-label="Add Repository Rule (Ctrl+Alt+R)">
-                                + Add
-                                <span class="tooltiptext" role="tooltip">
-                                    Add a new repository rule. Rules are processed in order, with the first match being applied.
-                                    <br><br><strong>Tip:</strong> Use Ctrl+Alt+R as a keyboard shortcut.
-                                </span>
-                            </button>
-                        </div>
-                        <div class="section-help" aria-describedby="repo-rules-heading">
-                            Define color rules for specific repositories. The <strong>FIRST MATCHING</strong> rule will be used. The qualifier is a simple substring match against the repository URL, not a regular expression.
-                        </div>
-                        <div id="repoRulesContent" role="region" aria-label="Repository rules table">
-                            <div class="placeholder" aria-live="polite">Loading repository rules...</div>
-                        </div>
-                    </section>
-                    <div class="right-column">
-                        <section class="branch-panel" aria-labelledby="branch-rules-heading">
+                
+                <div id="rules-tab" role="tabpanel" aria-labelledby="tab-rules" class="tab-content active">
+                    <div class="top-panels">
+                        <section class="repo-panel" aria-labelledby="repo-rules-heading">
                             <div class="panel-header">
-                                <h2 id="branch-rules-heading">Branch Rules
+                                <h2 id="repo-rules-heading">Repository Rules 
                                     <button class="tooltip panel-tooltip help-icon" 
                                             type="button"
-                                            aria-label="Help for Branch Rules"
-                                            aria-describedby="branch-rules-tooltip"
-                                            tabindex="0">ℹ️
+                                            aria-label="Help for Repository Rules"
+                                            aria-describedby="repo-rules-tooltip"
+                                            tabindex="0"><span class="codicon codicon-info"></span>
                                         <span class="tooltiptext" 
-                                              id="branch-rules-tooltip" 
-                                              role="tooltip" 
-                                              aria-hidden="true">
-                                            <strong>Branch Rules</strong><br>
-                                            Configure colors for branch name patterns across all repositories.<br><br>
-                                            <strong>Pattern:</strong> Regular expression to match branch names<br>
-                                            <strong>Examples:</strong><br>
-                                            • <code>feature/.*</code> - All feature branches<br>
-                                            • <code>main|master</code> - Main branches<br>
-                                            • <code>release-.*</code> - Release branches<br>
-                                            • <code>hotfix.*</code> - Hotfix branches
+                                            id="repo-rules-tooltip" 
+                                            role="tooltip" 
+                                            aria-hidden="true">
+                                            <strong>Repository Rules</strong><br>
+                                            Configure colors for specific repositories. Rules are matched in order from top to bottom.<br><br>
+                                            <strong>Repository Qualifier:</strong> Part of your repo URL (e.g., "myrepo", "github.com/user/repo")<br>
+                                            <strong>Primary Color:</strong> Main window color for this repository<br>
+                                            <strong>Branch Mode:</strong> Choose between Global or Local branch rules for this repository
                                         </span>
                                     </button>
                                 </h2>
                                 <button type="button" 
-                                        class="header-add-button tooltip panel-tooltip-left" 
-                                        data-action="addBranchRule" 
-                                        title="Add a new branch rule"
-                                        aria-label="Add Branch Rule (Ctrl+Alt+B)">
+                                        class="header-add-button tooltip panel-tooltip" 
+                                        data-action="addRepoRule" 
+                                        title="Add a new repository rule"
+                                        aria-label="Add Repository Rule (Ctrl+Alt+R)">
                                     + Add
                                     <span class="tooltiptext" role="tooltip">
-                                        Add a new branch rule. Branch rules override repository rules for matching branch patterns.
-                                        <br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut.
+                                        Add a new repository rule. Rules are processed in order, with the first match being applied.
+                                        <br><br><strong>Tip:</strong> Use Ctrl+Alt+R as a keyboard shortcut.
                                     </span>
                                 </button>
                             </div>
-                            <div class="section-help">
-                                Define color rules based on branch name patterns. These override repository branch rules (if used). The configured color is applied to the Activity Bar when working on a matched branch.
+                            <div class="section-help" aria-describedby="repo-rules-heading">
+                                Define coloring rules for repositories. Rules are processed from top to bottom. The <strong>FIRST MATCHING</strong> rule will be used. The qualifier is a simple substring match against the repository URL, not a regular expression.
                             </div>
-                            <div id="branchRulesContent" role="region" aria-label="Branch rules table">
-                                <div class="placeholder" aria-live="polite">Loading branch rules...</div>
+                            <div id="repoRulesContent" role="region" aria-label="Repository rules table">
+                                <div class="placeholder" aria-live="polite">Loading repository rules...</div>
                             </div>
                         </section>
-                        <section class="import-export-panel">
+                        <div class="right-column">
+                            <section class="branch-panel" aria-labelledby="branch-rules-heading">
+                                <button class="branch-collapse-btn" 
+                                        type="button"
+                                        aria-label="Collapse Branch Rules Table"
+                                        aria-expanded="true"
+                                        title="Collapse section">
+                                    <span class="codicon codicon-chevron-right"></span>
+                                </button>
+                                <button class="branch-expand-btn" 
+                                        type="button"
+                                        aria-label="Expand Branch Rules Table"
+                                        title="Expand section"
+                                        style="display: none;">
+                                    <span class="codicon codicon-chevron-left"></span>
+                                </button>
+                                <div class="panel-header">
+                                    <h2 id="branch-rules-heading">Branch Rules Table
+                                        <button class="tooltip panel-tooltip help-icon" 
+                                                type="button"
+                                                aria-label="Help for Branch Rules Table"
+                                                aria-describedby="branch-rules-tooltip"
+                                                tabindex="0"><span class="codicon codicon-info"></span>
+                                            <span class="tooltiptext" 
+                                                id="branch-rules-tooltip" 
+                                                role="tooltip" 
+                                                aria-hidden="true">
+                                                <strong>Branch Rules Table</strong><br>
+                                                Configure colors for branch name patterns across all repositories.<br><br>
+                                                <strong>Pattern:</strong> Regular expression to match branch names<br>
+                                                <strong>Examples:</strong><br>
+                                                • <code>feature/.*</code> - All feature branches<br>
+                                                • <code>main|master</code> - Main branches<br>
+                                                • <code>release-.*</code> - Release branches<br>
+                                                • <code>hotfix.*</code> - Hotfix branches
+                                            </span>
+                                        </button>
+                                    </h2>
+                                    <button type="button" 
+                                            class="header-add-button branch-add-button tooltip panel-tooltip-left" 
+                                            data-action="addBranchRule" 
+                                            title="Add a new branch rule"
+                                            aria-label="Add Branch Rule (Ctrl+Alt+B)">
+                                        + Add
+                                        <span class="tooltiptext" role="tooltip">
+                                            Add a new branch rule. Branch rules override repository rules for matching branch patterns.
+                                            <br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut.
+                                        </span>
+                                    </button>
+                                </div>
+                                <div class="section-help">
+                                    Define rules based on branch name patterns. Rules are processed from top to bottom. The first match applies. A simple color is applied to the Activity Bar when working on a matched branch. A profile is applied to all configured elements.
+                                </div>
+                                <div id="branchRulesContent" role="region" aria-label="Branch rules table">
+                                    <div class="placeholder" aria-live="polite">Loading branch rules...</div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                    <section class="bottom-panel" aria-labelledby="other-settings-heading">
+                        <button class="settings-collapse-btn" 
+                                type="button"
+                                aria-label="Collapse Other Settings"
+                                aria-expanded="true"
+                                title="Collapse section">
+                            <span class="codicon codicon-chevron-down"></span>
+                        </button>
+                        <button class="settings-expand-btn" 
+                                type="button"
+                                aria-label="Expand Other Settings"
+                                title="Expand section"
+                                style="display: none;">
+                            <span class="codicon codicon-chevron-up"></span>
+                        </button>
+                        <div class="panel-header">
+                            <h2 id="other-settings-heading">Other Settings
+                                <button class="tooltip bottom-panel-tooltip help-icon" 
+                                    type="button"
+                                    aria-label="Help for Other Settings"
+                                    aria-describedby="other-settings-tooltip"
+                                    tabindex="0"><span class="codicon codicon-info"></span>
+                                <span class="tooltiptext" 
+                                    id="other-settings-tooltip" 
+                                    role="tooltip" 
+                                    aria-hidden="true">
+                                    <strong>Other Settings</strong><br>
+                                    Configure other behavior and appearance options.<br><br>
+                                    <strong>* Simple Colors Only:</strong> Settings marked with an asterisk (*) only apply when using simple colors in your rules. When using Profiles, these color-related settings are controlled by the profile configuration.<br><br>
+                                    <strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br>
+                                    <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-179° to +179°)<br><br>
+                                    Toggle various UI elements that should be colored by the extension.
+                                </span>
+                            </button>
+                            </h2>
                             <div class="import-export-buttons">
                                 <button type="button" 
                                         class="import-export-button" 
@@ -621,35 +1221,188 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     📥 Import Config
                                 </button>
                             </div>
-                        </section>
-                    </div>
+                        </div>
+                        <div id="otherSettingsContent" role="region" aria-label="Other settings controls">
+                            <div class="placeholder" aria-live="polite">Loading other settings...</div>
+                        </div>
+                    </section>
                 </div>
-                <section class="bottom-panel" aria-labelledby="other-settings-heading">
-                    <h2 id="other-settings-heading">Other Settings
-                        <button class="tooltip bottom-panel-tooltip help-icon" 
-                                type="button"
-                                aria-label="Help for Other Settings"
-                                aria-describedby="other-settings-tooltip"
-                                tabindex="0">ℹ️
-                            <span class="tooltiptext" 
-                                  id="other-settings-tooltip" 
-                                  role="tooltip" 
-                                  aria-hidden="true">
-                                <strong>Other Settings</strong><br>
-                                Configure other behavior and appearance options.<br><br>
-                                <strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br>
-                                <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-179° to +179°)<br><br>
-                                Toggle various UI elements that should be colored by the extension.
-                            </span>
-                        </button>
-                    </h2>
-                    <div class="section-help" aria-describedby="other-settings-heading">
-                        Configure other settings that control the extension UI and how colors are applied across VS Code.
-                    </div>
-                    <div id="otherSettingsContent" role="region" aria-label="Other settings controls">
-                        <div class="placeholder" aria-live="polite">Loading other settings...</div>
-                    </div>
-                </section>
+                
+                <div id="profiles-tab" role="tabpanel" aria-labelledby="tab-profiles" class="tab-content">
+                     <!-- Top section: Profiles List + Palette Editor side by side -->
+                     <div class="profiles-top-section">
+                        <section class="profiles-list-section">
+                           <div class="panel-header">
+                                <h2>Profiles
+                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Profiles Help"><span class="codicon codicon-info"></span>
+                                        <span class="tooltiptext">
+                                            <strong>Profiles</strong><br>
+                                            Define reusable color schemes (profiles) that can be applied to repository rules.
+                                        </span>
+                                    </span>
+                                </h2>
+                                <button type="button" class="header-add-button" data-action="addProfile">+ Add</button>
+                           </div>
+                           <div id="profilesList" class="profiles-list"></div>
+                        </section>
+                        
+                        <div class="profile-editor-top" id="profileEditorTop">
+                            <div class="profile-header">
+                                <input type="text" id="profileNameInput" placeholder="Profile Name">
+                                <div class="profile-actions">
+                                   <button type="button" class="profile-action-btn" data-action="duplicateProfile" title="Duplicate Profile" aria-label="Duplicate Profile"><span class="codicon codicon-copy"></span></button>
+                                   <button type="button" class="profile-action-btn" data-action="deleteProfile" title="Delete Profile" aria-label="Delete Profile"><span class="codicon codicon-trash"></span></button>
+                                </div>
+                            </div>
+                            
+                            <div class="palette-editor-section">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                    <h3 style="margin: 0;">Reference Palette
+                                        <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help"><span class="codicon codicon-info"></span>
+                                            <span class="tooltiptext">
+                                                <strong>Reference Palette</strong><br>
+                                                Define reference colors that can be used in the mappings.<br><br>
+                                            </span>
+                                        </span>
+                                    </h3>
+                                    <div class="palette-generator-container">
+                                        <div id="paletteToast" class="palette-toast" style="display: none;">
+                                            <span class="palette-toast-message">Palette generated</span>
+                                            <div class="palette-toast-actions">
+                                                <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
+                                                <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" title="Generate palette colors from Primary Active Background using color theory algorithms" aria-label="Generate Pleasing Palette from Primary Active Background">
+                                            <span class="codicon codicon-wand"></span>
+                                            <span class="codicon codicon-chevron-down"></span>
+                                        </button>
+                                        <div class="palette-generator-dropdown" id="paletteGeneratorDropdown" style="display: none;">
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="balanced">Balanced Tetradic</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="monochromatic">Monochromatic</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="bold-contrast">Bold Contrast</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="paletteEditor" class="palette-grid">
+                                    <!-- Grid of palette slots -->
+                                </div>
+                            </div>
+                        </div>
+                     </div>
+                     
+                     <!-- Bottom section: Mappings Editor full width -->
+                     <div class="profiles-bottom-section" id="profileEditorBottom">
+                        <div class="mappings-editor-section">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                <h3 style="margin: 0;">
+                                    Mappings
+                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Mappings Help"><span class="codicon codicon-info"></span>
+                                        <span class="tooltiptext">
+                                            <strong>Section Mappings</strong><br>
+                                            Map UI elements (like Title Bar, Status Bar) to one of the palette slots defined above.
+                                        </span>
+                                    </span>
+                                </h3>
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="syncFgBgCheckbox" checked style="cursor: pointer;">
+                                        <span>Synchronize fg/bg selections</span>
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Synchronize Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
+                                            <span class="tooltiptext">
+                                                <strong>Synchronize Foreground/Background</strong><br>
+                                                When enabled, selecting a foreground color automatically sets the corresponding background color (and vice versa).<br><br>
+                                                For example, selecting "Primary Active Foreground" will automatically set "Primary Active Background" to its corresponding palette slot.
+                                            </span>
+                                        </span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="syncActiveInactiveCheckbox" checked style="cursor: pointer;">
+                                        <span>Synchronize active/inactive selections</span>
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Active/Inactive Sync Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
+                                            <span class="tooltiptext">
+                                                <strong>Synchronize Active/Inactive</strong><br>
+                                                When enabled, selecting an active element automatically sets the corresponding inactive element (and vice versa).<br><br>
+                                                For example, selecting "Title Bar Active Foreground" will automatically set "Title Bar Inactive Foreground" to its corresponding palette slot.<br><br>
+                                                <strong>Combined Effect:</strong> When both sync options are enabled, changing one element can automatically configure up to 4 related elements (active/inactive × foreground/background).
+                                            </span>
+                                        </span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                                        <input type="checkbox" id="limitOptionsCheckbox" style="cursor: pointer;">
+                                        <span>Limit options</span>
+                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Limit Options Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
+                                            <span class="tooltiptext">
+                                                <strong>Limit Dropdown Options</strong><br>
+                                                When enabled, dropdown menus will only show palette slots that match the element's characteristics.<br><br>
+                                                <strong>Examples:</strong><br>
+                                                • Background elements only show background palette slots (e.g., Primary Active Bg, Secondary Inactive Bg)<br>
+                                                • Foreground elements only show foreground palette slots<br>
+                                                • Active elements prefer active palette slots<br>
+                                                • Inactive elements prefer inactive palette slots<br><br>
+                                                This helps avoid accidentally assigning mismatched color types and makes it easier to find the right palette slot.
+                                            </span>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="mappingsEditor">
+                                <!-- Tabbed sections for mappings -->
+                            </div>
+                        </div>
+                     </div>
+                </div>
+                
+                <div id="branch-tables-tab" role="tabpanel" aria-labelledby="tab-branch-tables" class="tab-content">
+                    <section class="branch-tables-panel">
+                        <div class="panel-header">
+                            <h2>Branch Tables</h2>
+                        </div>
+                        <p style="margin: 0 0 1em 0; color: var(--vscode-descriptionForeground);">
+                            Manage shared branch rule tables that can be used across multiple repository rules. 
+                            Create new tables using "Create New Table" in the Branch Table dropdown on the Rules page. 
+                            Tables that are currently in use cannot be deleted.
+                        </p>
+                        <div id="branch-tables-content">
+                            <!-- Populated by renderBranchTablesTab() -->
+                        </div>
+                    </section>
+                </div>
+                
+                <div id="report-tab" role="tabpanel" aria-labelledby="tab-report" class="tab-content">
+                    <section class="report-panel">
+                        <div class="panel-header">
+                            <h2>Color Report
+                                <button class="tooltip panel-tooltip help-icon" 
+                                        type="button"
+                                        aria-label="Help for Color Report"
+                                        tabindex="0"><span class="codicon codicon-info"></span>
+                                    <span class="tooltiptext" role="tooltip">
+                                        <strong>Color Report</strong><br>
+                                        Detailed report showing all theme elements that are currently being colored,
+                                        the applied colors, and which rules or profiles are applying them.
+                                    </span>
+                                </button>
+                            </h2>
+                        </div>
+                        <div id="reportContent" role="region" aria-label="Color report table">
+                            <div class="placeholder">Loading color report...</div>
+                        </div>
+                    </section>
+                </div>
+            
+            </div>
+            
+            <!-- Help Panel (Unified) -->
+            <div class="help-panel-overlay" id="helpPanelOverlay" data-action="closeHelp"></div>
+            <div class="help-panel" id="helpPanel">
+                <div class="help-panel-header">
+                    <h2 class="help-panel-title" id="helpPanelTitle">Help</h2>
+                    <button type="button" class="help-panel-close" data-action="closeHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>
+                </div>
+                <div class="help-panel-content" id="helpPanelContent">
+                    <!-- Help content will be loaded here -->
+                </div>
             </div>
             
             <script nonce="${nonce}">
@@ -661,8 +1414,67 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         </html>`;
     }
 
+    private async _checkAndShowGettingStarted(): Promise<void> {
+        const hasShownGettingStarted = this._context.globalState.get<boolean>('grwc.hasShownGettingStarted', false);
+
+        if (!hasShownGettingStarted) {
+            // Mark as shown
+            await this._context.globalState.update('grwc.hasShownGettingStarted', true);
+
+            // Wait a bit for the webview to be fully loaded
+            setTimeout(async () => {
+                await this._sendGettingStartedHelpContent();
+
+                // Send a message to open the help panel
+                if (this._panel) {
+                    this._panel.webview.postMessage({
+                        command: 'openGettingStartedHelp',
+                    });
+                }
+            }, 500);
+        }
+    }
+
     private _onPanelDisposed(): void {
+        // When closing the configurator, we need to handle colors appropriately:
+        // 1. If there's a matching rule → apply it (replace preview colors with actual colors)
+        // 2. If no matching rule or not a git repo → clear preview colors
+
+        const workspaceInfo = this._getWorkspaceInfo();
+        const hasGitRepo = workspaceInfo && workspaceInfo.repositoryUrl && workspaceInfo.repositoryUrl.length > 0;
+
+        if (hasGitRepo) {
+            const repoRules = this._getRepoRules();
+            const matchingIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
+
+            if (matchingIndex >= 0) {
+                // Has a matching rule - apply its colors (not preview)
+                vscode.commands.executeCommand('_grwc.internal.applyColors', 'config panel closed', false);
+            } else {
+                // Git repo but no matching rule - clear preview colors
+                vscode.commands.executeCommand('_grwc.internal.clearPreviewColors');
+            }
+        } else {
+            // Not a git repo - clear any preview colors
+            vscode.commands.executeCommand('_grwc.internal.clearPreviewColors');
+        }
+
         this._panel = undefined;
+    }
+
+    private _shouldClearPreviewColorsOnClose(): boolean {
+        // If no workspace info, can't determine
+        if (!this._workspaceInfo || !this._workspaceInfo.repositoryUrl) {
+            // Not a git repo, should clear
+            return true;
+        }
+
+        // Check if there's a matching repo rule
+        const repoRules = this._getRepoRules();
+        const matchingIndex = this._getMatchingRepoRuleIndex(repoRules, this._workspaceInfo.repositoryUrl);
+
+        // No matching rule means not managed, should clear
+        return matchingIndex < 0;
     }
 
     public dispose(): void {
