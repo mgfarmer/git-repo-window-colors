@@ -177,6 +177,10 @@ body {
     margin: 0;
 }
 
+.branch-panel .panel-header {
+    padding-left: 40px;
+}
+
 h2 {
     margin-top: 0;
     color: var(--vscode-foreground);
@@ -1767,10 +1771,11 @@ button:focus {
 
 .branch-table-grid {
     display: grid;
-    grid-template-columns: 10% 8% 8% 74%;
+    grid-template-columns: 15% 8% 8% 69%;
     gap: 16px;
     align-items: center;
     flex: 1;
+    margin-right: 86px;
 }
 
 .branch-table-name {
@@ -1789,6 +1794,9 @@ button:focus {
 .branch-table-repo-list {
     color: var(--vscode-descriptionForeground);
     font-size: 0.9em;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.4;
 }
 
 .branch-table-repo-list .repo-link {

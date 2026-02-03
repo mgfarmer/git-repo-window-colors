@@ -5475,7 +5475,7 @@ const DEFAULT_MAPPINGS: SectionMappings = {
     'activityBar.background': 'primaryActiveBg',
     'activityBar.foreground': 'primaryActiveFg',
     'activityBar.inactiveForeground': 'primaryInactiveFg',
-    'statusBar.background': 'secondaryActiveBg',
+    'statusBar.background': 'primaryActiveBg',
     'statusBar.foreground': 'secondaryActiveFg',
     'titleBar.activeBackground': 'primaryActiveBg',
     'titleBar.activeForeground': 'primaryActiveFg',

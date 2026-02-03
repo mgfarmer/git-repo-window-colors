@@ -1371,27 +1371,27 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
         }
 
         // FALLBACK: Handle legacy string format
-        if (typeof setting === 'string') {
-            // Try parsing as JSON string first (for backward compatibility)
-            if (setting.trim().startsWith('{')) {
-                try {
-                    const obj = JSON.parse(setting);
-                    const repoConfig: RepoConfig = {
-                        repoQualifier: obj.repoQualifier || '',
-                        primaryColor: obj.primaryColor || '',
-                        profileName: obj.profileName,
-                        enabled: obj.enabled !== undefined ? obj.enabled : true,
-                        branchRules: obj.branchRules,
-                        branchTableName: obj.branchTableName,
-                    };
-                    result.push(repoConfig);
-                    continue;
-                } catch (err) {
-                    // If JSON parsing fails, log error and skip
-                    outputChannel.appendLine(`Failed to parse JSON rule: ${setting}`);
-                }
-            }
-        }
+        // if (typeof setting === 'string') {
+        //     // Try parsing as JSON string first (for backward compatibility)
+        //     if (setting.trim().startsWith('{')) {
+        //         try {
+        //             const obj = JSON.parse(setting);
+        //             const repoConfig: RepoConfig = {
+        //                 repoQualifier: obj.repoQualifier || '',
+        //                 primaryColor: obj.primaryColor || '',
+        //                 profileName: obj.profileName,
+        //                 enabled: obj.enabled !== undefined ? obj.enabled : true,
+        //                 branchRules: obj.branchRules,
+        //                 branchTableName: obj.branchTableName,
+        //             };
+        //             result.push(repoConfig);
+        //             continue;
+        //         } catch (err) {
+        //             // If JSON parsing fails, log error and skip
+        //             outputChannel.appendLine(`Failed to parse JSON rule: ${setting}`);
+        //         }
+        //     }
+        // }
     }
 
     return result;
@@ -1449,66 +1449,66 @@ function getBranchData(validate: boolean = false): Map<string, string> {
             continue;
         }
 
-        // FALLBACK: Handle legacy string format
-        if (typeof setting === 'string') {
-            // Try parsing as JSON string first (for backward compatibility)
-            if (setting.trim().startsWith('{')) {
-                try {
-                    const obj = JSON.parse(setting);
-                    // Skip disabled rules
-                    if (obj.enabled === false) {
-                        continue;
-                    }
-                    // Add enabled rules to the map
-                    if (obj.pattern && obj.color) {
-                        result.set(obj.pattern, obj.color);
-                    }
-                    continue;
-                } catch (err) {
-                    // If JSON parsing fails, fall through to legacy parsing
-                    outputChannel.appendLine(`Failed to parse JSON branch rule: ${setting}`);
-                }
-            }
+        //     // FALLBACK: Handle legacy string format
+        //     if (typeof setting === 'string') {
+        //         // Try parsing as JSON string first (for backward compatibility)
+        //         if (setting.trim().startsWith('{')) {
+        //             try {
+        //                 const obj = JSON.parse(setting);
+        //                 // Skip disabled rules
+        //                 if (obj.enabled === false) {
+        //                     continue;
+        //                 }
+        //                 // Add enabled rules to the map
+        //                 if (obj.pattern && obj.color) {
+        //                     result.set(obj.pattern, obj.color);
+        //                 }
+        //                 continue;
+        //             } catch (err) {
+        //                 // If JSON parsing fails, fall through to legacy parsing
+        //                 outputChannel.appendLine(`Failed to parse JSON branch rule: ${setting}`);
+        //             }
+        //         }
 
-            // Legacy string format parsing: pattern:color
-            const parts = setting.split(':');
-            if (validate && parts.length < 2) {
-                // Invalid entry
-                const msg = 'Setting `' + setting + "': missing a color specifier";
-                branchRuleErrors.set(currentIndex, msg);
-                outputChannel.appendLine(msg);
-                currentIndex++;
-                continue;
-            }
+        //         // Legacy string format parsing: pattern:color
+        //         const parts = setting.split(':');
+        //         if (validate && parts.length < 2) {
+        //             // Invalid entry
+        //             const msg = 'Setting `' + setting + "': missing a color specifier";
+        //             branchRuleErrors.set(currentIndex, msg);
+        //             outputChannel.appendLine(msg);
+        //             currentIndex++;
+        //             continue;
+        //         }
 
-            const branchName = parts[0].trim();
-            const branchColor = parts[1].trim();
+        //         const branchName = parts[0].trim();
+        //         const branchColor = parts[1].trim();
 
-            // Test all the colors to ensure they are parseable
-            let colorMessage = '';
+        //         // Test all the colors to ensure they are parseable
+        //         let colorMessage = '';
 
-            const profileName = extractProfileName(branchColor, advancedProfiles);
+        //         const profileName = extractProfileName(branchColor, advancedProfiles);
 
-            // Only validate as a color if it's not a profile name
-            if (!profileName) {
-                try {
-                    Color(branchColor);
-                } catch (error) {
-                    colorMessage = '`' + branchColor + '` is not a known color';
-                }
-            }
+        //         // Only validate as a color if it's not a profile name
+        //         if (!profileName) {
+        //             try {
+        //                 Color(branchColor);
+        //             } catch (error) {
+        //                 colorMessage = '`' + branchColor + '` is not a known color';
+        //             }
+        //         }
 
-            if (validate && colorMessage != '') {
-                const msg = 'Setting `' + setting + '`: ' + colorMessage;
-                branchRuleErrors.set(currentIndex, msg);
-                outputChannel.appendLine(msg);
-            }
+        //         if (validate && colorMessage != '') {
+        //             const msg = 'Setting `' + setting + '`: ' + colorMessage;
+        //             branchRuleErrors.set(currentIndex, msg);
+        //             outputChannel.appendLine(msg);
+        //         }
 
-            result.set(branchName, branchColor);
-            currentIndex++;
-        } else {
-            currentIndex++;
-        }
+        //         result.set(branchName, branchColor);
+        //         currentIndex++;
+        //     } else {
+        //         currentIndex++;
+        //     }
     }
 
     return result;
