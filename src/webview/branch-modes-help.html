@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Branch Modes Guide</title>
+    <title>Shared Branch Tables Guide</title>
     <link rel="stylesheet" href="help.css">
 </head>
 <body>
@@ -13,252 +13,233 @@
             <ul>
                 <li><a href="#" data-switch-help="getting-started">Getting Started</a></li>
                 <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
-                <li><a class="current">Branch Modes Guide</a> (current)</li>
+                <li><a class="current">Shared Branch Tables Guide</a> (current)</li>
                 <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a href="#" data-switch-help="starred">Starred Keys Guide</a></li>
+                <li><a href="#" data-switch-help="colored">Colored Keys Guide</a></li>
                 <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
             </ul>
         </div>
 
-        <h1>Branch Modes: Global vs. Local</h1>
+        <h1>Shared Branch Tables Guide</h1>
         
         <p>
-            Each repository rule can use either <strong>Global Branch Rules</strong> or <strong>Local Branch Rules</strong>. 
-            This powerful feature allows you to customize branch coloring on a per-repository basis while maintaining 
-            a set of common rules across all repositories.
+            Shared Branch Tables allow you to create and manage multiple sets of branch color rules that can be 
+            reused across different repository rules. Instead of duplicating branch rules or being limited to a 
+            single global set, you can organize branch rules into named tables and reference them from any repository rule.
         </p>
 
-        <h2>Understanding Branch Modes</h2>
+        <h2>Understanding Shared Branch Tables</h2>
 
-        <h3>Global Mode (Default)</h3>
+        <h3>What Are Shared Branch Tables?</h3>
         <p>
-            When a repository uses <strong>Global</strong> mode, it shares the common branch rules defined in the 
-            Branch Rules panel. This is the default behavior and is ideal for:
+            A branch table is a named collection of branch color rules. Each table contains its own list of 
+            branch patterns (like <code>main</code>, <code>feature/.*</code>, or <code>hotfix/.*</code>) with 
+            associated colors. Repository rules reference these tables by name instead of storing rules directly.
         </p>
-        <ul>
-            <li>Maintaining consistent branch colors across all your repositories</li>
-            <li>Having a single set of branch patterns (e.g., <code>feature/.*</code>, <code>main</code>) that apply everywhere</li>
-            <li>Simplifying configuration when your branching strategy is consistent across projects</li>
-        </ul>
 
         <div class="example">
-            <strong>Example:</strong><br>
-            If your global branch rules define:<br>
+            <strong>Example Tables:</strong><br>
+            <br>
+            <strong>Default</strong>:<br>
             • <code>main|master</code> → Blue<br>
+            • <code>develop</code> → Purple<br>
             • <code>feature/.*</code> → Green<br>
+            <br>
+            <strong>Release Workflow</strong>:<br>
+            • <code>release/.*</code> → Orange<br>
             • <code>hotfix/.*</code> → Red<br>
+            • <code>main</code> → Dark Blue<br>
             <br>
-            Then ALL repositories in Global mode will use these same branch color patterns.
+            <strong>Client Project</strong>:<br>
+            • <code>production</code> → Dark Red<br>
+            • <code>staging</code> → Orange<br>
+            • <code>dev</code> → Yellow<br>
         </div>
 
-        <h3>Local Mode</h3>
+        <h3>The Default Table</h3>
         <p>
-            When a repository uses <strong>Local</strong> mode, it has its own dedicated set of branch rules 
-            that override the global rules. This is useful when:
+            When you first install the extension, a table named <strong>"Default"</strong> is automatically created. 
+            This table is just like any other shared table - it can be renamed, modified, or even deleted if unused. 
+            It simply provides a convenient starting point for organizing your branch rules.
         </p>
         <ul>
-            <li>A specific repository has unique branching conventions</li>
-            <li>You want different branch colors for a particular project</li>
-            <li>You need more granular control over branch matching for certain repos</li>
+            <li>Can be renamed to better match your workflow (e.g., "Standard", "Common Branches")</li>
+            <li>Can be deleted if you prefer a different organizational structure</li>
+            <li>Is ideal for branch patterns used across most of your repositories</li>
         </ul>
 
-        <div class="example">
-            <strong>Example:</strong><br>
-            Your <code>client-project</code> repository might use Local mode with custom rules:<br>
-            • <code>prod</code> → Dark Red (production branch)<br>
-            • <code>staging</code> → Orange (staging branch)<br>
-            • <code>dev</code> → Yellow (development branch)<br>
-            <br>
-            While all your other repositories continue to use the global branch rules.
-        </div>
+        <h2>Using Branch Tables</h2>
 
-        <h2>How to Use Branch Modes</h2>
-
-        <h3>Switching Between Modes</h3>
+        <h3>Selecting a Table for a Repository</h3>
         <p>
-            In the Repository Rules table, each repository has a <strong>Branch Mode</strong> dropdown in the rightmost column:
-        </p>
-        <ol>
-            <li>Select a repository by clicking its radio button (leftmost column)</li>
-            <li>Find the "Branch Mode" dropdown for that repository</li>
-            <li>Choose <strong>Global</strong> or <strong>Local</strong></li>
-        </ol>
-
-        <p>
-            When you switch to Local mode, the extension will:
+            In the Repository Rules table, each repository has a <strong>Branch Table</strong> dropdown showing:
         </p>
         <ul>
-            <li>Initialize an empty local branch rules array for that repository</li>
-            <li>Update the Branch Rules section header to show "Branch Rules - [Repository Name]"</li>
-            <li>Display only that repository's local rules in the Branch Rules table</li>
-            <li>Show a "Copy From..." button to help you populate local rules</li>
-        </ul>
-
-        <h3>Working with Local Rules</h3>
-        <p>
-            When a repository is in Local mode and selected, the Branch Rules panel operates on that repository's 
-            local rules instead of the global rules:
-        </p>
-
-        <h4>Adding Local Rules</h4>
-        <p>
-            Click the "+ Add" button in the Branch Rules panel to create a new local rule for the selected repository. 
-            The rule will only apply to that specific repository.
-        </p>
-
-        <h4>Copying Rules</h4>
-        <p>
-            The <strong>"📋 Copy From..."</strong> button appears when editing local rules. It allows you to:
-        </p>
-        <ul>
-            <li><strong>Copy from Global Rules</strong> - Import all global branch rules into the local rule set</li>
-            <li><strong>Copy from Another Repository</strong> - Import local rules from any other repository that has local rules defined</li>
+            <li><strong>All Available Tables</strong> - Alphabetically sorted, with usage count badges (e.g., "Release Workflow (3)")</li>
+            <li><strong>➕ Create New Table...</strong> - Create a new table (shown last)</li>
         </ul>
 
         <div class="tip">
-            <strong>Tip:</strong> The Copy From feature <strong>appends</strong> rules instead of replacing them. 
-            This allows you to start with global rules and then add repository-specific customizations on top.
+            <strong>Tip:</strong> The usage count badge (e.g., "Feature Branches (3)") shows how many 
+            repository rules use that table. Hover over it to see which repositories reference it.
         </div>
 
-        <h4>Editing and Managing Local Rules</h4>
+        <h3>Creating a New Table</h3>
         <p>
-            Local rules work exactly like global rules:
+            To create a new branch table:
+        </p>
+        <ol>
+            <li>In a repository's Branch Table dropdown, select <strong>"➕ Create New Table..."</strong></li>
+            <li>Enter a unique name for your table</li>
+            <li>Optionally check "Start with copy of current table" to duplicate existing rules</li>
+            <li>Click "Create Table"</li>
+        </ol>
+        <p>
+            The new table is immediately assigned to that repository, and you can begin adding or editing rules.
+        </p>
+
+        <div class="note">
+            <strong>Note:</strong> Table names must be unique.
+        </div>
+
+        <h3>Editing Branch Rules</h3>
+        <p>
+            When you select a repository (via radio button), the Branch Rules section displays the rules from 
+            that repository's assigned table. Any edits you make affect the table itself, which means:
         </p>
         <ul>
-            <li>Drag to reorder (first matching rule wins)</li>
-            <li>Toggle enabled/disabled with the checkbox</li>
-            <li>Edit patterns and colors inline</li>
-            <li>Delete rules with the trash icon</li>
+            <li>Changes apply to <strong>all repositories</strong> using that table</li>
+            <li>If only one repository uses a table (usage count: 1), it's effectively private to that repo</li>
+            <li>You can see which table you're editing in the Branch Rules section header</li>
+        </ul>
+
+        <h2>Managing Tables (Branch Tables Tab)</h2>
+
+        <p>
+            The <strong>Branch Tables</strong> tab provides a central view of all your branch tables. Here you can:
+        </p>
+        <ul>
+            <li>See all tables with their rule counts and usage counts</li>
+            <li>View which repository rules use each table</li>
+            <li>Delete unused tables (tables with 0 usage)</li>
+            <li>Jump to a repository rule that uses a specific table for editing</li>
+        </ul>
+
+        <h3>Table Actions</h3>
+        <ul>
+            <li><strong>Select:</strong> Switches to the Rules tab and selects a repository using this table, 
+                allowing you to edit the table's branch rules. Disabled if no repositories use the table.</li>
+            <li><strong>Rename:</strong> Change the table name (updates all references).</li>
+            <li><strong>View Usage:</strong> Shows which repository rules reference this table.</li>
+            <li><strong>Delete:</strong> Remove the table (only available when no repositories use it).</li>
         </ul>
 
         <h2>How Branch Matching Works</h2>
         
         <p>
-            When the extension needs to determine the branch color for your current workspace, it follows this priority:
+            When determining the branch color for your workspace:
         </p>
 
         <ol>
-            <li><strong>Match Repository:</strong> First, find the repository rule that matches your workspace</li>
-            <li><strong>Check Branch Mode:</strong> Determine if that repository uses Global or Local branch rules</li>
-            <li><strong>Search Branch Rules:</strong>
-                <ul>
-                    <li>If <strong>Local mode</strong>: Search the repository's local branch rules first</li>
-                    <li>If <strong>Global mode</strong> OR no local match: Search the global branch rules</li>
-                </ul>
-            </li>
-            <li><strong>Apply First Match:</strong> Use the first matching branch rule found</li>
+            <li><strong>Match Repository:</strong> Find the repository rule that matches your workspace</li>
+            <li><strong>Get Branch Table:</strong> Look up the branch table referenced by that repository rule</li>
+            <li><strong>Search Rules:</strong> Process branch rules in order within that table</li>
+            <li><strong>Apply First Match:</strong> Use the first rule whose pattern matches your current branch</li>
         </ol>
 
         <div class="note">
             <strong>Important:</strong> Branch rules are processed in order. The <strong>first</strong> matching 
-            pattern is used, and subsequent matches are ignored. This applies to both local and global rules.
+            pattern is used, and subsequent matches are ignored.
         </div>
 
         <h2>Best Practices</h2>
 
-        <h3>When to Use Global Mode</h3>
+        <h3>When to Share Tables</h3>
         <ul>
-            <li>Most of your repositories follow the same branching conventions</li>
-            <li>You want simple, consistent branch colors across all projects</li>
-            <li>You're just getting started and want to minimize configuration</li>
+            <li>For standard branch patterns used across multiple projects</li>
+            <li>When you want consistent branch colors across a group of repositories</li>
+            <li>To maintain a single source of truth for branch rules</li>
         </ul>
 
-        <h3>When to Use Local Mode</h3>
+        <h3>When to Create Separate Tables</h3>
         <ul>
-            <li>A repository has unique branch names or patterns</li>
-            <li>You need different visual cues for branches in a critical production repository</li>
-            <li>Client projects have different color requirements</li>
-            <li>You want to experiment with branch rules without affecting other repositories</li>
+            <li><strong>Shared Custom Tables</strong> - When multiple repositories share the same branching convention
+                <ul>
+                    <li>Example: All microservices use the same release workflow</li>
+                    <li>Example: Client projects all follow the same naming scheme</li>
+                </ul>
+            </li>
+            <li><strong>Repository-Specific Tables</strong> - When a single repository needs unique rules
+                <ul>
+                    <li>Create a table, assign it to one repository (usage count: 1)</li>
+                    <li>It's effectively private but can easily be shared later if needed</li>
+                </ul>
+            </li>
         </ul>
 
-        <h3>Hybrid Approach</h3>
-        <p>
-            The most powerful approach is to use <strong>both modes</strong>:
-        </p>
+        <h3>Organizing Tables</h3>
         <ul>
-            <li>Set up comprehensive global branch rules for your standard workflow</li>
-            <li>Keep most repositories in Global mode</li>
-            <li>Switch specific repositories to Local mode only when they need custom behavior</li>
-            <li>Use "Copy From Global" as a starting point when creating local rules</li>
+            <li>Use descriptive names: "Release Workflow", "Client Projects", "Microservices"</li>
+            <li>Start with a common table (like the Default table) for standard patterns</li>
+            <li>Create specialized tables for distinct branching strategies</li>
+            <li>Check usage counts to understand the impact of changes</li>
         </ul>
 
         <div class="example">
-            <strong>Example Hybrid Setup:</strong><br>
+            <strong>Example Organization:</strong><br>
             <br>
-            <strong>Global Rules:</strong><br>
-            • <code>main|master</code> → Blue<br>
-            • <code>develop</code> → Purple<br>
-            • <code>feature/.*</code> → Green<br>
-            • <code>bugfix/.*</code> → Orange<br>
-            • <code>hotfix/.*</code> → Red<br>
+            <strong>Default</strong> (8 repos):<br>
+            Common patterns for most projects<br>
             <br>
-            <strong>Production Client Repository (Local Mode):</strong><br>
-            • <code>production</code> → Dark Red<br>
-            • <code>staging</code> → Orange<br>
-            • <code>develop</code> → Yellow<br>
-            • <code>feature/.*</code> → Light Blue<br>
+            <strong>Release Workflow</strong> (4 repos):<br>
+            Release and hotfix patterns for production services<br>
             <br>
-            All other repositories continue using the global rules automatically.
+            <strong>Client Project A</strong> (1 repo):<br>
+            Custom naming for this specific client<br>
+            <br>
+            This setup keeps most projects simple while allowing flexibility where needed.
         </div>
 
-        <h2>Selection and Visual Indicators</h2>
+        <h2>Sharing and Reusing Tables</h2>
 
-        <h3>Radio Button Selection</h3>
+        <h3>To Share Rules Across Repositories</h3>
         <p>
-            The leftmost column in the Repository Rules table contains radio buttons. Clicking a radio button:
-        </p>
-        <ul>
-            <li>Highlights the selected row with a blue outline</li>
-            <li>Updates the Branch Rules panel to show that repository's rules</li>
-            <li>Changes the panel header to indicate which rules you're viewing</li>
-        </ul>
-
-        <h3>Matched Workspace Indicator</h3>
-        <p>
-            The repository rule that matches your currently open workspace displays a green checkmark (✓) icon. 
-            This helps you quickly identify which rule is actively controlling your window colors.
+            Simply assign the same table to multiple repository rules using the Branch Table dropdown. 
+            All repositories will automatically use the same branch rules.
         </p>
 
-        <div class="tip">
-            <strong>Tip:</strong> When you first open the configuration panel, it automatically selects the 
-            repository rule that matches your current workspace, making it easy to customize colors for the 
-            project you're currently working on.
-        </div>
+        <h3>To Stop Sharing (Make Private)</h3>
+        <ol>
+            <li>Select "➕ Create New Table..." from the repository's dropdown</li>
+            <li>Check "Start with copy of current table" to preserve existing rules</li>
+            <li>The new table will have a usage count of 1 (private to this repository)</li>
+        </ol>
 
         <h2>Troubleshooting</h2>
 
         <h3>Branch Rules Not Applying</h3>
         <p>
-            If your local branch rules aren't working:
+            If branch rules aren't working as expected:
         </p>
         <ol>
-            <li>Verify the repository is in <strong>Local</strong> mode (check the Branch Mode dropdown)</li>
-            <li>Confirm the branch pattern matches your current branch name (patterns are regular expressions)</li>
+            <li>Verify which table the repository is using (check the Branch Table dropdown)</li>
+            <li>Select the repository and check the Branch Rules section to see the active rules</li>
+            <li>Confirm the branch pattern matches your current branch (patterns are regular expressions)</li>
             <li>Check rule order - earlier rules take precedence</li>
             <li>Ensure the rule is enabled (checkbox in the Actions column)</li>
             <li>Look at the Output panel (View → Output → Git Repo Window Colors) for matching details</li>
         </ol>
 
-        <h3>Seeing Wrong Colors After Switching Modes</h3>
+        <h3>Table Names or References</h3>
         <p>
-            If colors don't update immediately after switching between Global and Local:
-        </p>
-        <ol>
-            <li>Save the configuration (it should auto-save, but you can trigger it by making any edit)</li>
-            <li>Switch to a different branch and back, or reload VS Code window</li>
-            <li>Check the Output panel to see which rule is being matched</li>
-        </ol>
-
-        <h3>Copy From Button Not Appearing</h3>
-        <p>
-            The "Copy From..." button only appears when:
+            If you renamed a table or have orphaned references:
         </p>
         <ul>
-            <li>A repository is selected (via radio button)</li>
-            <li>That repository is in <strong>Local</strong> mode</li>
+            <li>Renaming a table automatically updates all repository rule references</li>
+            <li>If a table reference is missing or invalid, check the Output panel for warnings</li>
+            <li>Repository rules with missing table references may need to be reassigned to an existing table</li>
         </ul>
-        <p>
-            If you don't see it, verify the repository's Branch Mode is set to "Local".
-        </p>
 
         <h2>Additional Resources</h2>
         <ul>

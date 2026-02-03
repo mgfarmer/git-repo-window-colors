@@ -12,6 +12,7 @@ export interface DialogOptions {
     inputPlaceholder?: string;
     confirmText?: string;
     cancelText?: string;
+    validateInput?: (value: string) => string | null; // Returns error message or null if valid
 }
 
 export function showInputDialog(options: DialogOptions): Promise<string | null> {
@@ -95,6 +96,16 @@ export function showInputDialog(options: DialogOptions): Promise<string | null> 
 
         dialog.appendChild(input);
 
+        // Error message container (always visible to reserve space)
+        const errorMessage = document.createElement('div');
+        errorMessage.style.color = 'var(--vscode-errorForeground)';
+        errorMessage.style.fontSize = '12px';
+        errorMessage.style.marginTop = '-12px';
+        errorMessage.style.marginBottom = '12px';
+        errorMessage.style.minHeight = '18px';
+        errorMessage.textContent = '\u00A0'; // Non-breaking space to reserve space
+        dialog.appendChild(errorMessage);
+
         // Buttons container
         const buttonContainer = document.createElement('div');
         buttonContainer.style.display = 'flex';
@@ -154,6 +165,42 @@ export function showInputDialog(options: DialogOptions): Promise<string | null> 
 
         buttonContainer.appendChild(confirmButton);
         dialog.appendChild(buttonContainer);
+
+        // Debounced validation
+        let validationTimeout: number | undefined;
+        const validateAndUpdate = () => {
+            if (validationTimeout !== undefined) {
+                clearTimeout(validationTimeout);
+            }
+            validationTimeout = window.setTimeout(() => {
+                const value = input.value.trim();
+                if (options.validateInput) {
+                    const error = options.validateInput(value);
+                    if (error) {
+                        errorMessage.textContent = error;
+                        confirmButton.disabled = true;
+                        confirmButton.style.opacity = '0.5';
+                        confirmButton.style.cursor = 'not-allowed';
+                    } else {
+                        errorMessage.textContent = '\u00A0'; // Non-breaking space
+                        confirmButton.disabled = false;
+                        confirmButton.style.opacity = '1';
+                        confirmButton.style.cursor = 'pointer';
+                    }
+                }
+            }, 100);
+        };
+
+        // Initial validation if validator is provided
+        if (options.validateInput) {
+            confirmButton.disabled = true;
+            confirmButton.style.opacity = '0.5';
+            confirmButton.style.cursor = 'not-allowed';
+            validateAndUpdate();
+        }
+
+        // Add input event listener for dynamic validation
+        input.addEventListener('input', validateAndUpdate);
 
         // Handle Enter key
         input.addEventListener('keydown', (e) => {

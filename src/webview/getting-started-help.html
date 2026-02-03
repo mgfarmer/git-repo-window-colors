@@ -13,8 +13,10 @@
             <ul>
                 <li><a class="current">Getting Started</a> (current)</li>
                 <li><a href="#" data-switch-help="rules">Rules Guide</a></li>
-                <li><a href="#" data-switch-help="branch-modes">Branch Modes Guide</a></li>
+                <li><a href="#" data-switch-help="branch-modes">Shared Branch Tables Guide</a></li>
                 <li><a href="#" data-switch-help="profile">Profiles Guide</a></li>
+                <li><a href="#" data-switch-help="starred">Starred Keys Guide</a></li>
+                <li><a href="#" data-switch-help="colored">Colored Keys Guide</a></li>
                 <li><a href="#" data-switch-help="report">Color Report Guide</a></li>
             </ul>
         </div>
@@ -67,28 +69,31 @@
             <strong>Pro Tip:</strong> Configure your colors with the target repository open in your workspace! 
             This allows you to see real-time changes to the full VS Code UI as you adjust colors. You'll 
             immediately see how titlebar, activitybar, statusbar, and editor tabs look with your chosen colors, 
-            making it much easier to fine-tune your color scheme.
+            making it much easier to fine-tune your color scheme.  You can also turn on "Preview Selected Rules" 
+            in the Rules tab to see changes without needing to switch repositories or branches.
         </div>
 
         <h2>Understanding the Configuration Panel</h2>
 
-        <p>The configuration panel has three main tabs:</p>
+        <p>The configuration panel has these tabs:</p>
 
         <ul>
             <li><strong>Rules:</strong> Create and manage repository and branch color rules</li>
-            <li><strong>Profiles:</strong> Define reusable color palettes with advanced mapping options (Advanced Mode)</li>
+            <li><strong>Branch Tables:</strong> Manage shared branch tables</li>
+            <li><strong>Profiles:</strong> Define reusable color palettes with advanced mapping options</li>
             <li><strong>Color Report:</strong> View exactly which colors are currently applied and why</li>
+            <li><strong>Starred:</strong> View all your starred elements in one tab for easy application of colors</li>
         </ul>
 
         <h3>Key Settings</h3>
 
         <p>Under "Other Settings" you'll find options to control which UI elements get colored:</p>
-
+        Note: These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration. The currently selected rule is using a profile.
         <ul>
             <li><strong>Color Status Bar:</strong> Apply colors to the bottom status bar</li>
             <li><strong>Color Editor Tabs:</strong> Colorize the background of editor tabs</li>
             <li><strong>Color Inactive Titlebar:</strong> Color the titlebar even when VS Code is not focused</li>
-            <li><strong>Activity Bar Color:</strong> Choose intensity of activitybar coloring (None/Subtle/Medium/Strong)</li>
+            <li><strong>Color Knob:</strong> Choose intensity of primary color applied to the non-TitleBar elements (tabs and activity bar)</li>
         </ul>
 
         <h2>Testing Your Configuration</h2>
@@ -106,12 +111,12 @@
             troubleshooting rule patterns.
         </div>
 
-        <h2>Advanced Mode: Profiles</h2>
+        <h2>Using Profiles</h2>
 
         <p>
-            Once you're comfortable with Simple Mode, you can enable <strong>Advanced Mode</strong> to unlock 
+            Once you're comfortable with Simple Mode, you can enable <strong>Profiles</strong> to unlock 
             the powerful Profiles feature. Profiles allow you to create reusable color palettes with sophisticated 
-            mapping options.
+            mapping options to color many more elements of the VSCode UI beyond the basic elements supported in Simple mode.
         </p>
 
         <h3>Why Use Profiles?</h3>
@@ -144,7 +149,7 @@
         <p>To enable Profile mode:</p>
 
         <ol>
-            <li>Check the <strong>"Enable Profiles (Advanced Mode)"</strong> option under Other Settings</li>
+            <li>Check the <strong>"Enable Profiles"</strong> option under Other Settings</li>
             <li>The <strong>Profiles</strong> tab will become active</li>
             <li>You can now create profiles and reference them in your rules</li>
         </ol>

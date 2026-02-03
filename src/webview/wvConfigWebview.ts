@@ -840,6 +840,10 @@ function handleSwitchHelp(target: string) {
             titleElement.textContent = 'Branch Modes Guide';
         } else if (target === 'report') {
             titleElement.textContent = 'Color Report Guide';
+        } else if (target === 'starred') {
+            titleElement.textContent = 'Starred Keys Guide';
+        } else if (target === 'colored') {
+            titleElement.textContent = 'Colored Keys Guide';
         }
         console.log('[TOC Navigation] Updated panel title to:', titleElement.textContent);
     }
@@ -861,6 +865,12 @@ function handleSwitchHelp(target: string) {
     } else if (target === 'report') {
         console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'starred') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
+    } else if (target === 'colored') {
+        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
+        vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     }
 }
 
@@ -878,6 +888,10 @@ function openHelp(helpType: string) {
             titleElement.textContent = 'Branch Modes Guide';
         } else if (helpType === 'report') {
             titleElement.textContent = 'Color Report Guide';
+        } else if (helpType === 'starred') {
+            titleElement.textContent = 'Starred Keys Guide';
+        } else if (helpType === 'colored') {
+            titleElement.textContent = 'Colored Keys Guide';
         }
     }
 
@@ -1229,9 +1243,20 @@ function handleDocumentClick(event: Event) {
         if (activeTab?.id === 'rules-tab') {
             openHelp('rules');
         } else if (activeTab?.id === 'profiles-tab') {
-            openHelp('profile');
+            // Check if we're in the Starred or Colored mapping tab within Profiles
+            const activeMapTab = document.querySelector(
+                '.mapping-tab-btn[style*="border-bottom-color: var(--vscode-panelTitle-activeBorder)"]',
+            );
+            const tabText = activeMapTab?.textContent?.trim();
+            if (tabText?.includes('★ Starred')) {
+                openHelp('starred');
+            } else if (tabText?.includes('⚡ Colored')) {
+                openHelp('colored');
+            } else {
+                openHelp('profile');
+            }
         } else if (activeTab?.id === 'branch-tables-tab') {
-            openHelp('rules'); // Use rules help for now, can be customized later
+            openHelp('branch-modes');
         } else if (activeTab?.id === 'report-tab') {
             openHelp('report');
         }
@@ -1649,16 +1674,19 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     const tables = currentConfig.sharedBranchTables;
     const repoRules = currentConfig.repoRules || [];
 
-    // Calculate usage counts for each table
+    // Calculate usage counts and track which repos use each table
     const usageCounts: { [tableName: string]: number } = {};
+    const tableUsageMap: { [tableName: string]: string[] } = {};
     for (const tableName in tables) {
         usageCounts[tableName] = 0;
+        tableUsageMap[tableName] = [];
     }
     for (const rule of repoRules) {
         const tableName = rule.branchTableName;
         // Skip undefined (No Branch Table)
         if (tableName && usageCounts[tableName] !== undefined) {
             usageCounts[tableName]++;
+            tableUsageMap[tableName].push(rule.repoQualifier || 'Unknown');
         }
     }
 
@@ -1822,6 +1850,7 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     tableNames.forEach((tableName) => {
         const isSelected = tableName === selectedTableName;
         const usageCount = usageCounts[tableName] || 0;
+        const reposUsingTable = tableUsageMap[tableName] || [];
 
         const optionDiv = document.createElement('div');
         optionDiv.className = 'dropdown-option';
@@ -1832,6 +1861,17 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
         optionDiv.style.alignItems = 'center';
         optionDiv.style.gap = '8px';
         optionDiv.style.fontSize = '12px';
+
+        // Add tooltip showing which repos use this table
+        if (usageCount > 0) {
+            const maxReposToShow = 5;
+            const repoList = reposUsingTable.slice(0, maxReposToShow).join(', ');
+            const remaining = reposUsingTable.length - maxReposToShow;
+            const tooltipText = remaining > 0 ? `Used by: ${repoList}...and ${remaining} more` : `Used by: ${repoList}`;
+            optionDiv.title = tooltipText;
+        } else {
+            optionDiv.title = 'Not used by any repository rules';
+        }
 
         if (isSelected) {
             optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
@@ -3141,6 +3181,16 @@ async function showCreateTableDialog(repoRuleIndex: number) {
         inputPlaceholder: 'Enter table name',
         confirmText: 'Create',
         cancelText: 'Cancel',
+        validateInput: (value: string) => {
+            const trimmedName = value.trim();
+            if (!trimmedName) {
+                return 'Table name cannot be empty';
+            }
+            if (currentConfig?.sharedBranchTables?.[trimmedName]) {
+                return `A table named "${trimmedName}" already exists`;
+            }
+            return null; // Valid
+        },
     });
 
     if (!tableName) {
@@ -3148,26 +3198,8 @@ async function showCreateTableDialog(repoRuleIndex: number) {
         return; // User cancelled
     }
 
-    // Validate table name
+    // Name is already validated by the dialog
     const trimmedName = tableName.trim();
-    if (!trimmedName) {
-        await showMessageDialog({
-            title: 'Invalid Name',
-            message: 'Table name cannot be empty.',
-            confirmText: 'OK',
-        });
-        return;
-    }
-
-    // Check if table already exists
-    if (currentConfig?.sharedBranchTables?.[trimmedName]) {
-        await showMessageDialog({
-            title: 'Table Exists',
-            message: `A table named "${trimmedName}" already exists.`,
-            confirmText: 'OK',
-        });
-        return;
-    }
 
     // Create the new table via backend command
     console.log('[showCreateTableDialog] Creating table via backend:', trimmedName, 'for repo rule:', repoRuleIndex);
@@ -3232,30 +3264,24 @@ async function renameBranchTableFromMgmt(tableName: string) {
         inputValue: tableName,
         confirmText: 'Rename',
         cancelText: 'Cancel',
+        validateInput: (value: string) => {
+            const trimmedName = value.trim();
+            if (!trimmedName) {
+                return 'Table name cannot be empty';
+            }
+            if (trimmedName !== tableName && currentConfig?.sharedBranchTables?.[trimmedName]) {
+                return `A table named "${trimmedName}" already exists`;
+            }
+            return null; // Valid
+        },
     });
 
     if (!newName || newName === tableName) {
         return; // User cancelled or no change
     }
 
+    // Name is already validated by the dialog
     const trimmedName = newName.trim();
-    if (!trimmedName) {
-        await showMessageDialog({
-            title: 'Invalid Name',
-            message: 'Table name cannot be empty.',
-            confirmText: 'OK',
-        });
-        return;
-    }
-
-    if (currentConfig?.sharedBranchTables?.[trimmedName]) {
-        await showMessageDialog({
-            title: 'Table Exists',
-            message: `A table named "${trimmedName}" already exists.`,
-            confirmText: 'OK',
-        });
-        return;
-    }
 
     // Send rename command to backend
     vscode.postMessage({
@@ -3362,27 +3388,19 @@ function renderBranchRulesHeader(tableName: string) {
     const inputWrapper = document.createElement('span');
     inputWrapper.style.position = 'relative';
     inputWrapper.style.display = 'inline-block';
+    inputWrapper.style.cursor = 'pointer';
+    inputWrapper.title = 'Click to rename table';
     header.appendChild(inputWrapper);
 
-    // Create editable input for table name
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = tableName;
-    input.className = 'branch-table-name-input';
-    input.style.border = 'none';
-    input.style.background = 'transparent';
-    input.style.color = 'inherit';
-    input.style.fontSize = 'inherit';
-    input.style.fontWeight = 'inherit';
-    input.style.padding = '2px 4px';
-    input.style.paddingRight = '20px'; // Make room for edit icon
-    input.style.margin = '0';
-    input.style.outline = 'none';
-    input.style.width = 'auto';
-    input.style.minWidth = '100px';
-    input.style.maxWidth = '300px';
-    input.title = 'Click to edit table name';
-    inputWrapper.appendChild(input);
+    // Create table name text
+    const nameText = document.createElement('span');
+    nameText.textContent = tableName;
+    nameText.style.color = 'inherit';
+    nameText.style.fontSize = 'inherit';
+    nameText.style.fontWeight = 'inherit';
+    nameText.style.padding = '2px 4px';
+    nameText.style.paddingRight = '20px'; // Make room for edit icon
+    inputWrapper.appendChild(nameText);
 
     // Create small edit icon
     const editIcon = document.createElement('span');
@@ -3393,169 +3411,12 @@ function renderBranchRulesHeader(tableName: string) {
     editIcon.style.transform = 'translateY(-50%)';
     editIcon.style.fontSize = '11px';
     editIcon.style.opacity = '0.6';
-    editIcon.style.pointerEvents = 'none';
     inputWrapper.appendChild(editIcon);
 
-    // Create save button (hidden initially)
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = 'codicon codicon-save branch-table-save-btn';
-    saveBtn.style.display = 'none';
-    saveBtn.style.marginLeft = '8px';
-    saveBtn.style.padding = '4px 8px';
-    saveBtn.style.cursor = 'pointer';
-    saveBtn.style.border = '1px solid var(--vscode-button-border)';
-    saveBtn.style.background = 'var(--vscode-button-background)';
-    saveBtn.style.color = 'var(--vscode-button-foreground)';
-    saveBtn.style.borderRadius = '2px';
-    saveBtn.title = 'Save table name';
-    saveBtn.setAttribute('aria-label', 'Save table name');
-    header.appendChild(saveBtn);
-
-    let originalName = tableName;
-    let isEditing = false;
-
-    // Show save button and hide edit icon when user starts editing
-    input.addEventListener('focus', () => {
-        originalName = input.value;
-        isEditing = true;
-        editIcon.style.display = 'none';
-        saveBtn.style.display = 'inline-block';
-        input.style.border = '1px solid var(--vscode-focusBorder)';
-        input.style.background = 'var(--vscode-input-background)';
-        input.style.padding = '2px 4px';
-        input.style.paddingRight = '20px';
+    // Click handler to open rename dialog
+    inputWrapper.addEventListener('click', async () => {
+        await renameBranchTableFromMgmt(tableName);
     });
-
-    // Hide save button and show edit icon if user clicks away without changing
-    input.addEventListener('blur', (e) => {
-        // Don't blur if clicking the save button
-        if (e.relatedTarget === saveBtn) {
-            return;
-        }
-
-        // Revert if no change made
-        if (input.value === originalName) {
-            saveBtn.style.display = 'none';
-            editIcon.style.display = 'inline-block';
-            input.style.border = 'none';
-            input.style.background = 'transparent';
-            isEditing = false;
-        }
-    });
-
-    // Auto-resize input based on content
-    const resizeInput = () => {
-        const tempSpan = document.createElement('span');
-        tempSpan.style.visibility = 'hidden';
-        tempSpan.style.position = 'absolute';
-        tempSpan.style.fontSize = window.getComputedStyle(input).fontSize;
-        tempSpan.style.fontFamily = window.getComputedStyle(input).fontFamily;
-        tempSpan.style.fontWeight = window.getComputedStyle(input).fontWeight;
-        tempSpan.textContent = input.value || input.placeholder;
-        document.body.appendChild(tempSpan);
-        const width = Math.max(100, Math.min(300, tempSpan.offsetWidth + 20));
-        input.style.width = width + 'px';
-        document.body.removeChild(tempSpan);
-    };
-    input.addEventListener('input', resizeInput);
-    resizeInput();
-
-    // Save on Enter key
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            saveBtn.click();
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            input.value = originalName;
-            input.blur();
-            saveBtn.style.display = 'none';
-            editIcon.style.display = 'inline-block';
-            input.style.border = 'none';
-            input.style.background = 'transparent';
-            isEditing = false;
-        }
-    });
-
-    // Handle save button click
-    saveBtn.addEventListener('click', async () => {
-        const newName = input.value.trim();
-
-        if (!newName) {
-            showMessageDialog({
-                title: 'Invalid Name',
-                message: 'Table name cannot be empty.',
-            });
-            input.value = originalName;
-            return;
-        }
-
-        if (newName === originalName) {
-            // No change, just hide the button and show edit icon
-            saveBtn.style.display = 'none';
-            editIcon.style.display = 'inline-block';
-            input.style.border = 'none';
-            input.style.background = 'transparent';
-            input.blur();
-            isEditing = false;
-            return;
-        }
-
-        // Check if new name already exists
-        if (currentConfig?.sharedBranchTables?.[newName]) {
-            showMessageDialog({
-                title: 'Duplicate Name',
-                message: `A table named "${newName}" already exists.`,
-            });
-            input.value = originalName;
-            return;
-        }
-
-        // Rename the table
-        await renameBranchTable(originalName, newName);
-
-        // Update UI state
-        originalName = newName;
-        saveBtn.style.display = 'none';
-        editIcon.style.display = 'inline-block';
-        input.style.border = 'none';
-        input.style.background = 'transparent';
-        input.blur();
-        isEditing = false;
-    });
-}
-
-async function renameBranchTable(oldName: string, newName: string): Promise<void> {
-    if (!currentConfig) return;
-
-    // Create deep copy to ensure VS Code detects the change
-    const updatedTables = JSON.parse(JSON.stringify(currentConfig.sharedBranchTables));
-
-    // Rename the table
-    updatedTables[newName] = updatedTables[oldName];
-    delete updatedTables[oldName];
-
-    // Update all repo rules that reference the old table name
-    const updatedRepoRules = currentConfig.repoRules.map((rule: any) => {
-        if (rule.branchTableName === oldName) {
-            return { ...rule, branchTableName: newName };
-        }
-        return rule;
-    });
-
-    // Send to backend
-    vscode.postMessage({
-        command: 'updateConfig',
-        data: {
-            sharedBranchTables: updatedTables,
-            repoRules: updatedRepoRules,
-        },
-    });
-
-    // Update local config optimistically
-    currentConfig.sharedBranchTables = updatedTables;
-    currentConfig.repoRules = updatedRepoRules;
 }
 
 function updateCopyFromButton(showButton: boolean) {
@@ -6931,6 +6792,17 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     console.log(`[Mapping Debug] ${key}: currentSlot = ${currentSlot}`);
                 }
 
+                // Create warning indicator for uncolored keys in Starred tab
+                const warningIndicator = document.createElement('span');
+                const isUncolored = currentSlot === 'none';
+                const isStarredTab = sectionName === 'Starred';
+                if (isStarredTab && isUncolored) {
+                    warningIndicator.className = 'codicon codicon-warning';
+                    warningIndicator.style.color = 'var(--vscode-notificationsWarningIcon-foreground)';
+                    warningIndicator.style.fontSize = '14px';
+                    warningIndicator.title = 'No color assigned';
+                }
+
                 // Container for dropdown (and potentially fixed color picker)
                 const dropdownContainer = document.createElement('div');
                 dropdownContainer.style.flex = '1';
@@ -7424,7 +7296,24 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     updateMapping();
                     updateSliderGradient();
 
+                    // Update warning indicator visibility
                     const newSlot = select.getAttribute('data-value') || 'none';
+                    if (isStarredTab) {
+                        if (newSlot === 'none') {
+                            warningIndicator.className = 'codicon codicon-warning';
+                            warningIndicator.style.color = 'var(--vscode-notificationsWarningIcon-foreground)';
+                            warningIndicator.style.fontSize = '14px';
+                            warningIndicator.title = 'No color assigned';
+                            if (!row.contains(warningIndicator)) {
+                                row.insertBefore(warningIndicator, dropdownContainer);
+                            }
+                        } else {
+                            if (row.contains(warningIndicator)) {
+                                row.removeChild(warningIndicator);
+                            }
+                        }
+                    }
+
                     const keysToSync: string[] = [];
 
                     // Only sync if the selected slot is congruous with the current key
@@ -7503,6 +7392,9 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 row.appendChild(starIcon);
                 row.appendChild(label);
+                if (isStarredTab && isUncolored) {
+                    row.appendChild(warningIndicator);
+                }
                 row.appendChild(dropdownContainer);
                 row.appendChild(opacityContainer);
                 grid.appendChild(row);
