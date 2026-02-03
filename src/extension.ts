@@ -922,29 +922,8 @@ export async function activate(context: ExtensionContext) {
                 configList = new Array<RepoConfig>();
             }
 
-            // Check if any rule (enabled or disabled) exists for this repo
-            if (hasAnyMatchingRepoRule(configList)) {
-                // Rule already exists, just open the configuration editor
-                configProvider.show(context.extensionUri);
-                return;
-            }
-
-            // No rule exists, open editor and auto-add rule
-            // Create a new rule suggestion
-            const p1 = gitRepoRemoteFetchUrl.split(':');
-            let repoQualifier = '';
-            if (p1.length > 1) {
-                const parts = p1[1].split('/');
-                if (parts.length > 1) {
-                    const lastPart = parts.slice(-2).join('/');
-                    if (lastPart !== undefined) {
-                        repoQualifier = lastPart.replace('.git', '');
-                    }
-                }
-            }
-
-            // Open the configuration webview and automatically add a new rule
-            configProvider.showAndAddRepoRule(context.extensionUri, repoQualifier);
+            // Open the configuration editor (preview mode will show if no rule matches)
+            configProvider.show(context.extensionUri);
         }),
     );
 
@@ -1039,29 +1018,8 @@ export async function activate(context: ExtensionContext) {
                 configList = new Array<RepoConfig>();
             }
 
-            // Check if any rule (enabled or disabled) exists for this repo
-            if (hasAnyMatchingRepoRule(configList)) {
-                // Rule already exists, just open the configuration editor
-                configProvider.show(context.extensionUri);
-                return;
-            }
-
-            // No rule exists, open editor and auto-add rule
-            // Create a new rule suggestion
-            const p1 = gitRepoRemoteFetchUrl.split(':');
-            let repoQualifier = '';
-            if (p1.length > 1) {
-                const parts = p1[1].split('/');
-                if (parts.length > 1) {
-                    const lastPart = parts.slice(-2).join('/');
-                    if (lastPart !== undefined) {
-                        repoQualifier = lastPart.replace('.git', '');
-                    }
-                }
-            }
-
-            // Open the configuration webview and automatically add a new rule
-            configProvider.showAndAddRepoRule(context.extensionUri, repoQualifier);
+            // Open the configuration editor (preview mode will show if no rule matches)
+            configProvider.show(context.extensionUri);
         }),
     );
 
@@ -1263,8 +1221,8 @@ async function checkAndAskToColorizeRepo(): Promise<void> {
 
     switch (response) {
         case 'Yes, open configuration':
-            // Open the configuration webview and auto-add a rule
-            configProvider.showAndAddRepoRule(vscode.Uri.file(''), repoName);
+            // Open the configuration webview (preview mode will show toast with add button)
+            configProvider.show(vscode.Uri.file(''));
             break;
         case "No, don't ask again":
             // Disable the setting
@@ -1544,21 +1502,6 @@ async function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined
     }
 
     return repoConfig;
-}
-
-function hasAnyMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): boolean {
-    if (repoConfigList === undefined) {
-        return false;
-    }
-
-    for (const item of repoConfigList) {
-        // Check for matching rule regardless of enabled state
-        if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 function undoColors() {

@@ -1323,6 +1323,12 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle preview toast add button
+    if (target.getAttribute('data-action') === 'addRepoRuleFromPreview') {
+        addRepoRuleFromPreview();
+        return;
+    }
+
     // Handle contextual help button (opens help based on active tab)
     if (target.closest('[data-action="openContextualHelp"]')) {
         const activeTab = document.querySelector('.tab-content.active');
@@ -4783,6 +4789,7 @@ function showPreviewToast() {
     console.log('[showPreviewToast] CALLED');
     const toast = document.getElementById('preview-toast');
     const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
+    const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
     if (!toast) return;
 
     console.log('[showPreviewToast] Toast element found');
@@ -4808,6 +4815,37 @@ function showPreviewToast() {
     if (!isActuallyPreviewing) {
         hidePreviewToast();
         return;
+    }
+
+    // Check if we're in "no matching rule" scenario
+    const noMatchingRule =
+        currentConfig?.matchingIndexes?.repoRule === undefined || currentConfig?.matchingIndexes?.repoRule < 0;
+    const isGitRepo =
+        currentConfig?.workspaceInfo?.repositoryUrl && currentConfig.workspaceInfo.repositoryUrl.length > 0;
+
+    // Update button and tooltip based on scenario
+    if (resetBtn) {
+        if (noMatchingRule) {
+            if (isGitRepo) {
+                // Show "add" button for git repos with no matching rule
+                resetBtn.textContent = 'add';
+                resetBtn.setAttribute('data-action', 'addRepoRuleFromPreview');
+                resetBtn.style.display = '';
+                toast.title =
+                    'No repository rules match the current workspace. Press [add] to create a rule for this repository.';
+            } else {
+                // Hide button for non-git workspaces
+                resetBtn.style.display = 'none';
+                toast.title = 'Preview mode: The current workspace is not a git repository.';
+            }
+        } else {
+            // Show "reset" button for normal preview mode
+            resetBtn.textContent = 'reset';
+            resetBtn.setAttribute('data-action', 'resetToMatchingRules');
+            resetBtn.style.display = '';
+            toast.title =
+                'You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.';
+        }
     }
 
     // Get the selected repo rule
@@ -4980,6 +5018,42 @@ function resetToMatchingRules() {
     if (currentConfig) {
         renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
         renderBranchRulesForSelectedRepo();
+    }
+}
+
+function addRepoRuleFromPreview() {
+    if (!currentConfig) return;
+
+    // Turn off preview mode
+    const checkbox = document.getElementById('preview-selected-repo-rule') as HTMLInputElement;
+    if (checkbox) {
+        checkbox.checked = false;
+    }
+    previewMode = false;
+
+    // Add a new repo rule for the current workspace
+    const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    const newRule = {
+        repoQualifier: currentRepoName,
+        primaryColor: getThemeAppropriateColor(),
+    };
+
+    currentConfig.repoRules.push(newRule);
+
+    // Select the newly created rule
+    const newRuleIndex = currentConfig.repoRules.length - 1;
+    selectedRepoRuleIndex = newRuleIndex;
+
+    // Send configuration update
+    sendConfiguration();
+
+    // Hide the preview toast
+    hidePreviewToast();
+
+    // Switch to rules tab to show the new rule
+    const rulesTab = document.getElementById('tab-rules');
+    if (rulesTab) {
+        (rulesTab as HTMLElement).click();
     }
 }
 
