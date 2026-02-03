@@ -1165,6 +1165,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         </div>
                     </div>
                     <section class="bottom-panel" aria-labelledby="other-settings-heading">
+                        <button class="settings-collapse-btn" 
+                                type="button"
+                                aria-label="Collapse Other Settings"
+                                aria-expanded="true"
+                                title="Collapse section">
+                            <span class="codicon codicon-chevron-down"></span>
+                        </button>
+                        <button class="settings-expand-btn" 
+                                type="button"
+                                aria-label="Expand Other Settings"
+                                title="Expand section"
+                                style="display: none;">
+                            <span class="codicon codicon-chevron-up"></span>
+                        </button>
                         <div class="panel-header">
                             <h2 id="other-settings-heading">Other Settings
                                 <button class="tooltip bottom-panel-tooltip help-icon" 

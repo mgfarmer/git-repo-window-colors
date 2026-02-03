@@ -178,11 +178,17 @@ body {
     border: 1px solid var(--vscode-panel-border);
     padding: 15px;
     border-radius: 4px;
-    overflow: visible;
+    overflow: hidden;
+    position: relative;
+    transition:
+        min-height 0.3s ease-in-out,
+        max-height 0.3s ease-in-out,
+        height 0.3s ease-in-out,
+        padding 0.3s ease-in-out;
 }
 
 .bottom-panel .panel-header {
-    padding-left: 0;
+    padding-left: 40px;
     margin-bottom: 15px;
 }
 
@@ -1242,6 +1248,77 @@ button:focus {
     left: 50%;
     transform: translate(-50%, -50%) rotate(180deg);
     writing-mode: vertical-lr;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--vscode-foreground);
+    opacity: 0.8;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Other Settings collapse/expand buttons */
+.settings-collapse-btn,
+.settings-expand-btn {
+    position: absolute;
+    top: 15px;
+    left: 8px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    font-size: 14px;
+    width: 24px;
+    height: 24px;
+}
+
+.settings-collapse-btn:hover,
+.settings-expand-btn:hover {
+    background: var(--vscode-button-hoverBackground);
+}
+
+/* Collapsed state for bottom panel */
+.bottom-panel {
+    position: relative;
+}
+
+.bottom-panel.collapsed {
+    flex: 0 0 auto;
+    min-height: 50px;
+    max-height: 50px;
+    height: 50px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.bottom-panel.collapsed .panel-header,
+.bottom-panel.collapsed #otherSettingsContent {
+    display: none;
+}
+
+.bottom-panel.collapsed .settings-collapse-btn {
+    display: none !important;
+}
+
+.bottom-panel.collapsed .settings-expand-btn {
+    display: flex !important;
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    transform: translateY(-50%);
+}
+
+.bottom-panel.collapsed::after {
+    content: 'Other Settings';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     font-weight: 600;
     font-size: 14px;
     color: var(--vscode-foreground);

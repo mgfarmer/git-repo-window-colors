@@ -993,6 +993,7 @@ function attachEventListeners() {
 
     // Initialize branch panel collapse state
     initBranchPanelState();
+    initSettingsPanelState();
 }
 
 function toggleBranchPanelCollapse(collapse: boolean) {
@@ -1023,6 +1024,31 @@ function initBranchPanelState() {
     }
 }
 
+function toggleSettingsPanelCollapse(collapse: boolean) {
+    const settingsPanel = document.querySelector('.bottom-panel');
+    const collapseBtn = document.querySelector('.settings-collapse-btn') as HTMLElement;
+    const expandBtn = document.querySelector('.settings-expand-btn') as HTMLElement;
+
+    if (!settingsPanel || !collapseBtn || !expandBtn) return;
+
+    if (collapse) {
+        settingsPanel.classList.add('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'false');
+        localStorage.setItem('settingsPanelCollapsed', 'true');
+    } else {
+        settingsPanel.classList.remove('collapsed');
+        collapseBtn.setAttribute('aria-expanded', 'true');
+        localStorage.setItem('settingsPanelCollapsed', 'false');
+    }
+}
+
+function initSettingsPanelState() {
+    const isCollapsed = localStorage.getItem('settingsPanelCollapsed') === 'true';
+    if (isCollapsed) {
+        toggleSettingsPanelCollapse(true);
+    }
+}
+
 function handleDocumentClick(event: Event) {
     const target = event.target as HTMLElement;
     if (!target) return;
@@ -1037,6 +1063,19 @@ function handleDocumentClick(event: Event) {
     const expandBtn = target.closest('.branch-expand-btn') as HTMLElement;
     if (expandBtn) {
         toggleBranchPanelCollapse(false);
+        return;
+    }
+
+    // Handle settings panel collapse/expand buttons
+    const settingsCollapseBtn = target.closest('.settings-collapse-btn') as HTMLElement;
+    if (settingsCollapseBtn) {
+        toggleSettingsPanelCollapse(true);
+        return;
+    }
+
+    const settingsExpandBtn = target.closest('.settings-expand-btn') as HTMLElement;
+    if (settingsExpandBtn) {
+        toggleSettingsPanelCollapse(false);
         return;
     }
 
