@@ -821,11 +821,22 @@ function handleHelpContent(data: { helpType: string; content: string }) {
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
         console.log(`[TOC Navigation] ${data.helpType} help content loaded`);
+
+        // Update current help type to what was just loaded
+        currentHelpType = data.helpType;
+
+        // Restore scroll position after DOM has updated
+        requestAnimationFrame(() => {
+            restoreHelpScrollPosition(data.helpType);
+        });
     }
 }
 
 function handleSwitchHelp(target: string) {
     console.log('[TOC Navigation] handleSwitchHelp called with target:', target);
+
+    // Save scroll position of current help before switching
+    saveCurrentHelpScrollPosition();
 
     // Set the panel title
     const titleElement = document.getElementById('helpPanelTitle');
@@ -874,7 +885,39 @@ function handleSwitchHelp(target: string) {
     }
 }
 
+// Store scroll positions per help document
+const helpScrollPositions: { [helpType: string]: number } = {};
+let currentHelpType: string | null = null;
+
+function saveCurrentHelpScrollPosition() {
+    if (currentHelpType) {
+        const contentDiv = document.getElementById('helpPanelContent');
+        if (contentDiv) {
+            helpScrollPositions[currentHelpType] = contentDiv.scrollTop;
+            console.log(`[Help] Saved scroll position for ${currentHelpType}: ${contentDiv.scrollTop}`);
+        }
+    }
+}
+
+function restoreHelpScrollPosition(helpType: string) {
+    const contentDiv = document.getElementById('helpPanelContent');
+    if (contentDiv) {
+        const savedPosition = helpScrollPositions[helpType];
+        if (savedPosition !== undefined) {
+            contentDiv.scrollTop = savedPosition;
+            console.log(`[Help] Restored scroll position for ${helpType}: ${savedPosition}`);
+        } else {
+            // No saved position, reset to top
+            contentDiv.scrollTop = 0;
+            console.log(`[Help] No saved scroll position for ${helpType}, resetting to top`);
+        }
+    }
+}
+
 function openHelp(helpType: string) {
+    // Save scroll position of current help before switching
+    saveCurrentHelpScrollPosition();
+
     // Set the panel title
     const titleElement = document.getElementById('helpPanelTitle');
     if (titleElement) {
@@ -897,6 +940,7 @@ function openHelp(helpType: string) {
 
     // Request help content from backend
     console.log(`[Help] Requesting ${helpType} help content from extension`);
+    currentHelpType = helpType;
     vscode.postMessage({ command: 'requestHelp', data: { helpType } });
 
     // Show the help panel
@@ -909,6 +953,9 @@ function openHelp(helpType: string) {
 }
 
 function closeHelp() {
+    // Save scroll position before closing
+    saveCurrentHelpScrollPosition();
+
     const overlay = document.getElementById('helpPanelOverlay');
     const panel = document.getElementById('helpPanel');
     if (overlay && panel) {
@@ -2456,35 +2503,6 @@ function renderOtherSettings(settings: any) {
                             When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
                         </span>
                     </div>
-                    <div class="setting-item tooltip">
-                        <label>
-                            <input type="checkbox" 
-                                   id="enable-profiles-advanced"
-                                   ${settings.enableProfilesAdvanced ? 'checked' : ''}
-                                   ${getProfileUsageInfo().inUse ? 'disabled' : ''}
-                                   data-action="updateOtherSetting('enableProfilesAdvanced', this.checked)"
-                                   data-extra-action="updateProfilesTabVisibility">
-                            Enable Profiles ${(() => {
-                                const info = getProfileUsageInfo();
-                                if (info.count === 0) return '';
-                                const parts = [];
-                                if (info.repoRuleCount > 0)
-                                    parts.push(`${info.repoRuleCount} repo rule${info.repoRuleCount !== 1 ? 's' : ''}`);
-                                if (info.branchRuleCount > 0)
-                                    parts.push(
-                                        `${info.branchRuleCount} branch rule${info.branchRuleCount !== 1 ? 's' : ''}`,
-                                    );
-                                return `<i>(${info.count} profile${info.count !== 1 ? 's' : ''} used in ${parts.join(' and ')})</i>`;
-                            })()}
-                        </label>
-                        <span class="tooltiptext" role="tooltip">
-                            ${
-                                getProfileUsageInfo().inUse
-                                    ? 'Profiles are currently in use by one or more rules. Remove all profile references from your repository and branch rules to disable this feature.'
-                                    : 'Enable the advanced Profiles feature, which allows you to define reusable color palettes and map them to specific UI elements. When enabled, the Profiles tab will appear in the main navigation.'
-                            }
-                        </span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -2877,19 +2895,10 @@ function renderColorReport(config: any) {
 }
 
 function updateProfilesTabVisibility() {
-    const enableProfiles = (document.getElementById('enable-profiles-advanced') as HTMLInputElement)?.checked ?? false;
+    // Profiles are always enabled, so always show the tab
     const profilesTab = document.getElementById('tab-profiles');
-    const profilesTabContent = document.getElementById('profiles-tab');
-
     if (profilesTab) {
-        profilesTab.style.display = enableProfiles ? '' : 'none';
-    }
-    if (profilesTabContent && !enableProfiles && profilesTabContent.classList.contains('active')) {
-        // If profiles tab is currently active and we're hiding it, switch to rules tab
-        const rulesTab = document.getElementById('tab-rules');
-        if (rulesTab) {
-            (rulesTab as HTMLElement).click();
-        }
+        profilesTab.style.display = '';
     }
 }
 
