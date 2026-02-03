@@ -1747,6 +1747,23 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
             selectedRepoRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
         }
         renderBranchRulesForSelectedRepo();
+
+        // If preview mode is enabled, trigger preview for the initially selected rule
+        if (previewMode && selectedRepoRuleIndex >= 0) {
+            const selectedRule = rules[selectedRepoRuleIndex];
+            const tableName = selectedRule.branchTableName || '__none__';
+            const branchTable = currentConfig?.sharedBranchTables?.[tableName];
+            const hasBranchRules = tableName !== '__none__' && branchTable?.rules && branchTable.rules.length > 0;
+
+            vscode.postMessage({
+                command: 'previewRepoRule',
+                data: {
+                    index: selectedRepoRuleIndex,
+                    previewEnabled: true,
+                    clearBranchPreview: !hasBranchRules,
+                },
+            });
+        }
     }
 }
 

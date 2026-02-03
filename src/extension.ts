@@ -1058,6 +1058,13 @@ export async function activate(context: ExtensionContext) {
         }),
     );
 
+    // Register internal command to clear preview colors (used when closing config panel)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('_grwc.internal.clearPreviewColors', () => {
+            undoColors();
+        }),
+    );
+
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
             if (

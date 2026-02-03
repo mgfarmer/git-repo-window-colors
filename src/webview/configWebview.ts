@@ -150,6 +150,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Send initial configuration to webview
         this._sendConfigurationToWebview();
 
+        // Apply colors for the selected rule when opening the configurator
+        // This ensures preview mode actually shows colors, and for matched rules
+        // it's essentially a no-op reapplication
+        const usePreview = this._previewModeEnabled;
+        vscode.commands.executeCommand('_grwc.internal.applyColors', 'config panel opened', usePreview);
+
         // Check if this is the first time showing the webview
         this._checkAndShowGettingStarted();
     }
@@ -1430,7 +1436,45 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     }
 
     private _onPanelDisposed(): void {
+        // When closing the configurator, we need to handle colors appropriately:
+        // 1. If there's a matching rule → apply it (replace preview colors with actual colors)
+        // 2. If no matching rule or not a git repo → clear preview colors
+
+        const workspaceInfo = this._getWorkspaceInfo();
+        const hasGitRepo = workspaceInfo && workspaceInfo.repositoryUrl && workspaceInfo.repositoryUrl.length > 0;
+
+        if (hasGitRepo) {
+            const repoRules = this._getRepoRules();
+            const matchingIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
+
+            if (matchingIndex >= 0) {
+                // Has a matching rule - apply its colors (not preview)
+                vscode.commands.executeCommand('_grwc.internal.applyColors', 'config panel closed', false);
+            } else {
+                // Git repo but no matching rule - clear preview colors
+                vscode.commands.executeCommand('_grwc.internal.clearPreviewColors');
+            }
+        } else {
+            // Not a git repo - clear any preview colors
+            vscode.commands.executeCommand('_grwc.internal.clearPreviewColors');
+        }
+
         this._panel = undefined;
+    }
+
+    private _shouldClearPreviewColorsOnClose(): boolean {
+        // If no workspace info, can't determine
+        if (!this._workspaceInfo || !this._workspaceInfo.repositoryUrl) {
+            // Not a git repo, should clear
+            return true;
+        }
+
+        // Check if there's a matching repo rule
+        const repoRules = this._getRepoRules();
+        const matchingIndex = this._getMatchingRepoRuleIndex(repoRules, this._workspaceInfo.repositoryUrl);
+
+        // No matching rule means not managed, should clear
+        return matchingIndex < 0;
     }
 
     public dispose(): void {
