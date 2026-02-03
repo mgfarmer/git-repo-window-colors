@@ -1390,6 +1390,20 @@ function handleDocumentKeydown(event: KeyboardEvent) {
     const target = event.target as HTMLInputElement;
     if (!target) return;
 
+    // Handle escape key to close branch table dropdowns
+    if (event.key === 'Escape') {
+        const openDropdowns = document.querySelectorAll('.branch-table-dropdown .dropdown-options[style*="block"]');
+        if (openDropdowns.length > 0) {
+            openDropdowns.forEach((dropdown) => {
+                (dropdown as HTMLElement).style.display = 'none';
+                (dropdown.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
+            });
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+    }
+
     // Handle escape key for input restoration (both color inputs and rule inputs)
     if (
         event.key === 'Escape' &&
@@ -1689,17 +1703,13 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     const optionsContainer = document.createElement('div');
     optionsContainer.className = 'dropdown-options';
     optionsContainer.style.display = 'none';
-    optionsContainer.style.position = 'absolute';
-    optionsContainer.style.top = '100%';
-    optionsContainer.style.left = '0';
-    optionsContainer.style.minWidth = '100%';
+    optionsContainer.style.position = 'fixed';
     optionsContainer.style.width = 'max-content';
     optionsContainer.style.background = 'var(--vscode-dropdown-background)';
     optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
     optionsContainer.style.maxHeight = '250px';
     optionsContainer.style.overflowY = 'auto';
     optionsContainer.style.zIndex = '10000';
-    optionsContainer.style.marginTop = '2px';
 
     // Build sorted list of table names
     const tableNames = Object.keys(tables).sort((a, b) => {
@@ -1927,30 +1937,29 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
         document.querySelectorAll('.branch-table-dropdown .dropdown-options').forEach((other) => {
             if (other !== optionsContainer) {
                 (other as HTMLElement).style.display = 'none';
-                (other.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
             }
         });
 
         if (!isOpen) {
-            // Before opening, check if we need to flip the dropdown upward
-            const dropdownRect = dropdown.getBoundingClientRect();
+            // Position dropdown relative to the trigger element
+            const triggerRect = selectedDisplay.getBoundingClientRect();
             const viewportHeight = window.innerHeight;
-            const spaceBelow = viewportHeight - dropdownRect.bottom;
-            const spaceAbove = dropdownRect.top;
+            const spaceBelow = viewportHeight - triggerRect.bottom;
+            const spaceAbove = triggerRect.top;
             const dropdownHeight = 250; // maxHeight of options
+
+            // Position at the trigger element
+            optionsContainer.style.left = triggerRect.left + 'px';
+            optionsContainer.style.minWidth = triggerRect.width + 'px';
 
             // If not enough space below but enough above, flip it upward
             if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
-                optionsContainer.style.top = 'auto';
-                optionsContainer.style.bottom = '100%';
-                optionsContainer.style.marginTop = '0';
-                optionsContainer.style.marginBottom = '2px';
+                optionsContainer.style.top = triggerRect.top - dropdownHeight + 'px';
+                optionsContainer.style.bottom = 'auto';
             } else {
                 // Normal downward position
-                optionsContainer.style.top = '100%';
+                optionsContainer.style.top = triggerRect.bottom + 2 + 'px';
                 optionsContainer.style.bottom = 'auto';
-                optionsContainer.style.marginTop = '2px';
-                optionsContainer.style.marginBottom = '0';
             }
         }
 
@@ -1962,8 +1971,10 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     updateSelectedDisplay(selectedTableName);
 
     dropdown.appendChild(selectedDisplay);
-    dropdown.appendChild(optionsContainer);
     container.appendChild(dropdown);
+
+    // Append options to body for proper z-index stacking
+    document.body.appendChild(optionsContainer);
 
     return container;
 }

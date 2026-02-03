@@ -1156,7 +1156,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     </button>
                                 </div>
                                 <div class="section-help">
-                                    Define rules based on branch name patterns. A simple color is applied to the Activity Bar when working on a matched branch. A profile is applied to all configured elements.
+                                    Define rules based on branch name patterns. Rules are processed from top to bottom. The first match applies. A simple color is applied to the Activity Bar when working on a matched branch. A profile is applied to all configured elements.
                                 </div>
                                 <div id="branchRulesContent" role="region" aria-label="Branch rules table">
                                     <div class="placeholder" aria-live="polite">Loading branch rules...</div>
