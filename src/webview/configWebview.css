@@ -636,7 +636,7 @@ h2 {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
-    padding: 6px 12px;
+    padding: 6px 16px;
     margin-right: 4px;
     border-radius: 4px;
     cursor: pointer;

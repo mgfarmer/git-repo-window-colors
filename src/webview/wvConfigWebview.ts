@@ -3187,8 +3187,6 @@ function updateBranchRule(index: number, field: string, value: string) {
 function selectRepoRule(index: number) {
     if (!currentConfig?.repoRules?.[index]) return;
 
-    console.log('[selectRepoRule] Selecting repo rule index:', index, 'rule:', currentConfig.repoRules[index]);
-
     selectedRepoRuleIndex = index;
 
     // Reset branch rule selection when switching repos so it reinitializes
@@ -3199,13 +3197,6 @@ function selectRepoRule(index: number) {
 
     // Send preview command only if preview mode is enabled
     if (previewMode) {
-        console.log(
-            '[selectRepoRule] Sending previewRepoRule command for index:',
-            index,
-            'rule:',
-            currentConfig.repoRules[index],
-        );
-
         // Check if this repo has no branch table or empty branch table
         // If so, include clearBranchPreview flag to avoid double doit() calls
         const selectedRule = currentConfig.repoRules[index];

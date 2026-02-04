@@ -44,6 +44,30 @@
     color: var(--vscode-editor-foreground);
 }
 
+.help-content h4 {
+    font-size: 1.05em;
+    font-weight: 600;
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content h5 {
+    font-size: 1em;
+    font-weight: 600;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+}
+
+.help-content h6 {
+    font-size: 0.95em;
+    font-weight: 600;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+}
+
 .help-content p {
     margin-bottom: 1em;
     color: var(--vscode-editor-foreground);
