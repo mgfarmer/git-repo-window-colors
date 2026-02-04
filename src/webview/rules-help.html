@@ -38,13 +38,41 @@
         
         <h4>Repository Qualifier</h4>
         <p>
-            A substring to match against your repository URL. This is <strong>not</strong> a regular expression—it's a simple text match.
+            A substring to match against your repository URL or local folder path. Rules are processed from top to bottom, 
+            and the <strong>first matching rule</strong> is applied.
+        </p>
+        
+        <h5>Git Repository Matching</h5>
+        <p>
+            For git repositories, provide a substring to match against your repository's URL. 
+            This is <strong>not</strong> a regular expression—it's a simple text match.
         </p>
         <div class="example">
-            <strong>Examples:</strong><br>
+            <strong>Git Examples:</strong><br>
             • <code>myproject</code> - Matches any repo with "myproject" in the URL<br>
             • <code>github.com/user/repo</code> - Matches that specific GitHub repository<br>
             • <code>work-client</code> - Matches repos containing "work-client"
+        </div>
+
+        <h5>Local Folder Matching</h5>
+        <p>
+            For non-git workspaces (local folders), use a <strong>!</strong> prefix followed by a glob pattern. 
+            Environment variables are supported and will be expanded during matching.
+        </p>
+        <div class="example">
+            <strong>Local Folder Examples:</strong><br>
+            • <code>!$HOME/projects/*</code> - Matches any folder under your home projects directory<br>
+            • <code>!%USERPROFILE%\Documents\work\*</code> - Matches work folders on Windows<br>
+            • <code>!*/client-sites</code> - Matches any "client-sites" folder anywhere<br>
+            • <code>!%LOCALAPPDATA%\Temp\*</code> - Matches temporary folders<br>
+        </div>
+        <div class="tip">
+            <strong>Glob Patterns:</strong> Use <code>*</code> to match any characters, <code>**</code> to match across directories, 
+            and <code>?</code> to match a single character. Supported environment variables include <code>$HOME</code>, 
+            <code>%USERPROFILE%</code>, <code>%APPDATA%</code>, and <code>%LOCALAPPDATA%</code>.
+        </div>
+        <div class="warning">
+            <strong>Note:</strong> Local folder rules do not support branch rules since non-git workspaces don't have branches.
         </div>
 
         <h4>Primary Color</h4>

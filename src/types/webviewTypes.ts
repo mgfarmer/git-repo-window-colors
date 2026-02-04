@@ -58,7 +58,9 @@ export interface WebviewMessage {
         | 'toggleStarredKey'
         | 'createBranchTable'
         | 'deleteBranchTable'
-        | 'renameBranchTable';
+        | 'renameBranchTable'
+        | 'simplifyPath'
+        | 'simplifyPathForPreview';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -98,5 +100,7 @@ export interface WebviewMessage {
         index?: number;
         previewEnabled?: boolean;
         clearBranchPreview?: boolean;
+        // Local folder path simplification
+        path?: string;
     };
 }

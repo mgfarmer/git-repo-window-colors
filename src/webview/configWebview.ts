@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
 import { generatePalette, PaletteAlgorithm } from '../paletteGenerator';
-import { getRepoRuleErrors, getBranchRuleErrors, validateRules } from '../extension';
+import { getRepoRuleErrors, getBranchRuleErrors, validateRules, simplifyPath } from '../extension';
 //import { outputChannel } from '../extension';
 
 // Build-time configuration for color picker type
@@ -35,7 +35,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private readonly _extensionUri: vscode.Uri;
     private readonly _context: vscode.ExtensionContext;
     private _disposables: vscode.Disposable[] = [];
-    private _workspaceInfo: { repositoryUrl: string; currentBranch: string } = { repositoryUrl: '', currentBranch: '' };
+    private _workspaceInfo: { repositoryUrl: string; currentBranch: string; isGitRepo?: boolean } = {
+        repositoryUrl: '',
+        currentBranch: '',
+        isGitRepo: true,
+    };
     private currentConfig: any = null;
     private _configurationListener: vscode.Disposable | undefined;
     private _previewRepoRuleIndex: number | null = null;
@@ -55,8 +59,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this._disposables.push(this._configurationListener);
     }
 
-    public setWorkspaceInfo(repositoryUrl: string, currentBranch: string): void {
-        this._workspaceInfo = { repositoryUrl, currentBranch };
+    public setWorkspaceInfo(repositoryUrl: string, currentBranch: string, isGitRepo: boolean = true): void {
+        this._workspaceInfo = { repositoryUrl, currentBranch, isGitRepo };
         // Refresh the webview if it's open
         if (this._panel) {
             this._sendConfigurationToWebview();
@@ -254,6 +258,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'renameBranchTable':
                 await this._handleRenameBranchTable(message.data.oldTableName!, message.data.newTableName!);
+                break;
+            case 'simplifyPath':
+                await this._handleSimplifyPath(message.data.path!);
+                break;
+            case 'simplifyPathForPreview':
+                await this._handleSimplifyPathForPreview(message.data.path!);
                 break;
         }
     }
@@ -586,6 +596,30 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _handleSimplifyPath(path: string): Promise<void> {
+        const simplifiedPath = simplifyPath(path);
+
+        // Send simplified path back to webview
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'pathSimplified',
+                data: { simplifiedPath },
+            });
+        }
+    }
+
+    private async _handleSimplifyPathForPreview(path: string): Promise<void> {
+        const simplifiedPath = simplifyPath(path);
+
+        // Send simplified path back to webview
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'pathSimplifiedForPreview',
+                data: { simplifiedPath },
+            });
+        }
+    }
+
     private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string } {
         return this._workspaceInfo;
     }
@@ -604,15 +638,75 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // Skip disabled rules
             if ((repoRules[i] as any).enabled === false) continue;
 
-            // console.log(`[DEBUG] Testing repo rule ${i}: "${repoRules[i].repoQualifier}" against "${repositoryUrl}"`);
-            if (repositoryUrl.includes(repoRules[i].repoQualifier)) {
-                // console.log(`[DEBUG] Repo rule ${i} matched! Returning index ${i}`);
-                return i;
+            const repoQualifier = repoRules[i].repoQualifier;
+
+            // Check if this is a local folder pattern (starts with !)
+            if (repoQualifier.startsWith('!')) {
+                // For local folder patterns, use glob matching
+                // Import minimatch dynamically
+                const { minimatch } = require('minimatch');
+
+                // Remove ! prefix and expand environment variables
+                const cleanPattern = repoQualifier.substring(1);
+                const expandedPattern = this._expandEnvVars(cleanPattern);
+
+                // Normalize paths for comparison
+                const normalizedUrl = this._normalizePath(repositoryUrl);
+                const normalizedPattern = this._normalizePath(expandedPattern);
+
+                // Use minimatch for glob pattern matching
+                if (minimatch(normalizedUrl, normalizedPattern, { nocase: true })) {
+                    return i;
+                }
+            } else {
+                // Standard git repo matching - check if URL includes qualifier
+                // console.log(`[DEBUG] Testing repo rule ${i}: "${repoQualifier}" against "${repositoryUrl}"`);
+                if (repositoryUrl.includes(repoQualifier)) {
+                    // console.log(`[DEBUG] Repo rule ${i} matched! Returning index ${i}`);
+                    return i;
+                }
             }
         }
 
         // console.log('[DEBUG] No repo rule matched, returning -1');
         return -1;
+    }
+
+    private _normalizePath(filePath: string): string {
+        const path = require('path');
+        return path.normalize(filePath).toLowerCase().replace(/\\/g, '/');
+    }
+
+    private _expandEnvVars(pattern: string): string {
+        const os = require('os');
+        let expanded = pattern;
+
+        // Replace ~/ or ~ at start
+        if (expanded.startsWith('~/') || expanded === '~') {
+            expanded = expanded.replace(/^~/, os.homedir());
+        }
+
+        // List of supported environment variables
+        const envVars = [
+            { name: 'HOME', value: os.homedir() },
+            { name: 'USERPROFILE', value: os.homedir() },
+            { name: 'APPDATA', value: process.env.APPDATA || '' },
+            { name: 'LOCALAPPDATA', value: process.env.LOCALAPPDATA || '' },
+            { name: 'USER', value: process.env.USER || process.env.USERNAME || '' },
+        ];
+
+        // Replace $VAR or %VAR% style variables
+        for (const envVar of envVars) {
+            if (!envVar.value) continue;
+
+            // Unix style: $VAR
+            expanded = expanded.replace(new RegExp(`\\$${envVar.name}`, 'gi'), envVar.value);
+
+            // Windows style: %VAR%
+            expanded = expanded.replace(new RegExp(`%${envVar.name}%`, 'gi'), envVar.value);
+        }
+
+        return expanded;
     }
 
     private _getMatchingBranchRuleIndex(branchRules: BranchRule[], currentBranch: string): number {
@@ -1460,21 +1554,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         this._panel = undefined;
-    }
-
-    private _shouldClearPreviewColorsOnClose(): boolean {
-        // If no workspace info, can't determine
-        if (!this._workspaceInfo || !this._workspaceInfo.repositoryUrl) {
-            // Not a git repo, should clear
-            return true;
-        }
-
-        // Check if there's a matching repo rule
-        const repoRules = this._getRepoRules();
-        const matchingIndex = this._getMatchingRepoRuleIndex(repoRules, this._workspaceInfo.repositoryUrl);
-
-        // No matching rule means not managed, should clear
-        return matchingIndex < 0;
     }
 
     public dispose(): void {

@@ -661,6 +661,12 @@ window.addEventListener('message', (event) => {
                 }
             }
             break;
+        case 'pathSimplified':
+            handlePathSimplified(message.data);
+            break;
+        case 'pathSimplifiedForPreview':
+            handlePathSimplifiedForPreview(message.data);
+            break;
     }
 });
 
@@ -784,6 +790,47 @@ function handleDeleteConfirmed(data: any) {
         console.log('Rule deleted successfully');
     } else {
         console.log('Rule deletion was cancelled');
+    }
+}
+
+function handlePathSimplified(data: any) {
+    // Received simplified path from backend, complete addRepoRule action
+    if (!currentConfig || !data.simplifiedPath) return;
+
+    const newRule = {
+        repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
+        primaryColor: getThemeAppropriateColor(),
+    };
+
+    currentConfig.repoRules.push(newRule);
+    sendConfiguration();
+}
+
+function handlePathSimplifiedForPreview(data: any) {
+    // Received simplified path from backend, complete addRepoRuleFromPreview action
+    if (!currentConfig || !data.simplifiedPath) return;
+
+    const newRule = {
+        repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
+        primaryColor: getThemeAppropriateColor(),
+    };
+
+    currentConfig.repoRules.push(newRule);
+
+    // Select the newly created rule
+    const newRuleIndex = currentConfig.repoRules.length - 1;
+    selectedRepoRuleIndex = newRuleIndex;
+
+    // Send configuration update
+    sendConfiguration();
+
+    // Hide the preview toast
+    hidePreviewToast();
+
+    // Switch to rules tab to show the new rule
+    const rulesTab = document.getElementById('tab-rules');
+    if (rulesTab) {
+        (rulesTab as HTMLElement).click();
     }
 }
 
@@ -1772,6 +1819,23 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     container.style.display = 'flex';
     container.style.gap = '4px';
     container.style.alignItems = 'center';
+
+    // Check if this is a local folder rule (starts with !)
+    const repoRules = currentConfig?.repoRules || [];
+    const rule = repoRules[repoRuleIndex];
+    if (rule && rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+        // Local folder rule - show static text
+        container.textContent = 'Local Folder';
+        container.style.color = 'var(--vscode-descriptionForeground)';
+        container.style.fontStyle = 'italic';
+        container.style.fontSize = '12px';
+        container.style.padding = '2px 4px';
+        container.style.background = 'transparent';
+        container.setAttribute('title', 'Local folder rules do not support branch rules');
+        return container;
+    }
+
+    // For dropdown, allow flex to expand
     container.style.flex = '1';
 
     if (!currentConfig?.sharedBranchTables) {
@@ -1781,7 +1845,6 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     }
 
     const tables = currentConfig.sharedBranchTables;
-    const repoRules = currentConfig.repoRules || [];
 
     // Calculate usage counts and track which repos use each table
     const usageCounts: { [tableName: string]: number } = {};
@@ -2983,15 +3046,29 @@ function handlePreviewModeChange() {
 function addRepoRule() {
     if (!currentConfig) return;
 
-    // If current repo is already matched by an existing rule, don't pre-fill it
-    const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
-    const isCurrentRepoAlreadyMatched =
-        currentConfig.matchingIndexes?.repoRule !== null &&
-        currentConfig.matchingIndexes?.repoRule !== undefined &&
-        currentConfig.matchingIndexes?.repoRule >= 0;
+    // Check if workspace is a git repo or local folder
+    const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
+    let repoQualifier = '';
+
+    if (isGitRepo) {
+        // Git repository - extract repo name from URL
+        repoQualifier = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    } else {
+        // Local folder - create pattern with ! prefix and env var substitution
+        const folderPath = currentConfig.workspaceInfo?.repositoryUrl || '';
+        if (folderPath) {
+            // Send message to backend to simplify path
+            vscode.postMessage({
+                command: 'simplifyPath',
+                data: { path: folderPath },
+            });
+            // Will receive response via 'pathSimplified' message
+            return; // Exit early, will complete in message handler
+        }
+    }
 
     const newRule = {
-        repoQualifier: currentRepoName,
+        repoQualifier: repoQualifier,
         primaryColor: getThemeAppropriateColor(),
     };
 
@@ -5048,10 +5125,29 @@ function addRepoRuleFromPreview() {
     }
     previewMode = false;
 
-    // Add a new repo rule for the current workspace
-    const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    // Check if workspace is a git repo or local folder
+    const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
+    let repoQualifier = '';
+
+    if (isGitRepo) {
+        // Git repository - extract repo name from URL
+        repoQualifier = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    } else {
+        // Local folder - create pattern with ! prefix and env var substitution
+        const folderPath = currentConfig.workspaceInfo?.repositoryUrl || '';
+        if (folderPath) {
+            // Send message to backend to simplify path, then complete action
+            vscode.postMessage({
+                command: 'simplifyPathForPreview',
+                data: { path: folderPath },
+            });
+            // Will receive response via 'pathSimplifiedForPreview' message
+            return; // Exit early, will complete in message handler
+        }
+    }
+
     const newRule = {
-        repoQualifier: currentRepoName,
+        repoQualifier: repoQualifier,
         primaryColor: getThemeAppropriateColor(),
     };
 
