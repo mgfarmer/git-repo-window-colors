@@ -259,7 +259,7 @@ function createRepoTempProfile(repoColor: Color): AdvancedProfile {
             activityBarColorKnob = 0;
         }
         outputChannel.appendLine(`    [Repo Temp Profile] Raw color knob value: ${activityBarColorKnob}`);
-        activityBarColorKnob = activityBarColorKnob / 50;
+        activityBarColorKnob = activityBarColorKnob / 20;
         outputChannel.appendLine(`    [Repo Temp Profile] Normalized color knob: ${activityBarColorKnob}`);
 
         // Create cache key
