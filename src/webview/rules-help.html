@@ -53,6 +53,17 @@
             • <code>github.com/user/repo</code> - Matches that specific GitHub repository<br>
             • <code>work-client</code> - Matches repos containing "work-client"
         </div>
+        <div class="note">
+            <strong>Important:</strong> Repository rules match against the actual <strong>git repository URL</strong> 
+            (the remote origin URL), not the folder name where you cloned the repository. The folder name on your 
+            local disk is irrelevant to matching. For example:
+            <ul style="margin-top: 8px; margin-bottom: 0;">
+                <li>Repository URL: <code>https://github.com/user/awesome-project.git</code></li>
+                <li>Cloned into folder: <code>C:\temp\test123</code></li>
+                <li>Rule qualifier: <code>awesome-project</code> will match ✓</li>
+                <li>Rule qualifier: <code>test123</code> will NOT match ✗</li>
+            </ul>
+        </div>
 
         <h5>Local Folder Matching</h5>
         <p>
