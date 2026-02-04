@@ -1858,8 +1858,16 @@ function createBranchTableDropdown(
     const repoRules = currentConfig?.repoRules || [];
     const rule = repoRules[repoRuleIndex];
     if (rule && rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
-        // Local folder rule - show static text
-        container.textContent = 'Local Folder';
+        // Local folder rule - show static text with icon
+        const icon = document.createElement('span');
+        icon.className = 'codicon codicon-folder';
+        icon.style.marginRight = '4px';
+        container.appendChild(icon);
+
+        const text = document.createElement('span');
+        text.textContent = 'Local Folder';
+        container.appendChild(text);
+
         container.style.color = 'var(--vscode-descriptionForeground)';
         container.style.fontStyle = 'italic';
         container.style.fontSize = '12px';
@@ -2604,7 +2612,7 @@ function renderOtherSettings(settings: any) {
                         <span class="tooltiptext" role="tooltip">
                             When enabled, selecting any repository rule will preview its colors in the workspace 
                             without loading a workspace that matches the previewed rule. This is useful for testing how different 
-                            rules look before applying them to a specific repository.
+                            rules look without having to open every repository.
                         </span>
                     </div>
                     <div class="setting-item tooltip">
