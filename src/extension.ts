@@ -64,7 +64,10 @@ function normalizePath(filePath: string): string {
 /**
  * Expand environment variables in a path pattern
  */
-function expandEnvVars(pattern: string): string {
+/**
+ * Expand environment variables in a path pattern
+ */
+export function expandEnvVars(pattern: string): string {
     // List of supported environment variables
     const envVars = [
         { name: 'HOME', value: os.homedir() },
@@ -76,8 +79,8 @@ function expandEnvVars(pattern: string): string {
 
     let expanded = pattern;
 
-    // Replace ~/ or ~ at start
-    if (expanded.startsWith('~/') || expanded === '~') {
+    // Replace ~/ or ~\ or ~ at start (handle both Unix and Windows path separators)
+    if (expanded.startsWith('~/') || expanded.startsWith('~\\') || expanded === '~') {
         expanded = expanded.replace(/^~/, os.homedir());
     }
 
@@ -103,24 +106,33 @@ function simplifyPathWithEnvVars(filePath: string): string {
     const appData = process.env.APPDATA || '';
     const localAppData = process.env.LOCALAPPDATA || '';
 
-    // Normalize for comparison
+    // Normalize for comparison (case-insensitive on Windows)
     const normalizedPath = path.normalize(filePath);
     const normalizedHome = path.normalize(homeDir);
 
+    // For comparison on Windows, use lowercase
+    const isWindows = process.platform === 'win32';
+    const comparePath = isWindows ? normalizedPath.toLowerCase() : normalizedPath;
+    const compareHome = isWindows ? normalizedHome.toLowerCase() : normalizedHome;
+    const compareLocalAppData =
+        isWindows && localAppData ? path.normalize(localAppData).toLowerCase() : path.normalize(localAppData);
+    const compareAppData = isWindows && appData ? path.normalize(appData).toLowerCase() : path.normalize(appData);
+
     // Try to replace with environment variables (longest match first)
-    if (localAppData && normalizedPath.startsWith(path.normalize(localAppData))) {
-        return normalizedPath.replace(path.normalize(localAppData), '%LOCALAPPDATA%');
+    if (localAppData && comparePath.startsWith(compareLocalAppData)) {
+        const relativePath = normalizedPath.substring(path.normalize(localAppData).length);
+        return '%LOCALAPPDATA%' + relativePath;
     }
 
-    if (appData && normalizedPath.startsWith(path.normalize(appData))) {
-        return normalizedPath.replace(path.normalize(appData), '%APPDATA%');
+    if (appData && comparePath.startsWith(compareAppData)) {
+        const relativePath = normalizedPath.substring(path.normalize(appData).length);
+        return '%APPDATA%' + relativePath;
     }
 
-    if (normalizedPath.startsWith(normalizedHome)) {
-        // Use platform-appropriate syntax
-        const isWindows = process.platform === 'win32';
-        const varName = isWindows ? '%USERPROFILE%' : '$HOME';
-        return normalizedPath.replace(normalizedHome, varName);
+    if (comparePath.startsWith(compareHome)) {
+        // Use ~ for home directory (works cross-platform and is shorter)
+        const relativePath = normalizedPath.substring(normalizedHome.length);
+        return '~' + relativePath;
     }
 
     return filePath;
@@ -152,6 +164,29 @@ function matchesLocalFolderPattern(folderPath: string, pattern: string): boolean
 
     // Use minimatch for glob pattern matching
     return minimatch(normalizedFolder, normalizedPattern, { nocase: true });
+}
+
+/**
+ * Validate if a local folder pattern resolves to an existing path
+ * @param pattern The pattern to validate (with or without ! prefix)
+ * @returns true if the path exists, false otherwise
+ */
+export function validateLocalFolderPath(pattern: string): boolean {
+    // Remove ! prefix if present
+    const cleanPattern = pattern.startsWith('!') ? pattern.substring(1) : pattern;
+
+    // Expand environment variables
+    const expandedPath = expandEnvVars(cleanPattern);
+
+    // Normalize the path
+    const normalizedPath = path.normalize(expandedPath);
+
+    // Check if the path exists
+    try {
+        return fs.existsSync(normalizedPath);
+    } catch (error) {
+        return false;
+    }
 }
 
 /**

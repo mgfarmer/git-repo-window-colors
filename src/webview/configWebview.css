@@ -46,7 +46,7 @@ body {
 /* Preview Mode Toast */
 .preview-toast {
     position: fixed;
-    top: 20px;
+    top: 6px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10000;
@@ -268,6 +268,32 @@ h2 {
     right: 8px;
     transform: translateY(-50%);
     background-color: var(--vscode-charts-green);
+    color: var(--vscode-editor-background);
+    font-size: 13px;
+    line-height: 18px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: bold;
+}
+
+/* Warning icon for local folder rules with invalid paths */
+.rules-table tr.invalid-path {
+    position: relative;
+}
+.rules-table tr.invalid-path::after {
+    content: '⚠';
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    background-color: var(--vscode-charts-yellow);
     color: var(--vscode-editor-background);
     font-size: 13px;
     line-height: 18px;

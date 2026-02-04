@@ -28,6 +28,8 @@ let validationErrors: { repoRules: { [index: number]: string }; branchRules: { [
     repoRules: {},
     branchRules: {},
 };
+let localFolderPathValidation: { [index: number]: boolean } = {}; // Track which local folder paths exist
+let expandedPaths: { [index: number]: string } = {}; // Track expanded paths for local folder rules
 let selectedMappingTab: string | null = null; // Track which mapping tab is active
 let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
 let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
@@ -696,6 +698,20 @@ function handleConfigurationData(data: any) {
         validationErrors = { repoRules: {}, branchRules: {} };
     }
 
+    // Store local folder path validation if present
+    if (data.localFolderPathValidation) {
+        localFolderPathValidation = data.localFolderPathValidation;
+    } else {
+        localFolderPathValidation = {};
+    }
+
+    // Store expanded paths if present
+    if (data.expandedPaths) {
+        expandedPaths = data.expandedPaths;
+    } else {
+        expandedPaths = {};
+    }
+
     // Synchronize profileName fields for backward compatibility
     // If primaryColor/branchColor/color matches a profile but profileName is not set, set it
     if (currentConfig?.advancedProfiles && currentConfig?.repoRules) {
@@ -1027,8 +1043,11 @@ function renderConfiguration(config: any) {
     renderBranchTablesTab(config);
     renderColorReport(config);
 
-    // Show/hide preview toast based on preview mode
-    if (previewMode) {
+    // Show/hide preview toast based on preview mode and whether we're previewing a different rule
+    // Show toast only if the selected rule is different from the matching rule
+    const matchingRuleIndex = config.matchingIndexes?.repoRule ?? -1;
+    const isPreviewingDifferentRule = selectedRepoRuleIndex !== matchingRuleIndex;
+    if (previewMode && isPreviewingDifferentRule) {
         showPreviewToast();
     } else {
         hidePreviewToast();
@@ -1755,6 +1774,13 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
             row.classList.add('disabled-rule');
         }
 
+        // Add warning class if this is a local folder rule with invalid path
+        if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+            if (localFolderPathValidation[index] === false) {
+                row.classList.add('invalid-path');
+            }
+        }
+
         row.innerHTML = createRepoRuleRowHTML(rule, index, rules.length);
         setupRepoRuleRowEvents(row, index);
 
@@ -1771,7 +1797,23 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         );
         const cell = row.querySelector(`#branch-table-cell-${index}`);
         if (cell) {
-            const dropdownContainer = createBranchTableDropdown(tableName, index);
+            // Determine status tooltip
+            let statusTooltip = '';
+            if (matchingIndex !== undefined && index === matchingIndex) {
+                statusTooltip = 'This rule matches the current workspace';
+            } else if (
+                rule.repoQualifier &&
+                rule.repoQualifier.startsWith('!') &&
+                localFolderPathValidation[index] === false
+            ) {
+                statusTooltip = 'Warning: This path does not exist on the local system';
+            }
+
+            if (statusTooltip) {
+                cell.setAttribute('title', statusTooltip);
+            }
+
+            const dropdownContainer = createBranchTableDropdown(tableName, index, statusTooltip);
             cell.appendChild(dropdownContainer);
         }
     });
@@ -1814,7 +1856,11 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     }
 }
 
-function createBranchTableDropdown(selectedTableName: string | null, repoRuleIndex: number): HTMLElement {
+function createBranchTableDropdown(
+    selectedTableName: string | null,
+    repoRuleIndex: number,
+    statusTooltip?: string,
+): HTMLElement {
     const container = document.createElement('div');
     container.style.display = 'flex';
     container.style.gap = '4px';
@@ -1831,7 +1877,10 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
         container.style.fontSize = '12px';
         container.style.padding = '2px 4px';
         container.style.background = 'transparent';
-        container.setAttribute('title', 'Local folder rules do not support branch rules');
+        // Only set default tooltip if there's no status tooltip
+        if (!statusTooltip) {
+            container.setAttribute('title', 'Local folder rules do not support branch rules');
+        }
         return container;
     }
 
@@ -2194,6 +2243,15 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
 function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): string {
     const isSelected = selectedRepoRuleIndex === index;
 
+    // For local folder rules, create a tooltip showing the expanded path
+    let tooltipText = '';
+    if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+        const expandedPath = expandedPaths[index];
+        if (expandedPath) {
+            tooltipText = `Resolved path: ${expandedPath}`;
+        }
+    }
+
     return `
         <td class="select-cell">
             <input type="radio" 
@@ -2214,6 +2272,7 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
                    value="${escapeHtml(rule.repoQualifier || '')}" 
                    placeholder="e.g., myrepo or github.com/user/repo"
                    aria-label="Repository qualifier for rule ${index + 1}"
+                   ${tooltipText ? `title="${escapeHtml(tooltipText)}"` : ''}
                    data-action="updateRepoRule(${index}, 'repoQualifier', this.value)">
         </td>
         <td class="color-cell">
@@ -3210,8 +3269,13 @@ function selectRepoRule(index: number) {
     renderOtherSettings(currentConfig.otherSettings);
 
     // Update toast if preview mode is enabled
-    if (previewMode) {
+    // Show toast only if the selected rule is different from the matching rule
+    const matchingRuleIndex = currentConfig.matchingIndexes?.repoRule ?? -1;
+    const isPreviewingDifferentRule = selectedRepoRuleIndex !== matchingRuleIndex;
+    if (previewMode && isPreviewingDifferentRule) {
         showPreviewToast();
+    } else {
+        hidePreviewToast();
     }
 
     // Render branch rules for the selected repo
@@ -3482,6 +3546,53 @@ function renderBranchRulesForSelectedRepo() {
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) return;
+
+    // Check if this is a local folder rule
+    const isLocalFolderRule = selectedRule.repoQualifier && selectedRule.repoQualifier.startsWith('!');
+
+    if (isLocalFolderRule) {
+        // Local folder rules don't support branch rules
+        const header = document.querySelector('#branch-rules-heading');
+        if (header) {
+            header.innerHTML = `<span class="codicon codicon-folder"></span> Local Folder Rule`;
+        }
+
+        // Hide the section help text
+        const sectionHelp = document.querySelector('.branch-panel .section-help');
+        if (sectionHelp) {
+            (sectionHelp as HTMLElement).style.display = 'none';
+        }
+
+        // Hide the Copy From and Add buttons for local folder rules
+        updateCopyFromButton(false);
+        updateBranchAddButton(false);
+
+        // Show a message explaining local folder rules don't support branch tables
+        const container = document.getElementById('branchRulesContent');
+        if (container) {
+            container.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: var(--vscode-descriptionForeground);">
+                    <div style="font-size: 48px; margin-bottom: 16px;">
+                        <span class="codicon codicon-folder"></span>
+                    </div>
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">
+                        Local Folder Rules
+                    </div>
+                    <div style="font-size: 12px; line-height: 1.6; max-width: 400px; margin: 0 auto;">
+                        Branch rules are not supported for local folder rules. 
+                        Local folders are not git repositories and don't have branches.
+                    </div>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    // Show the section help text for non-local-folder rules
+    const sectionHelp = document.querySelector('.branch-panel .section-help');
+    if (sectionHelp) {
+        (sectionHelp as HTMLElement).style.display = '';
+    }
 
     // Get table name - default to '__none__' if not set
     const tableName = selectedRule.branchTableName || '__none__';
@@ -4647,6 +4758,31 @@ function escapeHtml(text: string): string {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Expand environment variables in a path for display in tooltips
+ */
+function expandEnvVarsForTooltip(pattern: string): string {
+    // Get user home directory
+    const userHome = (window as any).userInfo?.homeDir || '~';
+
+    let expanded = pattern;
+
+    // Replace ~/ or ~\ or ~ at start
+    if (expanded.startsWith('~/') || expanded.startsWith('~\\') || expanded === '~') {
+        expanded = expanded.replace(/^~/, userHome);
+    }
+
+    // Replace %USERPROFILE%, %APPDATA%, etc. with placeholder text
+    // Since we're in the webview, we don't have access to process.env
+    // Just show what would be expanded
+    expanded = expanded.replace(/%USERPROFILE%/gi, userHome);
+    expanded = expanded.replace(/%APPDATA%/gi, userHome + '\\AppData\\Roaming');
+    expanded = expanded.replace(/%LOCALAPPDATA%/gi, userHome + '\\AppData\\Local');
+    expanded = expanded.replace(/\$HOME/gi, userHome);
+
+    return expanded;
 }
 
 function isValidColorName(color: string): boolean {

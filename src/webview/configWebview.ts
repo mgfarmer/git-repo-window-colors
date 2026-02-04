@@ -2,7 +2,14 @@ import * as vscode from 'vscode';
 import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
 import { generatePalette, PaletteAlgorithm } from '../paletteGenerator';
-import { getRepoRuleErrors, getBranchRuleErrors, validateRules, simplifyPath } from '../extension';
+import {
+    getRepoRuleErrors,
+    getBranchRuleErrors,
+    validateRules,
+    simplifyPath,
+    validateLocalFolderPath,
+    expandEnvVars,
+} from '../extension';
 //import { outputChannel } from '../extension';
 
 // Build-time configuration for color picker type
@@ -301,6 +308,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Get currently applied color customizations
         const colorCustomizations = vscode.workspace.getConfiguration('workbench').get('colorCustomizations', {});
 
+        // Validate local folder paths and expand environment variables for tooltips
+        const localFolderPathValidation: { [index: number]: boolean } = {};
+        const expandedPaths: { [index: number]: string } = {};
+        repoRules.forEach((rule, index) => {
+            if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+                localFolderPathValidation[index] = validateLocalFolderPath(rule.repoQualifier);
+                // Expand the path for tooltip display (remove ! prefix first)
+                const pattern = rule.repoQualifier.substring(1);
+                expandedPaths[index] = expandEnvVars(pattern);
+            }
+        });
+
         // Calculate matching rule indexes using the same logic as the extension
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
 
@@ -361,6 +380,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 repoRules: repoRuleErrorsObj,
                 branchRules: branchRuleErrorsObj,
             },
+            localFolderPathValidation,
+            expandedPaths,
             matchingIndexes: {
                 repoRule: matchingRepoRuleIndex,
                 branchRule: matchingBranchRuleIndex,
@@ -681,8 +702,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const os = require('os');
         let expanded = pattern;
 
-        // Replace ~/ or ~ at start
-        if (expanded.startsWith('~/') || expanded === '~') {
+        // Replace ~/ or ~\ or ~ at start (handle both Unix and Windows path separators)
+        if (expanded.startsWith('~/') || expanded.startsWith('~\\') || expanded === '~') {
             expanded = expanded.replace(/^~/, os.homedir());
         }
 
@@ -816,6 +837,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 );
                 await this._waitForColorCustomizationsUpdate();
             }
+
+            // Refresh the webview to recalculate matching indexes
+            this._sendConfigurationToWebview();
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);
