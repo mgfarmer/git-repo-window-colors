@@ -321,7 +321,7 @@ h2 {
     outline: 3px solid var(--vscode-focusBorder);
     outline-offset: -2px;
     position: relative;
-    background-color: var(--vscode-list-activeSelectionBackground, rgba(100, 150, 255, 0.08));
+    background-color: transparent;
 }
 
 /* Make cells in selected row have transparent background so outline shows through */
