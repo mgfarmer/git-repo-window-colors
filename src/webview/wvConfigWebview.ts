@@ -571,7 +571,6 @@ function getThemeAppropriateColor(): string {
             return `#${red.toString(16).padStart(2, '0')}${green.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
         };
 
-        //console.log('[DEBUG] generateContrastColor HSL:', hue, saturation, lightness);
         return hslToRgb(hue, saturation, lightness);
     }
 
@@ -620,7 +619,7 @@ function collectUniqueBranchPatterns(): string[] {
 // Message handler for extension communication
 window.addEventListener('message', (event) => {
     const message = event.data;
-    console.log('[Message Listener] Received message:', message.command);
+    //console.log('[Message Listener] Received message:', message.command);
 
     switch (message.command) {
         case 'configData':
@@ -674,13 +673,13 @@ window.addEventListener('message', (event) => {
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
-    console.log('[handleConfigurationData] Received data from backend');
-    if (data?.repoRules) {
-        console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
-        data.repoRules.forEach((rule: any, index: number) => {
-            console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
-        });
-    }
+    // console.log('[handleConfigurationData] Received data from backend');
+    // if (data?.repoRules) {
+    //     console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
+    //     data.repoRules.forEach((rule: any, index: number) => {
+    //         console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
+    //     });
+    // }
 
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
@@ -1028,7 +1027,6 @@ function closeHelp() {
 }
 
 function renderConfiguration(config: any) {
-    console.log('[DEBUG] renderConfiguration ', config);
     // Clear validation errors on new data
     clearValidationErrors();
 
@@ -1713,7 +1711,6 @@ function handleDocumentDrop(event: DragEvent) {
 // Rule rendering functions
 
 function renderRepoRules(rules: any[], matchingIndex?: number) {
-    //console.log('[DEBUG] renderRepoRules called with matchingIndex:', rules, matchingIndex);
     const container = document.getElementById('repoRulesContent');
     if (!container) return;
 
@@ -1765,7 +1762,6 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
 
         // Highlight matched rule
         if (matchingIndex !== undefined && index === matchingIndex) {
-            // console.log('[DEBUG] Applying matched-rule class to index:', index, 'rule:', rule.repoQualifier);
             row.classList.add('matched-rule');
         }
 
@@ -1787,14 +1783,6 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
         // Insert custom branch table dropdown
         // '__none__' = explicitly No Branch Table, missing/undefined defaults to '__none__'
         const tableName = rule.branchTableName || '__none__';
-        console.log(
-            '[createDropdown] Rule',
-            index,
-            'branchTableName:',
-            rule.branchTableName,
-            'resolved tableName:',
-            tableName,
-        );
         const cell = row.querySelector(`#branch-table-cell-${index}`);
         if (cell) {
             // Determine status tooltip
@@ -2526,23 +2514,6 @@ function renderOtherSettings(settings: any) {
     const disabledClass = isProfileRule ? 'disabled' : '';
     const profileNote = isProfileRule ? ' <strong>The currently selected rule is using a profile.</strong>' : '';
 
-    console.log(
-        '[renderOtherSettings] selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-        'selectedRule:',
-        selectedRule,
-        'profilesEnabled:',
-        profilesEnabled,
-        'isProfileRule:',
-        isProfileRule,
-        'primaryColor:',
-        selectedRule?.primaryColor,
-        'profileName:',
-        selectedRule?.profileName,
-        'advancedProfiles:',
-        Object.keys(currentConfig?.advancedProfiles || {}),
-    );
-
     container.innerHTML = `
         <div class="settings-sections">
             <div class="settings-section">
@@ -2685,7 +2656,6 @@ function renderWorkspaceInfo(workspaceInfo: any) {
 function renderBranchTablesTab(config: any) {
     const container = document.getElementById('branch-tables-content');
     if (!container) {
-        console.log('[DEBUG] branch-tables-content container not found');
         return;
     }
 
@@ -2774,12 +2744,8 @@ function renderBranchTablesTab(config: any) {
 function renderColorReport(config: any) {
     const container = document.getElementById('reportContent');
     if (!container) {
-        console.log('[DEBUG] reportContent container not found');
         return;
     }
-
-    console.log('[DEBUG] renderColorReport called with config:', config);
-    console.log('[DEBUG] colorCustomizations:', config.colorCustomizations);
 
     const colorCustomizations = config.colorCustomizations || {};
     const managedColors = [
@@ -2962,8 +2928,6 @@ function renderColorReport(config: any) {
         }
     });
 
-    console.log('[DEBUG] Generated rows:', rows.length);
-
     if (rows.length === 0) {
         container.innerHTML =
             '<div class="no-rules">No colors are currently applied. Create and apply a repository or branch rule to see the color report.</div>';
@@ -3033,10 +2997,7 @@ function renderColorReport(config: any) {
         </div>
     `;
 
-    console.log('[DEBUG] About to set innerHTML, container:', container);
-    console.log('[DEBUG] Table HTML length:', tableHTML.length);
     container.innerHTML = tableHTML;
-    console.log('[DEBUG] innerHTML set, container.children.length:', container.children.length);
 }
 
 function updateProfilesTabVisibility() {
@@ -3949,29 +3910,22 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 }
 
 function updateColorSwatch(ruleType: string, index: number, field: string, value: string) {
-    // console.log(
-    //     `[DEBUG] updateColorSwatch called with: ruleType="${ruleType}", index=${index}, field="${field}", value="${value}"`,
-    // );
-
     const colorInput = document.getElementById(`${ruleType}-${field}-${index}`) as HTMLInputElement;
     if (colorInput && colorInput.type === 'color') {
         // Convert any color format to hex for the native color input
         const hexColor = convertColorToHex(value);
         colorInput.value = hexColor;
-        // console.log(`[DEBUG] Updated native color input to: "${hexColor}"`);
     }
 
     // Update the swatch background for non-native color picker (only if swatch exists)
     const swatch = colorInput?.parentElement?.querySelector('.color-swatch') as HTMLElement;
-    // console.log(`[DEBUG] Found swatch element:`, swatch);
 
     if (swatch) {
         // For named colors and other formats, try to convert to a valid CSS color
         const displayColor = convertColorToValidCSS(value) || '#4A90E2';
-        // console.log(`[DEBUG] Setting swatch backgroundColor to: "${displayColor}"`);
         swatch.style.backgroundColor = displayColor;
     } else {
-        // console.log(`[DEBUG] No swatch element found - using native color picker`);
+        // No swatch element found - using native color picker`);
     }
 }
 
@@ -4088,9 +4042,6 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
 }
 
 function moveRule(index: number, ruleType: string, direction: number) {
-    // console.log('[DEBUG] moveRule called:', { index, ruleType, direction });
-    // console.log('[DEBUG] currentConfig exists:', !!currentConfig);
-
     if (!currentConfig) return;
 
     let rules;
@@ -4108,18 +4059,10 @@ function moveRule(index: number, ruleType: string, direction: number) {
         }
     }
 
-    // console.log('[DEBUG] Rules array exists:', !!rules, 'length:', rules?.length);
-
     if (!rules) return;
-
-    // console.log(
-    //     '[DEBUG] Rules before move:',
-    //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
-    // );
 
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= rules.length) {
-        // console.log('[DEBUG] Move cancelled - out of bounds:', { newIndex, length: rules.length });
         return;
     }
 
@@ -4134,12 +4077,6 @@ function moveRule(index: number, ruleType: string, direction: number) {
     } else if (ruleType === 'repo' && selectedRepoRuleIndex === newIndex) {
         selectedRepoRuleIndex = index;
     }
-
-    // console.log(
-    //     '[DEBUG] Rules after move:',
-    //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
-    // );
-    // console.log('[DEBUG] About to call sendConfiguration with currentConfig:', !!currentConfig);
 
     // Send updated configuration - backend will recalculate matching indexes and send back proper update
     // This will trigger a complete table refresh with correct highlighting
@@ -4437,7 +4374,6 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
 function updateOtherSetting(setting: string, value: any) {
     if (!currentConfig?.otherSettings) return;
 
-    // console.log(`[DEBUG] updateOtherSetting: ${setting} = ${value}`);
     currentConfig.otherSettings[setting] = value;
     // Send immediately for settings changes (no validation needed)
     sendConfiguration();
@@ -4721,7 +4657,6 @@ function displayValidationErrors(errors: string[]) {
 
 // Communication functions
 function sendConfiguration() {
-    // console.log('[DEBUG] Sending configuration to extension:', currentConfig);
     vscode.postMessage({
         command: 'updateConfig',
         data: currentConfig,
@@ -4816,17 +4751,13 @@ function rgbToHex(rgb: string): string | null {
 function convertColorToValidCSS(color: string): string {
     if (!color) return '#4A90E2';
 
-    // console.log(`[DEBUG] Testing color: "${color}"`);
-
     // If it's already a valid hex color, return it
     if (/^#[0-9A-Fa-f]{6}$/.test(color) || /^#[0-9A-Fa-f]{3}$/.test(color)) {
-        // console.log(`[DEBUG] "${color}" is hex, returning as-is`);
         return color;
     }
 
     // If it's an RGB color, return it as-is
     if (/^rgba?\(/.test(color)) {
-        // console.log(`[DEBUG] "${color}" is RGB, returning as-is`);
         return color;
     }
 
@@ -4838,17 +4769,11 @@ function convertColorToValidCSS(color: string): string {
         const computedColor = getComputedStyle(tempDiv).backgroundColor;
         document.body.removeChild(tempDiv);
 
-        // console.log(`[DEBUG] "${color}" computed to: "${computedColor}"`);
-
         // If the browser recognized the color, return the original value
         if (computedColor && computedColor !== 'rgba(0, 0, 0, 0)' && computedColor !== 'transparent') {
-            // console.log(`[DEBUG] "${color}" is valid, returning original`);
             return color; // Return the original named color since CSS understands it
         }
-
-        // console.log(`[DEBUG] "${color}" failed validation, using fallback`);
     } catch (e) {
-        // console.log(`[DEBUG] Error testing "${color}":`, e);
         // If there's an error, fall back to default
     }
 
@@ -4857,8 +4782,6 @@ function convertColorToValidCSS(color: string): string {
 
 function convertColorToHex(color: string): string {
     if (!color) return '#4A90E2'; // Default blue
-
-    //console.log(`[DEBUG] convertColorToHex called with: "${color}"`);
 
     // Check if it's a profile name (exists in current config)
     if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[color]) {
@@ -4873,30 +4796,24 @@ function convertColorToHex(color: string): string {
 
     // If it's already a hex color, return it
     if (color.startsWith('#')) {
-        // console.log(`[DEBUG] "${color}" is already hex`);
         return color;
     }
 
     // If it's a named color, convert it using browser's color computation
     if (isValidColorName(color)) {
-        // console.log(`[DEBUG] "${color}" is a valid color name, converting...`);
         const tempDiv = document.createElement('div');
         tempDiv.style.color = color;
         document.body.appendChild(tempDiv);
         const computedColor = getComputedStyle(tempDiv).color;
         document.body.removeChild(tempDiv);
 
-        // console.log(`[DEBUG] "${color}" computed to RGB: "${computedColor}"`);
-
         // Convert RGB to hex
         const hexColor = rgbToHex(computedColor);
         if (hexColor) {
-            // console.log(`[DEBUG] "${color}" converted to hex: "${hexColor}"`);
             return hexColor;
         }
     }
 
-    // console.log(`[DEBUG] "${color}" conversion failed, using default`);
     // If conversion failed or it's an unknown format, return default
     return '#4A90E2';
 }
@@ -6370,11 +6287,11 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
                 ? matchedBranchRule.color
                 : null);
 
-        console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
-        console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);
-        console.log('[Profile Indicators] matchedBranchRule:', matchedBranchRule);
-        console.log('[Profile Indicators] repoProfileName:', repoProfileName);
-        console.log('[Profile Indicators] branchProfileName:', branchProfileName);
+        // console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
+        // console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);
+        // console.log('[Profile Indicators] matchedBranchRule:', matchedBranchRule);
+        // console.log('[Profile Indicators] repoProfileName:', repoProfileName);
+        // console.log('[Profile Indicators] branchProfileName:', branchProfileName);
 
         Object.keys(profiles).forEach((name) => {
             const el = document.createElement('div');
@@ -6390,33 +6307,33 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             const isRepoProfile = name === repoProfileName;
             const isBranchProfile = name === branchProfileName;
 
-            console.log(
-                `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
-            );
+            // console.log(
+            //     `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
+            // );
 
             // Create indicator container (even if empty, to maintain alignment)
             const indicatorContainer = document.createElement('span');
             indicatorContainer.className = 'profile-indicators';
 
-            if (isRepoProfile || isBranchProfile) {
-                console.log(`[Profile Indicators] Adding indicators for "${name}"`);
+            // if (isRepoProfile || isBranchProfile) {
+            //     console.log(`[Profile Indicators] Adding indicators for "${name}"`);
 
-                if (isRepoProfile) {
-                    const repoIcon = document.createElement('span');
-                    repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
-                    repoIcon.title = 'Applied to repository rule for this workspace';
-                    indicatorContainer.appendChild(repoIcon);
-                    console.log(`[Profile Indicators] Added repo icon for "${name}"`);
-                }
+            //     if (isRepoProfile) {
+            //         const repoIcon = document.createElement('span');
+            //         repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
+            //         repoIcon.title = 'Applied to repository rule for this workspace';
+            //         indicatorContainer.appendChild(repoIcon);
+            //         console.log(`[Profile Indicators] Added repo icon for "${name}"`);
+            //     }
 
-                if (isBranchProfile) {
-                    const branchIcon = document.createElement('span');
-                    branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
-                    branchIcon.title = 'Applied to branch rule for this workspace';
-                    indicatorContainer.appendChild(branchIcon);
-                    console.log(`[Profile Indicators] Added branch icon for "${name}"`);
-                }
-            }
+            //     if (isBranchProfile) {
+            //         const branchIcon = document.createElement('span');
+            //         branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
+            //         branchIcon.title = 'Applied to branch rule for this workspace';
+            //         indicatorContainer.appendChild(branchIcon);
+            //         console.log(`[Profile Indicators] Added branch icon for "${name}"`);
+            //     }
+            // }
 
             nameContainer.appendChild(indicatorContainer);
 
@@ -7159,9 +7076,9 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 }
 
                 // Debug: Check what slot was determined
-                if (currentSlot !== 'none') {
-                    console.log(`[Mapping Debug] ${key}: currentSlot = ${currentSlot}`);
-                }
+                // if (currentSlot !== 'none') {
+                //     console.log(`[Mapping Debug] ${key}: currentSlot = ${currentSlot}`);
+                // }
 
                 // Create warning indicator for uncolored keys in Starred tab
                 const warningIndicator = document.createElement('span');
@@ -7286,28 +7203,28 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 const filteredPaletteOptions = getFilteredPaletteOptions(key, allPaletteOptions, currentSlot);
 
                 // Debug: Check if current slot is in the filtered options
-                if (currentSlot !== 'none' && currentSlot !== '__fixed__') {
-                    const isInFiltered = filteredPaletteOptions.includes(currentSlot);
-                    console.log(
-                        `[Mapping Debug] ${key}: currentSlot "${currentSlot}" in filtered options?`,
-                        isInFiltered,
-                    );
-                    if (!isInFiltered) {
-                        console.log(`[Mapping Debug] ${key}: filtered options =`, filteredPaletteOptions);
-                        console.log(`[Mapping Debug] ${key}: all options =`, allPaletteOptions);
-                    }
-                }
+                // if (currentSlot !== 'none' && currentSlot !== '__fixed__') {
+                //     const isInFiltered = filteredPaletteOptions.includes(currentSlot);
+                //     console.log(
+                //         `[Mapping Debug] ${key}: currentSlot "${currentSlot}" in filtered options?`,
+                //         isInFiltered,
+                //     );
+                //     if (!isInFiltered) {
+                //         console.log(`[Mapping Debug] ${key}: filtered options =`, filteredPaletteOptions);
+                //         console.log(`[Mapping Debug] ${key}: all options =`, allPaletteOptions);
+                //     }
+                // }
 
-                filteredPaletteOptions.forEach((opt) => {
-                    const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
-                    const slotDef = profile.palette[opt];
-                    const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
-                    options.push({ value: opt, label, color });
+                // filteredPaletteOptions.forEach((opt) => {
+                //     const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
+                //     const slotDef = profile.palette[opt];
+                //     const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
+                //     options.push({ value: opt, label, color });
 
-                    if (opt === currentSlot) {
-                        console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
-                    }
-                });
+                //     if (opt === currentSlot) {
+                //         console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
+                //     }
+                // });
 
                 // Helper to create option element
                 const createOptionElement = (opt: DropdownOption, isSelected: boolean, index: number) => {

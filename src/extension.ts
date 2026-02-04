@@ -167,13 +167,26 @@ function matchesLocalFolderPattern(folderPath: string, pattern: string): boolean
 }
 
 /**
+ * Check if a pattern contains glob characters
+ */
+function isGlobPattern(pattern: string): boolean {
+    // Check for common glob pattern characters
+    return /[*?[\]{}]/.test(pattern);
+}
+
+/**
  * Validate if a local folder pattern resolves to an existing path
  * @param pattern The pattern to validate (with or without ! prefix)
- * @returns true if the path exists, false otherwise
+ * @returns true if the path exists, false otherwise, or undefined if it's a glob pattern (not validatable)
  */
-export function validateLocalFolderPath(pattern: string): boolean {
+export function validateLocalFolderPath(pattern: string): boolean | undefined {
     // Remove ! prefix if present
     const cleanPattern = pattern.startsWith('!') ? pattern.substring(1) : pattern;
+
+    // If it's a glob pattern, we can't validate it (return undefined to indicate "not applicable")
+    if (isGlobPattern(cleanPattern)) {
+        return undefined;
+    }
 
     // Expand environment variables
     const expandedPath = expandEnvVars(cleanPattern);
@@ -181,7 +194,6 @@ export function validateLocalFolderPath(pattern: string): boolean {
     // Normalize the path
     const normalizedPath = path.normalize(expandedPath);
 
-    // Check if the path exists
     try {
         return fs.existsSync(normalizedPath);
     } catch (error) {
@@ -473,14 +485,6 @@ function createBranchTempProfile(branchColor: Color): AdvancedProfile {
         );
         outputChannel.appendLine(`    [Branch Temp Profile] Mappings: ${Object.keys(mappings).join(', ')}`);
         outputChannel.appendLine(`    [Branch Temp Profile] Branch color: ${branchColor.hex()}`);
-        console.log(
-            '[createBranchTempProfile] Created profile for branch color:',
-            branchColor.hex(),
-            'palette:',
-            palette,
-            'mappings:',
-            mappings,
-        );
 
         return profile;
     } catch (error) {
@@ -1250,12 +1254,14 @@ export async function activate(context: ExtensionContext) {
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
+            console.log('[GRWC] onDidChangeConfiguration fired');
             if (
                 e.affectsConfiguration('windowColors') ||
                 e.affectsConfiguration('window.titleBarStyle') ||
                 e.affectsConfiguration('window.customTitleBarVisibility') ||
                 e.affectsConfiguration('workbench.colorTheme')
             ) {
+                console.log('[GRWC] Configuration affects windowColors or theme, will call doit()');
                 // Clear simple mode profile cache when color settings change
                 if (
                     e.affectsConfiguration('windowColors.colorEditorTabs') ||
@@ -1897,7 +1903,6 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     stopBranchPoll();
     outputChannel.appendLine('\nColorizer triggered by ' + reason);
     outputChannel.appendLine('  Preview mode enabled: ' + usePreviewMode);
-    console.log('[doit] Triggered by:', reason, 'usePreviewMode:', usePreviewMode);
 
     const repoConfigList = getRepoConfigList(true);
     if (repoConfigList === undefined) {
@@ -1924,11 +1929,9 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         // Use selected index from config provider
         const selectedIndex = configProvider?.getPreviewRepoRuleIndex();
         outputChannel.appendLine('  Selected repo rule index: ' + selectedIndex);
-        console.log('[doit] Preview mode - selectedIndex:', selectedIndex);
         if (selectedIndex !== null && selectedIndex !== undefined) {
             repoRuleIndex = selectedIndex;
             outputChannel.appendLine('  [PREVIEW MODE] Using selected rule at index ' + repoRuleIndex);
-            console.log('[doit] Using preview repo rule at index:', repoRuleIndex);
         }
     } else {
         // Use matching index - find the rule that matches the current repo or local folder
@@ -1974,7 +1977,6 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     if (repoRuleIndex !== undefined && repoConfigList && repoConfigList[repoRuleIndex]) {
         matchedRepoConfig = repoConfigList[repoRuleIndex];
         outputChannel.appendLine('  Rule: "' + matchedRepoConfig.repoQualifier + '"');
-        console.log('[doit] Matched repo config:', matchedRepoConfig);
 
         // Check if this rule has an error (only show for non-preview mode)
         if (!usePreviewMode && repoRuleErrors.has(repoRuleIndex)) {
@@ -2015,11 +2017,9 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                 try {
                     repoColor = Color(matchedRepoConfig.primaryColor);
                     outputChannel.appendLine('  Using simple color: ' + repoColor.hex());
-                    console.log('[doit] Creating repo temp profile for simple color:', repoColor.hex());
 
                     matchedRepoConfig.profile = createRepoTempProfile(repoColor);
                     matchedRepoConfig.isSimpleMode = true;
-                    console.log('[doit] Repo profile created:', matchedRepoConfig.profile);
                 } catch (e) {
                     outputChannel.appendLine('  Error parsing color: ' + e);
                 }
@@ -2307,15 +2307,10 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     // Log activity bar colors specifically for debugging
     const activityBarKeys = Object.keys(finalColors).filter((k) => k.startsWith('activityBar.'));
     if (activityBarKeys.length > 0) {
-        console.log(
-            '[doit] Activity bar colors being set:',
-            activityBarKeys.map((k) => `${k}: ${finalColors[k]}`),
-        );
         outputChannel.appendLine(
             '  Activity bar colors: ' + activityBarKeys.map((k) => `${k}=${finalColors[k]}`).join(', '),
         );
     } else {
-        console.log('[doit] WARNING: No activity bar colors in finalColors');
         outputChannel.appendLine('  WARNING: No activity bar colors being set');
     }
 
@@ -2325,7 +2320,11 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     outputChannel.appendLine(
         'If you have any issues or suggestions, please file them at\n  https://github.com/mgfarmer/git-repo-window-colors/issues',
     );
-    startBranchPoll();
+
+    // Only start branch polling if we have a git repository
+    if (gitRepository) {
+        startBranchPoll();
+    }
     updateStatusBarItem(); // Update status bar after applying colors
 }
 
@@ -2351,6 +2350,11 @@ function getWorkspaceRepo() {
 }
 
 function getCurrentGitBranch(): string | undefined {
+    // If gitRepository is undefined (local folder workspace), return undefined
+    if (!gitRepository) {
+        return undefined;
+    }
+
     const head = gitRepository.state.HEAD;
     if (!head) {
         console.warn('No HEAD found for repository.');

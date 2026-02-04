@@ -208,14 +208,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 if ((message.data as any).clearBranchPreview) {
                     this._previewBranchRuleContext = null;
                 }
-                console.log(
-                    '[configWebview] previewRepoRule received - index:',
-                    this._previewRepoRuleIndex,
-                    'previewEnabled:',
-                    this._previewModeEnabled,
-                    'clearBranchPreview:',
-                    (message.data as any).clearBranchPreview,
-                );
+
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
                 // Wait for colorCustomizations to update before refreshing
@@ -309,11 +302,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const colorCustomizations = vscode.workspace.getConfiguration('workbench').get('colorCustomizations', {});
 
         // Validate local folder paths and expand environment variables for tooltips
-        const localFolderPathValidation: { [index: number]: boolean } = {};
+        const localFolderPathValidation: { [index: number]: boolean | undefined } = {};
         const expandedPaths: { [index: number]: string } = {};
         repoRules.forEach((rule, index) => {
             if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
-                localFolderPathValidation[index] = validateLocalFolderPath(rule.repoQualifier);
+                const validationResult = validateLocalFolderPath(rule.repoQualifier);
+                // Only store validation result if it's not undefined (i.e., not a glob pattern)
+                if (validationResult !== undefined) {
+                    localFolderPathValidation[index] = validationResult;
+                }
                 // Expand the path for tooltip display (remove ! prefix first)
                 const pattern = rule.repoQualifier.substring(1);
                 expandedPaths[index] = expandEnvVars(pattern);
@@ -339,12 +336,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             actualBranchRules,
             workspaceInfo.currentBranch,
         );
-
-        // console.log('[DEBUG] Sending matching indexes:', {
-        //     repoRule: matchingRepoRuleIndex,
-        //     branchRule: matchingBranchRuleIndex,
-        //     actualBranchRulesCount: actualBranchRules.length,
-        // });
 
         this.currentConfig = {
             repoRules,
@@ -390,8 +381,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             previewRepoRuleIndex: this._previewRepoRuleIndex,
             previewBranchRuleContext: this._previewBranchRuleContext,
         };
-
-        //console.log('[DEBUG] Sending configuration to webview: ', msgData);
 
         this._panel.webview.postMessage({
             command: 'configData',
@@ -650,11 +639,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return -1;
         }
 
-        // console.log('[DEBUG] Matching repo rules:', {
-        //     repoRules: repoRules.map((r, i) => `${i}: ${r.repoQualifier}`),
-        //     repositoryUrl: repositoryUrl,
-        // });
-
         for (let i = 0; i < repoRules.length; i++) {
             // Skip disabled rules
             if ((repoRules[i] as any).enabled === false) continue;
@@ -681,15 +665,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 }
             } else {
                 // Standard git repo matching - check if URL includes qualifier
-                // console.log(`[DEBUG] Testing repo rule ${i}: "${repoQualifier}" against "${repositoryUrl}"`);
                 if (repositoryUrl.includes(repoQualifier)) {
-                    // console.log(`[DEBUG] Repo rule ${i} matched! Returning index ${i}`);
                     return i;
                 }
             }
         }
 
-        // console.log('[DEBUG] No repo rule matched, returning -1');
         return -1;
     }
 
@@ -735,38 +716,25 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return -1;
         }
 
-        // console.log('[DEBUG] Matching branch rules:', {
-        //     branchRules: branchRules.map((r, i) => `${i}: ${r.pattern}`),
-        //     currentBranch: currentBranch,
-        // });
-
         for (let i = 0; i < branchRules.length; i++) {
             // Skip disabled rules
             if ((branchRules[i] as any).enabled === false) continue;
 
-            // outputChannel.appendLine(
-            //     `[DEBUG] Testing branch rule ${i}: "${branchRules[i].pattern}" against "${currentBranch}"`,
-            // );
             try {
                 const regex = new RegExp(branchRules[i].pattern);
                 if (regex.test(currentBranch)) {
-                    // outputChannel.appendLine(`[DEBUG] Branch rule ${i} matched! Returning index ${i}`);
                     return i;
                 }
             } catch (error) {
-                // outputChannel.appendLine(`[DEBUG] Branch rule ${i} has invalid regex, skipping`);
                 // Invalid regex, skip this rule
                 continue;
             }
         }
 
-        // console.log('[DEBUG] No branch rule matched, returning -1');
         return -1;
     }
 
     private async _updateConfiguration(data: any): Promise<void> {
-        // console.log('[DEBUG] Backend _updateConfiguration called with:', data);
-
         if (!data) {
             vscode.window.showErrorMessage('No configuration data provided');
             return;
@@ -774,16 +742,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const config = vscode.workspace.getConfiguration('windowColors');
-            // console.log('[DEBUG] Current settingsconfiguration:', config);
-            // console.log('[DEBUG] New data to apply:', data);
             const updatePromises: Thenable<void>[] = [];
 
             // Update repository rules
             if (data.repoRules) {
-                // console.log('[DEBUG] Updating repo rules:', data.repoRules);
                 const repoRulesArray = data.repoRules.map((rule: RepoRule) => {
                     const formatted = this._formatRepoRule(rule);
-                    // console.log('[DEBUG]   Formatted rule:', rule, '->', formatted);
                     return formatted;
                 });
                 updatePromises.push(config.update('repoConfigurationList', repoRulesArray, true));
@@ -791,9 +755,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Update branch rules
             if (data.branchRules) {
-                // console.log('[DEBUG] Updating branch rules:', data.branchRules);
                 const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
-                    // console.log('[DEBUG]   branch rule:', rule);
                     // Always return JSON object format
                     return {
                         pattern: rule.pattern,
@@ -816,27 +778,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Update other settings
             if (data.otherSettings) {
-                // console.log('[DEBUG] Updating other settings:', data.otherSettings);
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
                     updatePromises.push(config.update(key, settings[key as keyof OtherSettings], true));
                 });
             }
 
-            // console.log('[DEBUG] Waiting for', updatePromises.length, 'configuration updates to complete...');
             await Promise.all(updatePromises);
-            // console.log('[DEBUG] All configuration updates completed results:', promiseResult);
+            console.log('[GRWC] Configuration saved, waiting 100ms for propagation...');
 
-            // If preview mode is active, re-apply the preview after configuration update
-            // This ensures that color changes during preview mode are immediately reflected
-            if (this._previewModeEnabled) {
-                await vscode.commands.executeCommand(
-                    '_grwc.internal.applyColors',
-                    'config update during preview',
-                    true,
-                );
-                await this._waitForColorCustomizationsUpdate();
-            }
+            // Wait a bit for VS Code to propagate the configuration changes
+            // The onDidChangeConfiguration event will automatically call doit() to apply colors
+            await new Promise((resolve) => setTimeout(resolve, 100));
 
             // Refresh the webview to recalculate matching indexes
             this._sendConfigurationToWebview();
