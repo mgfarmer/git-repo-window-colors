@@ -4933,31 +4933,15 @@ function clearRegexValidationError() {
 
 // Preview Toast Functions
 function showPreviewToast() {
-    console.log('[showPreviewToast] CALLED');
     const toast = document.getElementById('preview-toast');
     const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
     const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
     if (!toast) return;
 
-    console.log('[showPreviewToast] Toast element found');
-
     // Only show if actually previewing (selected indexes don't match the matching indexes)
     const isActuallyPreviewing =
         selectedRepoRuleIndex !== currentConfig?.matchingIndexes?.repoRule ||
         selectedBranchRuleIndex !== currentConfig?.matchingIndexes?.branchRule;
-
-    console.log(
-        '[showPreviewToast] isActuallyPreviewing:',
-        isActuallyPreviewing,
-        'selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-        'matchingRepoRule:',
-        currentConfig?.matchingIndexes?.repoRule,
-        'selectedBranchRuleIndex:',
-        selectedBranchRuleIndex,
-        'matchingBranchRule:',
-        currentConfig?.matchingIndexes?.branchRule,
-    );
 
     if (!isActuallyPreviewing) {
         hidePreviewToast();
@@ -4999,27 +4983,19 @@ function showPreviewToast() {
     const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) return;
 
-    console.log('[showPreviewToast] selectedRule:', selectedRule);
-
     // Check if this rule uses a profile (not virtual)
     const profileName = selectedRule.profileName || selectedRule.primaryColor;
     const profile = currentConfig?.advancedProfiles?.[profileName];
-
-    console.log('[showPreviewToast] profileName:', profileName, 'profile:', profile);
 
     let primaryColor = selectedRule.primaryColor;
     let secondaryBgColor = null;
     let secondaryFgColor = null;
 
     if (profile && !profile.virtual && profile.palette) {
-        console.log('[showPreviewToast] Using profile palette:', profile.palette);
-
         // Resolve primary color from palette
         const primaryActiveBg = profile.palette.primaryActiveBg;
         if (primaryActiveBg) {
-            console.log('[showPreviewToast] primaryActiveBg slot:', primaryActiveBg);
             const resolvedPrimary = resolveColorFromSlot(primaryActiveBg, selectedRule);
-            console.log('[showPreviewToast] resolved primary color:', resolvedPrimary);
             if (resolvedPrimary) {
                 primaryColor = resolvedPrimary;
             }
@@ -5029,27 +5005,13 @@ function showPreviewToast() {
         const secondaryActiveBg = profile.palette.secondaryActiveBg;
         const secondaryActiveFg = profile.palette.secondaryActiveFg;
 
-        console.log('[showPreviewToast] secondaryActiveBg slot:', secondaryActiveBg);
-        console.log('[showPreviewToast] secondaryActiveFg slot:', secondaryActiveFg);
-
         if (secondaryActiveBg) {
             secondaryBgColor = resolveColorFromSlot(secondaryActiveBg, selectedRule);
-            console.log('[showPreviewToast] resolved secondary bg:', secondaryBgColor);
         }
         if (secondaryActiveFg) {
             secondaryFgColor = resolveColorFromSlot(secondaryActiveFg, selectedRule);
-            console.log('[showPreviewToast] resolved secondary fg:', secondaryFgColor);
         }
     }
-
-    console.log(
-        '[showPreviewToast] Final colors - primary:',
-        primaryColor,
-        'secondaryBg:',
-        secondaryBgColor,
-        'secondaryFg:',
-        secondaryFgColor,
-    );
 
     // Apply the primary color to toast
     if (primaryColor) {

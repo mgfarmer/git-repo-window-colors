@@ -1116,7 +1116,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 font-src ${webview.cspSource}; 
                 img-src ${webview.cspSource}; 
                 style-src 'unsafe-inline' ${webview.cspSource}; 
-                script-src 'nonce-${nonce}';">
+                script-src 'nonce-${nonce}'; 
+                connect-src ${webview.cspSource} https://file+.vscode-resource.vscode-cdn.net;">
             
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Git Repo Window Colors Configuration</title>
