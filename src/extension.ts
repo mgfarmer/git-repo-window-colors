@@ -1532,9 +1532,10 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                     continue;
                 }
 
-                // Validate colors if not profile names
+                // Validate colors if not profile names and not special 'none' value
                 const primaryIsProfile = advancedProfiles[repoConfig.primaryColor];
-                if (!primaryIsProfile) {
+                const isSpecialNone = repoConfig.primaryColor === 'none';
+                if (!primaryIsProfile && !isSpecialNone) {
                     try {
                         Color(repoConfig.primaryColor);
                     } catch (error) {
@@ -1612,7 +1613,8 @@ function getBranchData(validate: boolean = false): Map<string, string> {
                 // Validate if needed
                 if (validate) {
                     const profileName = extractProfileName(setting.color, advancedProfiles);
-                    if (!profileName) {
+                    const isSpecialNone = setting.color === 'none';
+                    if (!profileName && !isSpecialNone) {
                         try {
                             Color(setting.color);
                         } catch (error) {
@@ -1991,6 +1993,13 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         matchedRepoConfig = repoConfigList[repoRuleIndex];
         outputChannel.appendLine('  Rule: "' + matchedRepoConfig.repoQualifier + '"');
 
+        // Check if this rule explicitly excludes from coloring
+        if (matchedRepoConfig.primaryColor === 'none') {
+            outputChannel.appendLine('  Rule specifies "none" - excluding from coloring');
+            undoColors();
+            return;
+        }
+
         // Check if this rule has an error (only show for non-preview mode)
         if (!usePreviewMode && repoRuleErrors.has(repoRuleIndex)) {
             const errorMsg = repoRuleErrors.get(repoRuleIndex);
@@ -2087,6 +2096,10 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                         };
                     }
                     matchedRepoConfig.branchProfile = advancedProfiles[profileName];
+                } else if (selectedRule.color === 'none') {
+                    // Special 'none' value - skip branch coloring
+                    outputChannel.appendLine('  [PREVIEW MODE] Branch rule specifies "none" - skipping branch color');
+                    // Don't set branchProfile or branchColor
                 } else {
                     // It's a simple color - create temporary branch profile
                     branchColor = Color(selectedRule.color);
@@ -2154,6 +2167,12 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                                 };
                             }
                             matchedRepoConfig.branchProfile = advancedProfiles[profileName];
+                        } else if (rule.color === 'none') {
+                            // Special 'none' value - skip branch coloring
+                            outputChannel.appendLine(
+                                `  Branch rule matched in "${tableName}": "${rule.pattern}" specifies "none" - skipping branch color`,
+                            );
+                            // Don't set branchProfile or branchColor, but still count as a match
                         } else {
                             // It's a simple color - create temporary branch profile
                             branchColor = Color(rule.color);

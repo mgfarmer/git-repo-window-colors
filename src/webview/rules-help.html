@@ -170,6 +170,30 @@
             status bar, tabs, panels, and more), and you can adjust colors in one place to update all repositories using that profile.
         </div>
 
+        <h5>Excluding Repositories from Coloring</h5>
+        <p>
+            Sometimes you want to explicitly exclude certain repositories or folders from being colored. 
+            Use the special value <code>none</code> in the Primary Color field to prevent any coloring for matching workspaces.
+        </p>
+        <div class="example">
+            <strong>Use Cases for "none":</strong><br>
+            • Exclude personal projects while coloring work repositories<br>
+            • Prevent coloring for specific folders that should use default VS Code theme<br>
+            • Create a "catch-all" rule at the bottom that prevents coloring for unmatched repos
+        </div>
+        <p>
+            When a rule with <code>none</code> matches:
+        </p>
+        <ul>
+            <li>All custom window colors are removed</li>
+            <li>VS Code reverts to its default theme appearance</li>
+            <li>Branch rules are not applicable (the Branch Table column shows "n/a")</li>
+        </ul>
+        <div class="tip">
+            <strong>Tip:</strong> You can select <code>none</code> from the autocomplete dropdown under the "Special" section, 
+            or simply type "none" in the Primary Color field.
+        </div>
+
         <h3>Rule Controls</h3>
         <p>Each rule has several controls on the left side:</p>
         <table>
@@ -295,6 +319,23 @@
             (title bar, activity bar, status bar, tabs, etc.) based on the profile's configuration. This provides comprehensive 
             theming for branch-specific work.
         </p>
+
+        <h5>Excluding Branches from Coloring</h5>
+        <p>
+            Use <code>none</code> as the color value to skip branch-specific coloring for certain branches. 
+            This lets the repository rule's colors apply without any branch override.
+        </p>
+        <div class="example">
+            <strong>Example:</strong> You want all feature branches to be green, except for one specific branch 
+            that should use the repository's default color:
+            <ul style="margin-top: 8px; margin-bottom: 0;">
+                <li>Branch pattern: <code>feature/experimental</code> → Color: <code>none</code></li>
+                <li>Branch pattern: <code>feature/.*</code> → Color: <code>green</code></li>
+            </ul>
+            Without the first rule, <code>feature/experimental</code> would match the second pattern and be colored green. 
+            By placing a specific <code>none</code> rule first, that branch is excluded while all other feature branches 
+            are still colored.
+        </div>
 
         <div class="note">
             <strong>How Branch Rules Work:</strong> When you're on a branch that matches a branch rule:

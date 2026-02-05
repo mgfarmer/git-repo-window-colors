@@ -472,6 +472,27 @@ h2 {
     border-radius: 2px;
 }
 
+/* Special 'none' value indicator */
+.none-indicator {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--vscode-descriptionForeground);
+    border: 1px dashed var(--vscode-panel-border);
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-left: 4px;
+    cursor: help;
+}
+
+.color-input-container.is-none .color-input.text-input {
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
 .color-input.text-input {
     flex: 1;
     min-width: 80px;
@@ -1432,6 +1453,18 @@ button:focus {
     border: 1px solid var(--vscode-panel-border);
     flex-shrink: 0;
     margin-left: auto;
+}
+
+/* Autocomplete indicators */
+.profile-indicator,
+.special-indicator {
+    margin-left: auto;
+    color: var(--vscode-descriptionForeground);
+    flex-shrink: 0;
+}
+
+.special-indicator {
+    color: var(--vscode-errorForeground);
 }
 
 /* Scrollbar styling for dropdown */

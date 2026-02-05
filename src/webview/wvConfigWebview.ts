@@ -1878,6 +1878,27 @@ function createBranchTableDropdown(
         return container;
     }
 
+    // Check if primaryColor is 'none' (excluded from coloring)
+    if (rule && rule.primaryColor === 'none') {
+        const icon = document.createElement('span');
+        icon.textContent = '⊘';
+        icon.style.marginRight = '4px';
+        icon.style.opacity = '0.7';
+        container.appendChild(icon);
+
+        const text = document.createElement('span');
+        text.textContent = 'n/a';
+        container.appendChild(text);
+
+        container.style.color = 'var(--vscode-descriptionForeground)';
+        container.style.fontStyle = 'italic';
+        container.style.fontSize = '12px';
+        container.style.padding = '2px 4px';
+        container.style.background = 'transparent';
+        container.setAttribute('title', 'Branch rules are not applicable when color is set to "none"');
+        return container;
+    }
+
     // For dropdown, allow flex to expand
     container.style.flex = '1';
 
@@ -2408,14 +2429,23 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
     const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
+    // Handle special 'none' value - show indicator instead of color picker
+    const isSpecialNone = color === 'none';
+
     if (USE_NATIVE_COLOR_PICKER) {
-        const hexColor = convertColorToHex(color);
+        const hexColor = isSpecialNone ? '#808080' : convertColorToHex(color);
+        const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
+        const noneIndicator = isSpecialNone
+            ? '<span class="none-indicator" title="Excluded from coloring">⊘</span>'
+            : '';
         return `
-            <div class="color-input-container native-picker">
+            <div class="color-input-container native-picker${isSpecialNone ? ' is-none' : ''}">
+                ${noneIndicator}
                 <input type="color" 
                        class="native-color-input" 
                        id="${ruleType}-${field}-${index}"
                        value="${hexColor}" 
+                       ${colorPickerDisplay}
                        title="Click to use a color picker, shift-click to choose a random color"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
@@ -2429,12 +2459,16 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
             </div>
         `;
     } else {
+        const swatchStyle = isSpecialNone
+            ? 'background-color: transparent; display: flex; align-items: center; justify-content: center;'
+            : `background-color: ${convertColorToValidCSS(color) || '#4A90E2'}`;
+        const swatchContent = isSpecialNone ? '⊘' : '';
         return `
-            <div class="color-input-container">
+            <div class="color-input-container${isSpecialNone ? ' is-none' : ''}">
                 <div class="color-swatch" 
-                     style="background-color: ${convertColorToValidCSS(color) || '#4A90E2'}"
+                     style="${swatchStyle}"
                      data-action="openColorPicker('${ruleType}', ${index}, '${field}')"
-                     title="Click to use a color picker, shift-click to choose a random color"></div>
+                     title="${isSpecialNone ? 'Excluded from coloring' : 'Click to use a color picker, shift-click to choose a random color'}">${swatchContent}</div>
                 <input type="text" 
                        class="color-input" 
                        id="${ruleType}-${field}-${index}"
@@ -5207,10 +5241,19 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
     const profileMatches: string[] = [];
     const colorMatches: string[] = [];
 
-    // Check if this is a palette slot input (should not show profiles)
+    // Check if this is a palette slot input (should not show profiles or special values)
     const isPaletteSlot = input.hasAttribute('data-palette-slot');
 
-    // 1. Add profile section (only for non-palette inputs)
+    // 1. Add Special section (only for non-palette inputs)
+    if (!isPaletteSlot) {
+        // Check if 'none' matches the filter
+        if (value.length === 0 || 'none'.includes(value)) {
+            matches.push('__SPECIAL_HEADER__'); // Special marker for "Special" header
+            matches.push('none'); // Special value to exclude from coloring
+        }
+    }
+
+    // 2. Add profile section (only for non-palette inputs)
     if (!isPaletteSlot) {
         matches.push('__PROFILES_HEADER__'); // Special marker for "Profiles" header
 
@@ -5237,7 +5280,7 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
         }
     }
 
-    // 2. Add matching color names
+    // 3. Add matching color names
     if (value.length === 0) {
         // Show all color names when field is empty
         colorMatches.push(...HTML_COLOR_NAMES);
@@ -5270,6 +5313,15 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
 
     let selectableIndex = 0; // Track actual selectable items (excluding separator)
     suggestions.forEach((suggestion, index) => {
+        // Handle Special header
+        if (suggestion === '__SPECIAL_HEADER__') {
+            const header = document.createElement('div');
+            header.className = 'color-autocomplete-separator';
+            header.textContent = 'Special';
+            dropdown.appendChild(header);
+            return; // Don't increment selectableIndex
+        }
+
         // Handle Profiles header
         if (suggestion === '__PROFILES_HEADER__') {
             const header = document.createElement('div');
@@ -5313,9 +5365,17 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
         item.dataset.index = selectableIndex.toString();
         item.dataset.value = suggestion; // Store original value
 
-        // Add color preview (only for actual color names, not profile references)
+        // Add color preview or special indicator
         const isProfile = currentConfig?.advancedProfiles && currentConfig.advancedProfiles[suggestion];
-        if (!isProfile) {
+        const isSpecialNone = suggestion === 'none';
+        if (isSpecialNone) {
+            // Add special indicator for 'none'
+            const indicator = document.createElement('span');
+            indicator.className = 'special-indicator';
+            indicator.textContent = ' ⊘';
+            indicator.title = 'Exclude from coloring';
+            item.appendChild(indicator);
+        } else if (!isProfile) {
             const preview = document.createElement('span');
             preview.className = 'color-preview';
             preview.style.backgroundColor = suggestion;
@@ -5404,7 +5464,23 @@ function handleAutoCompleteKeydown(event: KeyboardEvent) {
 
         case 'Escape':
             event.preventDefault();
-            hideAutoCompleteDropdown();
+            // Restore original value before hiding dropdown
+            if (activeAutoCompleteInput) {
+                const originalValue = originalInputValues.get(activeAutoCompleteInput);
+                if (originalValue !== undefined) {
+                    activeAutoCompleteInput.value = originalValue;
+                    // Trigger change events to update the configuration
+                    activeAutoCompleteInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    activeAutoCompleteInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    originalInputValues.delete(activeAutoCompleteInput);
+                }
+                const inputToBlur = activeAutoCompleteInput;
+                hideAutoCompleteDropdown();
+                inputToBlur.blur();
+            } else {
+                hideAutoCompleteDropdown();
+            }
+            event.stopPropagation(); // Prevent document handler from running again
             break;
     }
 }
