@@ -3026,15 +3026,19 @@ function handlePreviewModeChange() {
         // If enabling preview and a rule is selected, send preview message
         // Prioritize branch rule if selected, otherwise use repo rule
         if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
-            const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
-            const useGlobal = !selectedRule?.branchRules;
+            // Determine which table we're using
+            let tableName = '__none__';
+            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+                const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+                tableName = selectedRule.branchTableName || '__none__';
+            }
 
             vscode.postMessage({
                 command: 'previewBranchRule',
                 data: {
                     index: selectedBranchRuleIndex,
-                    isGlobal: useGlobal,
-                    repoIndex: useGlobal ? undefined : selectedRepoRuleIndex,
+                    tableName,
+                    repoIndex: selectedRepoRuleIndex,
                     previewEnabled: true,
                 },
             });
@@ -3282,6 +3286,7 @@ function selectBranchRule(index: number) {
             data: {
                 index,
                 tableName,
+                repoIndex: selectedRepoRuleIndex,
             },
         });
     }

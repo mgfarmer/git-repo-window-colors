@@ -220,6 +220,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     index: (message.data as any).index,
                     tableName: (message.data as any).tableName || 'Default Rules',
                 };
+                this._previewRepoRuleIndex = (message.data as any).repoIndex ?? null;
                 this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
