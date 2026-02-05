@@ -1166,7 +1166,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     </button>
                                 </h2>
                                 <button type="button" 
-                                        class="header-add-button tooltip panel-tooltip" 
+                                        class="header-add-button tooltip panel-tooltip-left" 
                                         data-action="addRepoRule" 
                                         title="Add a new repository rule"
                                         aria-label="Add Repository Rule (Ctrl+Alt+R)">
