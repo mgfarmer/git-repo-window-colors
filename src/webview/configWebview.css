@@ -46,23 +46,30 @@ body {
 /* Preview Mode Toast */
 .preview-toast {
     position: fixed;
-    top: 20px;
+    top: -1px;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(-50%) translateY(-100%);
     z-index: 10000;
     padding: 12px 20px;
-    border-radius: 6px;
+    border-radius: 0px 0px 6px 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    display: none;
+    display: flex;
     align-items: center;
     gap: 12px;
     font-size: 14px;
     font-weight: 500;
     border: 2px solid;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .preview-toast.visible {
-    display: flex;
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .preview-toast-text {
@@ -283,6 +290,32 @@ h2 {
     font-weight: bold;
 }
 
+/* Warning icon for local folder rules with invalid paths */
+.rules-table tr.invalid-path {
+    position: relative;
+}
+.rules-table tr.invalid-path::after {
+    content: '⚠';
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    background-color: var(--vscode-charts-yellow);
+    color: var(--vscode-editor-background);
+    font-size: 13px;
+    line-height: 18px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: bold;
+}
+
 /* Highlight rule in preview mode */
 .rules-table tr.preview-active {
     background-color: var(--vscode-list-hoverBackground);
@@ -295,7 +328,12 @@ h2 {
     outline: 3px solid var(--vscode-focusBorder);
     outline-offset: -2px;
     position: relative;
-    background-color: var(--vscode-list-activeSelectionBackground, rgba(100, 150, 255, 0.08));
+    background-color: transparent;
+}
+
+/* Make cells in selected row have transparent background so outline shows through */
+.rules-table tr.selected-rule td {
+    background-color: transparent;
 }
 
 /* Select column styling */
@@ -605,7 +643,7 @@ h2 {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
-    padding: 6px 12px;
+    padding: 6px 16px;
     margin-right: 4px;
     border-radius: 4px;
     cursor: pointer;

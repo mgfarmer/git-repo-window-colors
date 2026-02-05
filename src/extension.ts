@@ -7,6 +7,7 @@ import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 import { resolveProfile } from './profileResolver';
 import { AdvancedProfile } from './types/advancedModeTypes';
 import { ConfigWebviewProvider } from './webview/configWebview';
+import { minimatch } from 'minimatch';
 
 let currentBranch: undefined | string = undefined;
 
@@ -50,6 +51,155 @@ type RepoConfig = {
     branchProfile?: AdvancedProfile; // Resolved branch profile (real or temporary)
     isSimpleMode?: boolean; // True if repo rule used simple color (not profile)
 };
+
+// ========== Local Folder Path Utilities ==========
+
+/**
+ * Normalize a file path for cross-platform comparison
+ */
+function normalizePath(filePath: string): string {
+    return path.normalize(filePath).toLowerCase().replace(/\\/g, '/');
+}
+
+/**
+ * Expand environment variables in a path pattern
+ */
+/**
+ * Expand environment variables in a path pattern
+ */
+export function expandEnvVars(pattern: string): string {
+    // List of supported environment variables
+    const envVars = [
+        { name: 'HOME', value: os.homedir() },
+        { name: 'USERPROFILE', value: os.homedir() },
+        { name: 'APPDATA', value: process.env.APPDATA || '' },
+        { name: 'LOCALAPPDATA', value: process.env.LOCALAPPDATA || '' },
+        { name: 'USER', value: process.env.USER || process.env.USERNAME || '' },
+    ];
+
+    let expanded = pattern;
+
+    // Replace ~/ or ~\ or ~ at start (handle both Unix and Windows path separators)
+    if (expanded.startsWith('~/') || expanded.startsWith('~\\') || expanded === '~') {
+        expanded = expanded.replace(/^~/, os.homedir());
+    }
+
+    // Replace $VAR or %VAR% style variables
+    for (const envVar of envVars) {
+        if (!envVar.value) continue;
+
+        // Unix style: $VAR
+        expanded = expanded.replace(new RegExp(`\\$${envVar.name}`, 'gi'), envVar.value);
+
+        // Windows style: %VAR%
+        expanded = expanded.replace(new RegExp(`%${envVar.name}%`, 'gi'), envVar.value);
+    }
+
+    return expanded;
+}
+
+/**
+ * Simplify a path by replacing common prefixes with environment variables
+ */
+function simplifyPathWithEnvVars(filePath: string): string {
+    const homeDir = os.homedir();
+    const appData = process.env.APPDATA || '';
+    const localAppData = process.env.LOCALAPPDATA || '';
+
+    // Normalize for comparison (case-insensitive on Windows)
+    const normalizedPath = path.normalize(filePath);
+    const normalizedHome = path.normalize(homeDir);
+
+    // For comparison on Windows, use lowercase
+    const isWindows = process.platform === 'win32';
+    const comparePath = isWindows ? normalizedPath.toLowerCase() : normalizedPath;
+    const compareHome = isWindows ? normalizedHome.toLowerCase() : normalizedHome;
+    const compareLocalAppData =
+        isWindows && localAppData ? path.normalize(localAppData).toLowerCase() : path.normalize(localAppData);
+    const compareAppData = isWindows && appData ? path.normalize(appData).toLowerCase() : path.normalize(appData);
+
+    // Try to replace with environment variables (longest match first)
+    if (localAppData && comparePath.startsWith(compareLocalAppData)) {
+        const relativePath = normalizedPath.substring(path.normalize(localAppData).length);
+        return '%LOCALAPPDATA%' + relativePath;
+    }
+
+    if (appData && comparePath.startsWith(compareAppData)) {
+        const relativePath = normalizedPath.substring(path.normalize(appData).length);
+        return '%APPDATA%' + relativePath;
+    }
+
+    if (comparePath.startsWith(compareHome)) {
+        // Use ~ for home directory (works cross-platform and is shorter)
+        const relativePath = normalizedPath.substring(normalizedHome.length);
+        return '~' + relativePath;
+    }
+
+    return filePath;
+}
+
+/**
+ * Export simplifyPathWithEnvVars for use in webview
+ */
+export function simplifyPath(filePath: string): string {
+    return simplifyPathWithEnvVars(filePath);
+}
+
+/**
+ * Check if a local folder path matches a pattern (with ! prefix)
+ */
+function matchesLocalFolderPattern(folderPath: string, pattern: string): boolean {
+    // Pattern must start with !
+    if (!pattern.startsWith('!')) {
+        return false;
+    }
+
+    // Remove ! prefix and expand environment variables
+    const cleanPattern = pattern.substring(1);
+    const expandedPattern = expandEnvVars(cleanPattern);
+
+    // Normalize both paths for comparison
+    const normalizedFolder = normalizePath(folderPath);
+    const normalizedPattern = normalizePath(expandedPattern);
+
+    // Use minimatch for glob pattern matching
+    return minimatch(normalizedFolder, normalizedPattern, { nocase: true });
+}
+
+/**
+ * Check if a pattern contains glob characters
+ */
+function isGlobPattern(pattern: string): boolean {
+    // Check for common glob pattern characters
+    return /[*?[\]{}]/.test(pattern);
+}
+
+/**
+ * Validate if a local folder pattern resolves to an existing path
+ * @param pattern The pattern to validate (with or without ! prefix)
+ * @returns true if the path exists, false otherwise, or undefined if it's a glob pattern (not validatable)
+ */
+export function validateLocalFolderPath(pattern: string): boolean | undefined {
+    // Remove ! prefix if present
+    const cleanPattern = pattern.startsWith('!') ? pattern.substring(1) : pattern;
+
+    // If it's a glob pattern, we can't validate it (return undefined to indicate "not applicable")
+    if (isGlobPattern(cleanPattern)) {
+        return undefined;
+    }
+
+    // Expand environment variables
+    const expandedPath = expandEnvVars(cleanPattern);
+
+    // Normalize the path
+    const normalizedPath = path.normalize(expandedPath);
+
+    try {
+        return fs.existsSync(normalizedPath);
+    } catch (error) {
+        return false;
+    }
+}
 
 /**
  * Extracts profile name from color string.
@@ -109,7 +259,7 @@ function createRepoTempProfile(repoColor: Color): AdvancedProfile {
             activityBarColorKnob = 0;
         }
         outputChannel.appendLine(`    [Repo Temp Profile] Raw color knob value: ${activityBarColorKnob}`);
-        activityBarColorKnob = activityBarColorKnob / 50;
+        activityBarColorKnob = activityBarColorKnob / 20;
         outputChannel.appendLine(`    [Repo Temp Profile] Normalized color knob: ${activityBarColorKnob}`);
 
         // Create cache key
@@ -335,14 +485,6 @@ function createBranchTempProfile(branchColor: Color): AdvancedProfile {
         );
         outputChannel.appendLine(`    [Branch Temp Profile] Mappings: ${Object.keys(mappings).join(', ')}`);
         outputChannel.appendLine(`    [Branch Temp Profile] Branch color: ${branchColor.hex()}`);
-        console.log(
-            '[createBranchTempProfile] Created profile for branch color:',
-            branchColor.hex(),
-            'palette:',
-            palette,
-            'mappings:',
-            mappings,
-        );
 
         return profile;
     } catch (error) {
@@ -480,35 +622,65 @@ function createStatusBarItem(context: ExtensionContext): void {
 }
 
 function shouldShowStatusBarItem(): boolean {
-    // Never show if not a git repository
-    if (!gitRepoRemoteFetchUrl || gitRepoRemoteFetchUrl === '') {
-        return false;
-    }
-
     const showOnlyWhenNoMatch = getBooleanSetting('showStatusIconWhenNoRuleMatches') ?? true;
-
-    if (!showOnlyWhenNoMatch) {
-        // Always show when it's a git repo
-        return true;
-    }
-
-    // Show only when no rule matches
     const repoConfigList = getRepoConfigList(false);
-    if (!repoConfigList) {
-        return true; // No rules configured, so show
-    }
 
-    // Check if any rule matches current repo
-    for (const rule of repoConfigList) {
-        // Skip disabled rules
-        if (rule.enabled === false) continue;
-
-        if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
-            return false; // Rule matches, so don't show
+    // Check if we have a git repo
+    if (gitRepoRemoteFetchUrl && gitRepoRemoteFetchUrl !== '') {
+        if (!showOnlyWhenNoMatch) {
+            // Always show when it's a git repo
+            return true;
         }
+
+        // Show only when no rule matches
+        if (!repoConfigList) {
+            return true; // No rules configured, so show
+        }
+
+        // Check if any rule matches current repo
+        for (const rule of repoConfigList) {
+            // Skip disabled rules
+            if (rule.enabled === false) continue;
+
+            if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
+                return false; // Rule matches, so don't show
+            }
+        }
+
+        return true; // No rule matches, so show
     }
 
-    return true; // No rule matches, so show
+    // No git repo - check for local folder rules
+    if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+        const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
+
+        if (!showOnlyWhenNoMatch) {
+            // Always show when we have a workspace folder
+            return true;
+        }
+
+        if (!repoConfigList) {
+            return true; // No rules configured, so show
+        }
+
+        // Check if any local folder rule matches
+        for (const rule of repoConfigList) {
+            // Skip disabled rules
+            if (rule.enabled === false) continue;
+
+            // Check for local folder pattern (starts with !)
+            if (rule.repoQualifier.startsWith('!')) {
+                if (matchesLocalFolderPattern(workspaceFolder, rule.repoQualifier)) {
+                    return false; // Rule matches, so don't show
+                }
+            }
+        }
+
+        return true; // No rule matches, so show
+    }
+
+    // No git repo and no workspace folder
+    return false;
 }
 
 function updateStatusBarItem(): void {
@@ -528,19 +700,39 @@ function updateStatusBarItem(): void {
 }
 
 function getCurrentMatchingRule(): RepoConfig | undefined {
-    if (!gitRepoRemoteFetchUrl) return undefined;
-
     const repoConfigList = getRepoConfigList(false);
     if (!repoConfigList) return undefined;
 
-    for (const rule of repoConfigList) {
-        // Skip disabled rules
-        if (rule.enabled === false) continue;
+    // Check git repo rules first
+    if (gitRepoRemoteFetchUrl && gitRepoRemoteFetchUrl !== '') {
+        for (const rule of repoConfigList) {
+            // Skip disabled rules
+            if (rule.enabled === false) continue;
 
-        if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
-            return rule;
+            if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
+                return rule;
+            }
+        }
+        return undefined;
+    }
+
+    // No git repo - check for local folder rules
+    if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+        const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
+
+        for (const rule of repoConfigList) {
+            // Skip disabled rules
+            if (rule.enabled === false) continue;
+
+            // Check for local folder pattern (starts with !)
+            if (rule.repoQualifier.startsWith('!')) {
+                if (matchesLocalFolderPattern(workspaceFolder, rule.repoQualifier)) {
+                    return rule;
+                }
+            }
         }
     }
+
     return undefined;
 }
 
@@ -1008,11 +1200,6 @@ export async function activate(context: ExtensionContext) {
     // Register status bar click command with smart behavior
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.statusBarClick', async () => {
-            if (gitRepoRemoteFetchUrl === undefined || gitRepoRemoteFetchUrl === '') {
-                vscode.window.showErrorMessage('This workspace is not a git repository.');
-                return;
-            }
-
             let configList = getRepoConfigList(false);
             if (configList === undefined) {
                 configList = new Array<RepoConfig>();
@@ -1067,12 +1254,14 @@ export async function activate(context: ExtensionContext) {
 
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(async (e) => {
+            console.log('[GRWC] onDidChangeConfiguration fired');
             if (
                 e.affectsConfiguration('windowColors') ||
                 e.affectsConfiguration('window.titleBarStyle') ||
                 e.affectsConfiguration('window.customTitleBarVisibility') ||
                 e.affectsConfiguration('workbench.colorTheme')
             ) {
+                console.log('[GRWC] Configuration affects windowColors or theme, will call doit()');
                 // Clear simple mode profile cache when color settings change
                 if (
                     e.affectsConfiguration('windowColors.colorEditorTabs') ||
@@ -1197,6 +1386,17 @@ async function init() {
         }
     } else {
         outputChannel.appendLine('No git repository found for workspace.');
+
+        // For non-git workspaces, set workspace info with folder path
+        if (configProvider && workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+            const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
+            outputChannel.appendLine('Workspace folder: ' + workspaceFolder);
+            configProvider.setWorkspaceInfo(workspaceFolder, '', false); // false = not a git repo
+
+            // Apply colors if there's a matching local folder rule
+            doit('initial activation - local folder');
+        }
+
         updateStatusBarItem(); // Update status bar for non-git workspace
     }
 }
@@ -1308,6 +1508,17 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
                 let errorMsg = '';
                 if (!repoConfig.repoQualifier || !repoConfig.primaryColor) {
                     errorMsg = 'Repository rule missing required fields (repoQualifier or primaryColor)';
+                    repoRuleErrors.set(result.length, errorMsg);
+                    outputChannel.appendLine(errorMsg);
+                    // Add to result anyway so it can be displayed in UI with error indication
+                    result.push(repoConfig);
+                    continue;
+                }
+
+                // Check if this is a local folder rule (starts with !)
+                const isLocalFolder = repoConfig.repoQualifier.startsWith('!');
+                if (isLocalFolder && repoConfig.branchTableName && repoConfig.branchTableName !== '__none__') {
+                    errorMsg = `Local folder rules do not support branch tables (${repoConfig.repoQualifier})`;
                     repoRuleErrors.set(result.length, errorMsg);
                     outputChannel.appendLine(errorMsg);
                     // Add to result anyway so it can be displayed in UI with error indication
@@ -1496,15 +1707,30 @@ async function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined
         return undefined;
     }
 
+    // Get current workspace folder path for local folder matching
+    let workspaceFolderPath = '';
+    if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+        workspaceFolderPath = workspace.workspaceFolders[0].uri.fsPath;
+    }
+
     let repoConfig: RepoConfig | undefined = undefined;
     let item: RepoConfig;
     for (item of repoConfigList) {
         // Skip disabled rules
         if (item.enabled === false) continue;
 
-        if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
-            repoConfig = item;
-            break;
+        // Check if this is a local folder pattern (starts with !)
+        if (item.repoQualifier.startsWith('!')) {
+            if (workspaceFolderPath && matchesLocalFolderPattern(workspaceFolderPath, item.repoQualifier)) {
+                repoConfig = item;
+                break;
+            }
+        } else {
+            // Standard git repo matching
+            if (gitRepoRemoteFetchUrl && gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
+                repoConfig = item;
+                break;
+            }
         }
     }
 
@@ -1677,7 +1903,6 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     stopBranchPoll();
     outputChannel.appendLine('\nColorizer triggered by ' + reason);
     outputChannel.appendLine('  Preview mode enabled: ' + usePreviewMode);
-    console.log('[doit] Triggered by:', reason, 'usePreviewMode:', usePreviewMode);
 
     const repoConfigList = getRepoConfigList(true);
     if (repoConfigList === undefined) {
@@ -1704,15 +1929,19 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         // Use selected index from config provider
         const selectedIndex = configProvider?.getPreviewRepoRuleIndex();
         outputChannel.appendLine('  Selected repo rule index: ' + selectedIndex);
-        console.log('[doit] Preview mode - selectedIndex:', selectedIndex);
         if (selectedIndex !== null && selectedIndex !== undefined) {
             repoRuleIndex = selectedIndex;
             outputChannel.appendLine('  [PREVIEW MODE] Using selected rule at index ' + repoRuleIndex);
-            console.log('[doit] Using preview repo rule at index:', repoRuleIndex);
         }
     } else {
-        // Use matching index - find the rule that matches the current repo
+        // Use matching index - find the rule that matches the current repo or local folder
         if (repoConfigList !== undefined) {
+            // Get current workspace folder path for local folder matching
+            let workspaceFolderPath = '';
+            if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+                workspaceFolderPath = workspace.workspaceFolders[0].uri.fsPath;
+            }
+
             let ruleIndex = 0;
             for (const item of repoConfigList) {
                 // Skip disabled rules
@@ -1720,7 +1949,21 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                     ruleIndex++;
                     continue;
                 }
-                if (gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
+
+                // Check if this is a local folder pattern (starts with !)
+                let isMatch = false;
+                if (item.repoQualifier.startsWith('!')) {
+                    if (workspaceFolderPath && matchesLocalFolderPattern(workspaceFolderPath, item.repoQualifier)) {
+                        isMatch = true;
+                    }
+                } else {
+                    // Standard git repo matching
+                    if (gitRepoRemoteFetchUrl && gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
+                        isMatch = true;
+                    }
+                }
+
+                if (isMatch) {
                     repoRuleIndex = ruleIndex;
                     outputChannel.appendLine('  Repo rule matched at index ' + repoRuleIndex);
                     break;
@@ -1734,7 +1977,6 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     if (repoRuleIndex !== undefined && repoConfigList && repoConfigList[repoRuleIndex]) {
         matchedRepoConfig = repoConfigList[repoRuleIndex];
         outputChannel.appendLine('  Rule: "' + matchedRepoConfig.repoQualifier + '"');
-        console.log('[doit] Matched repo config:', matchedRepoConfig);
 
         // Check if this rule has an error (only show for non-preview mode)
         if (!usePreviewMode && repoRuleErrors.has(repoRuleIndex)) {
@@ -1775,11 +2017,9 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                 try {
                     repoColor = Color(matchedRepoConfig.primaryColor);
                     outputChannel.appendLine('  Using simple color: ' + repoColor.hex());
-                    console.log('[doit] Creating repo temp profile for simple color:', repoColor.hex());
 
                     matchedRepoConfig.profile = createRepoTempProfile(repoColor);
                     matchedRepoConfig.isSimpleMode = true;
-                    console.log('[doit] Repo profile created:', matchedRepoConfig.profile);
                 } catch (e) {
                     outputChannel.appendLine('  Error parsing color: ' + e);
                 }
@@ -2067,15 +2307,10 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     // Log activity bar colors specifically for debugging
     const activityBarKeys = Object.keys(finalColors).filter((k) => k.startsWith('activityBar.'));
     if (activityBarKeys.length > 0) {
-        console.log(
-            '[doit] Activity bar colors being set:',
-            activityBarKeys.map((k) => `${k}: ${finalColors[k]}`),
-        );
         outputChannel.appendLine(
             '  Activity bar colors: ' + activityBarKeys.map((k) => `${k}=${finalColors[k]}`).join(', '),
         );
     } else {
-        console.log('[doit] WARNING: No activity bar colors in finalColors');
         outputChannel.appendLine('  WARNING: No activity bar colors being set');
     }
 
@@ -2085,7 +2320,11 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     outputChannel.appendLine(
         'If you have any issues or suggestions, please file them at\n  https://github.com/mgfarmer/git-repo-window-colors/issues',
     );
-    startBranchPoll();
+
+    // Only start branch polling if we have a git repository
+    if (gitRepository) {
+        startBranchPoll();
+    }
     updateStatusBarItem(); // Update status bar after applying colors
 }
 
@@ -2111,6 +2350,11 @@ function getWorkspaceRepo() {
 }
 
 function getCurrentGitBranch(): string | undefined {
+    // If gitRepository is undefined (local folder workspace), return undefined
+    if (!gitRepository) {
+        return undefined;
+    }
+
     const head = gitRepository.state.HEAD;
     if (!head) {
         console.warn('No HEAD found for repository.');

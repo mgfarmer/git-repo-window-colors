@@ -38,13 +38,84 @@
         
         <h4>Repository Qualifier</h4>
         <p>
-            A substring to match against your repository URL. This is <strong>not</strong> a regular expression—it's a simple text match.
+            A substring to match against your repository URL or local folder path. Rules are processed from top to bottom, 
+            and the <strong>first matching rule</strong> is applied.
+        </p>
+        
+        <h5>Git Repository Matching</h5>
+        <p>
+            For git repositories, provide a substring to match against your repository's URL. 
+            This is <strong>not</strong> a regular expression—it's a simple text match.
         </p>
         <div class="example">
-            <strong>Examples:</strong><br>
+            <strong>Git Examples:</strong><br>
             • <code>myproject</code> - Matches any repo with "myproject" in the URL<br>
             • <code>github.com/user/repo</code> - Matches that specific GitHub repository<br>
             • <code>work-client</code> - Matches repos containing "work-client"
+        </div>
+        <div class="note">
+            <strong>Important:</strong> Repository rules match against the actual <strong>git repository URL</strong> 
+            (the remote origin URL), not the folder name where you cloned the repository. The folder name on your 
+            local disk is irrelevant to matching. For example:
+            <ul style="margin-top: 8px; margin-bottom: 0;">
+                <li>Repository URL: <code>https://github.com/user/awesome-project.git</code></li>
+                <li>Cloned into folder: <code>C:\temp\test123</code></li>
+                <li>Rule qualifier: <code>awesome-project</code> will match ✓</li>
+                <li>Rule qualifier: <code>test123</code> will NOT match ✗</li>
+            </ul>
+        </div>
+
+        <h5>Local Folder Matching</h5>
+        <p>
+            While this extension is primarily designed for git repositories, you can also create rules for local folders.
+            For non-git workspaces (local folders), use a <strong>!</strong> prefix followed by a file path pattern. 
+            Both exact paths and glob patterns are supported, and environment variables will be automatically expanded during matching.
+        </p>
+        <div class="example">
+            <strong>Local Folder Examples:</strong><br>
+            • <code>!~/projects/my-project</code> - Matches a specific project (~ expands to home directory)<br>
+            • <code>!~/projects/*</code> - Matches any folder under ~/projects<br>
+            • <code>!%USERPROFILE%\Documents\work\*</code> - Matches work folders on Windows<br>
+            • <code>!$HOME/client-sites/*</code> - Matches client folders on Unix/Mac<br>
+            • <code>!%LOCALAPPDATA%\Temp\*</code> - Matches temporary folders on Windows<br>
+            • <code>!C:\Dev\**\test</code> - Matches any "test" folder under C:\Dev at any depth
+        </div>
+
+        <div class="tip">
+            <strong>Home Folder:</strong> Use ~ instead of platform specific home directory environment variables for better portability across machines.
+        </div>
+        
+        <h6>Glob Pattern Support</h6>
+        <p>
+            Glob patterns allow flexible matching of file paths:
+        </p>
+        <ul>
+            <li><code>*</code> - Matches any characters within a single directory level</li>
+            <li><code>**</code> - Matches any characters across multiple directory levels</li>
+            <li><code>?</code> - Matches exactly one character</li>
+            <li><code>[abc]</code> - Matches any character in the brackets</li>
+            <li><code>{a,b,c}</code> - Matches any of the comma-separated patterns</li>
+        </ul>
+        
+        <h6>Environment Variable Support</h6>
+        <p>
+            The following environment variables are expanded automatically during path matching:
+        </p>
+        <ul>
+            <li><code>~</code> or <code>~/</code> or <code>~\</code> - User's home directory (cross-platform)</li>
+            <li><code>$HOME</code> - User's home directory (Unix/Mac)</li>
+            <li><code>%USERPROFILE%</code> - User's profile directory (Windows)</li>
+            <li><code>%APPDATA%</code> - Application data directory (Windows)</li>
+            <li><code>%LOCALAPPDATA%</code> - Local application data directory (Windows)</li>
+        </ul>
+        <div class="tip">
+            <strong>Path Simplification:</strong> When you add a local folder rule, paths are automatically simplified 
+            to use <code>~</code> instead of the full home directory path for better readability and portability across machines.
+        </div>
+        <div class="warning">
+            <strong>Important:</strong> Local folder rules <strong>do not support branch rules</strong> since non-git 
+            workspaces don't have branches. The Branch Rules Table dropdown will be disabled for local folder rules, 
+            and the branch panel will show a message indicating that branch rules are not available.
         </div>
 
         <h4>Primary Color</h4>
@@ -132,6 +203,27 @@
                 </tr>
             </tbody>
         </table>
+
+        <h3>Local Folder Path Validation</h3>
+        <p>
+            When you create or edit local folder rules, the extension validates the paths and provides visual feedback:
+        </p>
+        <ul>
+            <li><strong>Valid paths:</strong> Display normally without any warning indicator</li>
+            <li><strong>Invalid paths:</strong> Show a yellow warning icon (⚠) if the path doesn't exist on your system</li>
+            <li><strong>Glob patterns:</strong> Paths containing glob characters (<code>*</code>, <code>?</code>, <code>[</code>, <code>{</code>) 
+                are not validated since they match multiple possible paths</li>
+            <li><strong>Tooltips:</strong> Hover over the Repository Qualifier field to see the fully expanded path with all environment variables resolved</li>
+        </ul>
+        <div class="tip">
+            <strong>Validation Tip:</strong> If you see a warning icon on a local folder rule, check that:
+            <ul style="margin-top: 8px; margin-bottom: 0;">
+                <li>The path exists on your system</li>
+                <li>Environment variables are spelled correctly</li>
+                <li>The path uses the correct format for your operating system (forward or backslashes)</li>
+            </ul>
+            For glob patterns, the warning will not appear even if no folders currently match the pattern.
+        </div>
 
         <h3>Rule Selection and Preview</h3>
         <p>

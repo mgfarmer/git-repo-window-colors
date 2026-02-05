@@ -28,6 +28,8 @@ let validationErrors: { repoRules: { [index: number]: string }; branchRules: { [
     repoRules: {},
     branchRules: {},
 };
+let localFolderPathValidation: { [index: number]: boolean } = {}; // Track which local folder paths exist
+let expandedPaths: { [index: number]: string } = {}; // Track expanded paths for local folder rules
 let selectedMappingTab: string | null = null; // Track which mapping tab is active
 let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
 let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
@@ -569,7 +571,6 @@ function getThemeAppropriateColor(): string {
             return `#${red.toString(16).padStart(2, '0')}${green.toString(16).padStart(2, '0')}${blue.toString(16).padStart(2, '0')}`;
         };
 
-        //console.log('[DEBUG] generateContrastColor HSL:', hue, saturation, lightness);
         return hslToRgb(hue, saturation, lightness);
     }
 
@@ -618,7 +619,7 @@ function collectUniqueBranchPatterns(): string[] {
 // Message handler for extension communication
 window.addEventListener('message', (event) => {
     const message = event.data;
-    console.log('[Message Listener] Received message:', message.command);
+    //console.log('[Message Listener] Received message:', message.command);
 
     switch (message.command) {
         case 'configData':
@@ -661,18 +662,24 @@ window.addEventListener('message', (event) => {
                 }
             }
             break;
+        case 'pathSimplified':
+            handlePathSimplified(message.data);
+            break;
+        case 'pathSimplifiedForPreview':
+            handlePathSimplifiedForPreview(message.data);
+            break;
     }
 });
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
-    console.log('[handleConfigurationData] Received data from backend');
-    if (data?.repoRules) {
-        console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
-        data.repoRules.forEach((rule: any, index: number) => {
-            console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
-        });
-    }
+    // console.log('[handleConfigurationData] Received data from backend');
+    // if (data?.repoRules) {
+    //     console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
+    //     data.repoRules.forEach((rule: any, index: number) => {
+    //         console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
+    //     });
+    // }
 
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
@@ -688,6 +695,20 @@ function handleConfigurationData(data: any) {
         validationErrors = data.validationErrors;
     } else {
         validationErrors = { repoRules: {}, branchRules: {} };
+    }
+
+    // Store local folder path validation if present
+    if (data.localFolderPathValidation) {
+        localFolderPathValidation = data.localFolderPathValidation;
+    } else {
+        localFolderPathValidation = {};
+    }
+
+    // Store expanded paths if present
+    if (data.expandedPaths) {
+        expandedPaths = data.expandedPaths;
+    } else {
+        expandedPaths = {};
     }
 
     // Synchronize profileName fields for backward compatibility
@@ -784,6 +805,47 @@ function handleDeleteConfirmed(data: any) {
         console.log('Rule deleted successfully');
     } else {
         console.log('Rule deletion was cancelled');
+    }
+}
+
+function handlePathSimplified(data: any) {
+    // Received simplified path from backend, complete addRepoRule action
+    if (!currentConfig || !data.simplifiedPath) return;
+
+    const newRule = {
+        repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
+        primaryColor: getThemeAppropriateColor(),
+    };
+
+    currentConfig.repoRules.push(newRule);
+    sendConfiguration();
+}
+
+function handlePathSimplifiedForPreview(data: any) {
+    // Received simplified path from backend, complete addRepoRuleFromPreview action
+    if (!currentConfig || !data.simplifiedPath) return;
+
+    const newRule = {
+        repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
+        primaryColor: getThemeAppropriateColor(),
+    };
+
+    currentConfig.repoRules.push(newRule);
+
+    // Select the newly created rule
+    const newRuleIndex = currentConfig.repoRules.length - 1;
+    selectedRepoRuleIndex = newRuleIndex;
+
+    // Send configuration update
+    sendConfiguration();
+
+    // Hide the preview toast
+    hidePreviewToast();
+
+    // Switch to rules tab to show the new rule
+    const rulesTab = document.getElementById('tab-rules');
+    if (rulesTab) {
+        (rulesTab as HTMLElement).click();
     }
 }
 
@@ -965,7 +1027,6 @@ function closeHelp() {
 }
 
 function renderConfiguration(config: any) {
-    console.log('[DEBUG] renderConfiguration ', config);
     // Clear validation errors on new data
     clearValidationErrors();
 
@@ -980,8 +1041,11 @@ function renderConfiguration(config: any) {
     renderBranchTablesTab(config);
     renderColorReport(config);
 
-    // Show/hide preview toast based on preview mode
-    if (previewMode) {
+    // Show/hide preview toast based on preview mode and whether we're previewing a different rule
+    // Show toast only if the selected rule is different from the matching rule
+    const matchingRuleIndex = config.matchingIndexes?.repoRule ?? -1;
+    const isPreviewingDifferentRule = selectedRepoRuleIndex !== matchingRuleIndex;
+    if (previewMode && isPreviewingDifferentRule) {
         showPreviewToast();
     } else {
         hidePreviewToast();
@@ -1647,7 +1711,6 @@ function handleDocumentDrop(event: DragEvent) {
 // Rule rendering functions
 
 function renderRepoRules(rules: any[], matchingIndex?: number) {
-    //console.log('[DEBUG] renderRepoRules called with matchingIndex:', rules, matchingIndex);
     const container = document.getElementById('repoRulesContent');
     if (!container) return;
 
@@ -1699,7 +1762,6 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
 
         // Highlight matched rule
         if (matchingIndex !== undefined && index === matchingIndex) {
-            // console.log('[DEBUG] Applying matched-rule class to index:', index, 'rule:', rule.repoQualifier);
             row.classList.add('matched-rule');
         }
 
@@ -1708,23 +1770,38 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
             row.classList.add('disabled-rule');
         }
 
+        // Add warning class if this is a local folder rule with invalid path
+        if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+            if (localFolderPathValidation[index] === false) {
+                row.classList.add('invalid-path');
+            }
+        }
+
         row.innerHTML = createRepoRuleRowHTML(rule, index, rules.length);
         setupRepoRuleRowEvents(row, index);
 
         // Insert custom branch table dropdown
         // '__none__' = explicitly No Branch Table, missing/undefined defaults to '__none__'
         const tableName = rule.branchTableName || '__none__';
-        console.log(
-            '[createDropdown] Rule',
-            index,
-            'branchTableName:',
-            rule.branchTableName,
-            'resolved tableName:',
-            tableName,
-        );
         const cell = row.querySelector(`#branch-table-cell-${index}`);
         if (cell) {
-            const dropdownContainer = createBranchTableDropdown(tableName, index);
+            // Determine status tooltip
+            let statusTooltip = '';
+            if (matchingIndex !== undefined && index === matchingIndex) {
+                statusTooltip = 'This rule matches the current workspace';
+            } else if (
+                rule.repoQualifier &&
+                rule.repoQualifier.startsWith('!') &&
+                localFolderPathValidation[index] === false
+            ) {
+                statusTooltip = 'Warning: This path does not exist on the local system';
+            }
+
+            if (statusTooltip) {
+                cell.setAttribute('title', statusTooltip);
+            }
+
+            const dropdownContainer = createBranchTableDropdown(tableName, index, statusTooltip);
             cell.appendChild(dropdownContainer);
         }
     });
@@ -1767,11 +1844,43 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     }
 }
 
-function createBranchTableDropdown(selectedTableName: string | null, repoRuleIndex: number): HTMLElement {
+function createBranchTableDropdown(
+    selectedTableName: string | null,
+    repoRuleIndex: number,
+    statusTooltip?: string,
+): HTMLElement {
     const container = document.createElement('div');
     container.style.display = 'flex';
     container.style.gap = '4px';
     container.style.alignItems = 'center';
+
+    // Check if this is a local folder rule (starts with !)
+    const repoRules = currentConfig?.repoRules || [];
+    const rule = repoRules[repoRuleIndex];
+    if (rule && rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+        // Local folder rule - show static text with icon
+        const icon = document.createElement('span');
+        icon.className = 'codicon codicon-folder';
+        icon.style.marginRight = '4px';
+        container.appendChild(icon);
+
+        const text = document.createElement('span');
+        text.textContent = 'Local Folder';
+        container.appendChild(text);
+
+        container.style.color = 'var(--vscode-descriptionForeground)';
+        container.style.fontStyle = 'italic';
+        container.style.fontSize = '12px';
+        container.style.padding = '2px 4px';
+        container.style.background = 'transparent';
+        // Only set default tooltip if there's no status tooltip
+        if (!statusTooltip) {
+            container.setAttribute('title', 'Local folder rules do not support branch rules');
+        }
+        return container;
+    }
+
+    // For dropdown, allow flex to expand
     container.style.flex = '1';
 
     if (!currentConfig?.sharedBranchTables) {
@@ -1781,7 +1890,6 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
     }
 
     const tables = currentConfig.sharedBranchTables;
-    const repoRules = currentConfig.repoRules || [];
 
     // Calculate usage counts and track which repos use each table
     const usageCounts: { [tableName: string]: number } = {};
@@ -2131,6 +2239,15 @@ function createBranchTableDropdown(selectedTableName: string | null, repoRuleInd
 function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): string {
     const isSelected = selectedRepoRuleIndex === index;
 
+    // For local folder rules, create a tooltip showing the expanded path
+    let tooltipText = '';
+    if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+        const expandedPath = expandedPaths[index];
+        if (expandedPath) {
+            tooltipText = `Resolved path: ${expandedPath}`;
+        }
+    }
+
     return `
         <td class="select-cell">
             <input type="radio" 
@@ -2151,6 +2268,7 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
                    value="${escapeHtml(rule.repoQualifier || '')}" 
                    placeholder="e.g., myrepo or github.com/user/repo"
                    aria-label="Repository qualifier for rule ${index + 1}"
+                   ${tooltipText ? `title="${escapeHtml(tooltipText)}"` : ''}
                    data-action="updateRepoRule(${index}, 'repoQualifier', this.value)">
         </td>
         <td class="color-cell">
@@ -2404,23 +2522,6 @@ function renderOtherSettings(settings: any) {
     const disabledClass = isProfileRule ? 'disabled' : '';
     const profileNote = isProfileRule ? ' <strong>The currently selected rule is using a profile.</strong>' : '';
 
-    console.log(
-        '[renderOtherSettings] selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-        'selectedRule:',
-        selectedRule,
-        'profilesEnabled:',
-        profilesEnabled,
-        'isProfileRule:',
-        isProfileRule,
-        'primaryColor:',
-        selectedRule?.primaryColor,
-        'profileName:',
-        selectedRule?.profileName,
-        'advancedProfiles:',
-        Object.keys(currentConfig?.advancedProfiles || {}),
-    );
-
     container.innerHTML = `
         <div class="settings-sections">
             <div class="settings-section">
@@ -2511,7 +2612,7 @@ function renderOtherSettings(settings: any) {
                         <span class="tooltiptext" role="tooltip">
                             When enabled, selecting any repository rule will preview its colors in the workspace 
                             without loading a workspace that matches the previewed rule. This is useful for testing how different 
-                            rules look before applying them to a specific repository.
+                            rules look without having to open every repository.
                         </span>
                     </div>
                     <div class="setting-item tooltip">
@@ -2563,7 +2664,6 @@ function renderWorkspaceInfo(workspaceInfo: any) {
 function renderBranchTablesTab(config: any) {
     const container = document.getElementById('branch-tables-content');
     if (!container) {
-        console.log('[DEBUG] branch-tables-content container not found');
         return;
     }
 
@@ -2652,12 +2752,8 @@ function renderBranchTablesTab(config: any) {
 function renderColorReport(config: any) {
     const container = document.getElementById('reportContent');
     if (!container) {
-        console.log('[DEBUG] reportContent container not found');
         return;
     }
-
-    console.log('[DEBUG] renderColorReport called with config:', config);
-    console.log('[DEBUG] colorCustomizations:', config.colorCustomizations);
 
     const colorCustomizations = config.colorCustomizations || {};
     const managedColors = [
@@ -2840,8 +2936,6 @@ function renderColorReport(config: any) {
         }
     });
 
-    console.log('[DEBUG] Generated rows:', rows.length);
-
     if (rows.length === 0) {
         container.innerHTML =
             '<div class="no-rules">No colors are currently applied. Create and apply a repository or branch rule to see the color report.</div>';
@@ -2911,10 +3005,7 @@ function renderColorReport(config: any) {
         </div>
     `;
 
-    console.log('[DEBUG] About to set innerHTML, container:', container);
-    console.log('[DEBUG] Table HTML length:', tableHTML.length);
     container.innerHTML = tableHTML;
-    console.log('[DEBUG] innerHTML set, container.children.length:', container.children.length);
 }
 
 function updateProfilesTabVisibility() {
@@ -2935,15 +3026,19 @@ function handlePreviewModeChange() {
         // If enabling preview and a rule is selected, send preview message
         // Prioritize branch rule if selected, otherwise use repo rule
         if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
-            const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
-            const useGlobal = !selectedRule?.branchRules;
+            // Determine which table we're using
+            let tableName = '__none__';
+            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+                const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+                tableName = selectedRule.branchTableName || '__none__';
+            }
 
             vscode.postMessage({
                 command: 'previewBranchRule',
                 data: {
                     index: selectedBranchRuleIndex,
-                    isGlobal: useGlobal,
-                    repoIndex: useGlobal ? undefined : selectedRepoRuleIndex,
+                    tableName,
+                    repoIndex: selectedRepoRuleIndex,
                     previewEnabled: true,
                 },
             });
@@ -2983,15 +3078,29 @@ function handlePreviewModeChange() {
 function addRepoRule() {
     if (!currentConfig) return;
 
-    // If current repo is already matched by an existing rule, don't pre-fill it
-    const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
-    const isCurrentRepoAlreadyMatched =
-        currentConfig.matchingIndexes?.repoRule !== null &&
-        currentConfig.matchingIndexes?.repoRule !== undefined &&
-        currentConfig.matchingIndexes?.repoRule >= 0;
+    // Check if workspace is a git repo or local folder
+    const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
+    let repoQualifier = '';
+
+    if (isGitRepo) {
+        // Git repository - extract repo name from URL
+        repoQualifier = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    } else {
+        // Local folder - create pattern with ! prefix and env var substitution
+        const folderPath = currentConfig.workspaceInfo?.repositoryUrl || '';
+        if (folderPath) {
+            // Send message to backend to simplify path
+            vscode.postMessage({
+                command: 'simplifyPath',
+                data: { path: folderPath },
+            });
+            // Will receive response via 'pathSimplified' message
+            return; // Exit early, will complete in message handler
+        }
+    }
 
     const newRule = {
-        repoQualifier: currentRepoName,
+        repoQualifier: repoQualifier,
         primaryColor: getThemeAppropriateColor(),
     };
 
@@ -3090,8 +3199,6 @@ function updateBranchRule(index: number, field: string, value: string) {
 function selectRepoRule(index: number) {
     if (!currentConfig?.repoRules?.[index]) return;
 
-    console.log('[selectRepoRule] Selecting repo rule index:', index, 'rule:', currentConfig.repoRules[index]);
-
     selectedRepoRuleIndex = index;
 
     // Reset branch rule selection when switching repos so it reinitializes
@@ -3102,13 +3209,6 @@ function selectRepoRule(index: number) {
 
     // Send preview command only if preview mode is enabled
     if (previewMode) {
-        console.log(
-            '[selectRepoRule] Sending previewRepoRule command for index:',
-            index,
-            'rule:',
-            currentConfig.repoRules[index],
-        );
-
         // Check if this repo has no branch table or empty branch table
         // If so, include clearBranchPreview flag to avoid double doit() calls
         const selectedRule = currentConfig.repoRules[index];
@@ -3133,8 +3233,13 @@ function selectRepoRule(index: number) {
     renderOtherSettings(currentConfig.otherSettings);
 
     // Update toast if preview mode is enabled
-    if (previewMode) {
+    // Show toast only if the selected rule is different from the matching rule
+    const matchingRuleIndex = currentConfig.matchingIndexes?.repoRule ?? -1;
+    const isPreviewingDifferentRule = selectedRepoRuleIndex !== matchingRuleIndex;
+    if (previewMode && isPreviewingDifferentRule) {
         showPreviewToast();
+    } else {
+        hidePreviewToast();
     }
 
     // Render branch rules for the selected repo
@@ -3181,6 +3286,7 @@ function selectBranchRule(index: number) {
             data: {
                 index,
                 tableName,
+                repoIndex: selectedRepoRuleIndex,
             },
         });
     }
@@ -3405,6 +3511,53 @@ function renderBranchRulesForSelectedRepo() {
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) return;
+
+    // Check if this is a local folder rule
+    const isLocalFolderRule = selectedRule.repoQualifier && selectedRule.repoQualifier.startsWith('!');
+
+    if (isLocalFolderRule) {
+        // Local folder rules don't support branch rules
+        const header = document.querySelector('#branch-rules-heading');
+        if (header) {
+            header.innerHTML = `<span class="codicon codicon-folder"></span> Local Folder Rule`;
+        }
+
+        // Hide the section help text
+        const sectionHelp = document.querySelector('.branch-panel .section-help');
+        if (sectionHelp) {
+            (sectionHelp as HTMLElement).style.display = 'none';
+        }
+
+        // Hide the Copy From and Add buttons for local folder rules
+        updateCopyFromButton(false);
+        updateBranchAddButton(false);
+
+        // Show a message explaining local folder rules don't support branch tables
+        const container = document.getElementById('branchRulesContent');
+        if (container) {
+            container.innerHTML = `
+                <div style="padding: 20px; text-align: center; color: var(--vscode-descriptionForeground);">
+                    <div style="font-size: 48px; margin-bottom: 16px;">
+                        <span class="codicon codicon-folder"></span>
+                    </div>
+                    <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">
+                        Local Folder Rules
+                    </div>
+                    <div style="font-size: 12px; line-height: 1.6; max-width: 400px; margin: 0 auto;">
+                        Branch rules are not supported for local folder rules. 
+                        Local folders are not git repositories and don't have branches.
+                    </div>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    // Show the section help text for non-local-folder rules
+    const sectionHelp = document.querySelector('.branch-panel .section-help');
+    if (sectionHelp) {
+        (sectionHelp as HTMLElement).style.display = '';
+    }
 
     // Get table name - default to '__none__' if not set
     const tableName = selectedRule.branchTableName || '__none__';
@@ -3761,29 +3914,22 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 }
 
 function updateColorSwatch(ruleType: string, index: number, field: string, value: string) {
-    // console.log(
-    //     `[DEBUG] updateColorSwatch called with: ruleType="${ruleType}", index=${index}, field="${field}", value="${value}"`,
-    // );
-
     const colorInput = document.getElementById(`${ruleType}-${field}-${index}`) as HTMLInputElement;
     if (colorInput && colorInput.type === 'color') {
         // Convert any color format to hex for the native color input
         const hexColor = convertColorToHex(value);
         colorInput.value = hexColor;
-        // console.log(`[DEBUG] Updated native color input to: "${hexColor}"`);
     }
 
     // Update the swatch background for non-native color picker (only if swatch exists)
     const swatch = colorInput?.parentElement?.querySelector('.color-swatch') as HTMLElement;
-    // console.log(`[DEBUG] Found swatch element:`, swatch);
 
     if (swatch) {
         // For named colors and other formats, try to convert to a valid CSS color
         const displayColor = convertColorToValidCSS(value) || '#4A90E2';
-        // console.log(`[DEBUG] Setting swatch backgroundColor to: "${displayColor}"`);
         swatch.style.backgroundColor = displayColor;
     } else {
-        // console.log(`[DEBUG] No swatch element found - using native color picker`);
+        // No swatch element found - using native color picker`);
     }
 }
 
@@ -3900,9 +4046,6 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
 }
 
 function moveRule(index: number, ruleType: string, direction: number) {
-    // console.log('[DEBUG] moveRule called:', { index, ruleType, direction });
-    // console.log('[DEBUG] currentConfig exists:', !!currentConfig);
-
     if (!currentConfig) return;
 
     let rules;
@@ -3920,18 +4063,10 @@ function moveRule(index: number, ruleType: string, direction: number) {
         }
     }
 
-    // console.log('[DEBUG] Rules array exists:', !!rules, 'length:', rules?.length);
-
     if (!rules) return;
-
-    // console.log(
-    //     '[DEBUG] Rules before move:',
-    //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
-    // );
 
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= rules.length) {
-        // console.log('[DEBUG] Move cancelled - out of bounds:', { newIndex, length: rules.length });
         return;
     }
 
@@ -3946,12 +4081,6 @@ function moveRule(index: number, ruleType: string, direction: number) {
     } else if (ruleType === 'repo' && selectedRepoRuleIndex === newIndex) {
         selectedRepoRuleIndex = index;
     }
-
-    // console.log(
-    //     '[DEBUG] Rules after move:',
-    //     rules.map((r) => (ruleType === 'repo' ? r.repoQualifier : r.pattern)),
-    // );
-    // console.log('[DEBUG] About to call sendConfiguration with currentConfig:', !!currentConfig);
 
     // Send updated configuration - backend will recalculate matching indexes and send back proper update
     // This will trigger a complete table refresh with correct highlighting
@@ -4249,7 +4378,6 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
 function updateOtherSetting(setting: string, value: any) {
     if (!currentConfig?.otherSettings) return;
 
-    // console.log(`[DEBUG] updateOtherSetting: ${setting} = ${value}`);
     currentConfig.otherSettings[setting] = value;
     // Send immediately for settings changes (no validation needed)
     sendConfiguration();
@@ -4533,7 +4661,6 @@ function displayValidationErrors(errors: string[]) {
 
 // Communication functions
 function sendConfiguration() {
-    // console.log('[DEBUG] Sending configuration to extension:', currentConfig);
     vscode.postMessage({
         command: 'updateConfig',
         data: currentConfig,
@@ -4572,6 +4699,31 @@ function escapeHtml(text: string): string {
     return div.innerHTML;
 }
 
+/**
+ * Expand environment variables in a path for display in tooltips
+ */
+function expandEnvVarsForTooltip(pattern: string): string {
+    // Get user home directory
+    const userHome = (window as any).userInfo?.homeDir || '~';
+
+    let expanded = pattern;
+
+    // Replace ~/ or ~\ or ~ at start
+    if (expanded.startsWith('~/') || expanded.startsWith('~\\') || expanded === '~') {
+        expanded = expanded.replace(/^~/, userHome);
+    }
+
+    // Replace %USERPROFILE%, %APPDATA%, etc. with placeholder text
+    // Since we're in the webview, we don't have access to process.env
+    // Just show what would be expanded
+    expanded = expanded.replace(/%USERPROFILE%/gi, userHome);
+    expanded = expanded.replace(/%APPDATA%/gi, userHome + '\\AppData\\Roaming');
+    expanded = expanded.replace(/%LOCALAPPDATA%/gi, userHome + '\\AppData\\Local');
+    expanded = expanded.replace(/\$HOME/gi, userHome);
+
+    return expanded;
+}
+
 function isValidColorName(color: string): boolean {
     // Instead of maintaining a hardcoded list, test the color with the browser
     try {
@@ -4603,17 +4755,13 @@ function rgbToHex(rgb: string): string | null {
 function convertColorToValidCSS(color: string): string {
     if (!color) return '#4A90E2';
 
-    // console.log(`[DEBUG] Testing color: "${color}"`);
-
     // If it's already a valid hex color, return it
     if (/^#[0-9A-Fa-f]{6}$/.test(color) || /^#[0-9A-Fa-f]{3}$/.test(color)) {
-        // console.log(`[DEBUG] "${color}" is hex, returning as-is`);
         return color;
     }
 
     // If it's an RGB color, return it as-is
     if (/^rgba?\(/.test(color)) {
-        // console.log(`[DEBUG] "${color}" is RGB, returning as-is`);
         return color;
     }
 
@@ -4625,17 +4773,11 @@ function convertColorToValidCSS(color: string): string {
         const computedColor = getComputedStyle(tempDiv).backgroundColor;
         document.body.removeChild(tempDiv);
 
-        // console.log(`[DEBUG] "${color}" computed to: "${computedColor}"`);
-
         // If the browser recognized the color, return the original value
         if (computedColor && computedColor !== 'rgba(0, 0, 0, 0)' && computedColor !== 'transparent') {
-            // console.log(`[DEBUG] "${color}" is valid, returning original`);
             return color; // Return the original named color since CSS understands it
         }
-
-        // console.log(`[DEBUG] "${color}" failed validation, using fallback`);
     } catch (e) {
-        // console.log(`[DEBUG] Error testing "${color}":`, e);
         // If there's an error, fall back to default
     }
 
@@ -4644,8 +4786,6 @@ function convertColorToValidCSS(color: string): string {
 
 function convertColorToHex(color: string): string {
     if (!color) return '#4A90E2'; // Default blue
-
-    //console.log(`[DEBUG] convertColorToHex called with: "${color}"`);
 
     // Check if it's a profile name (exists in current config)
     if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[color]) {
@@ -4660,30 +4800,24 @@ function convertColorToHex(color: string): string {
 
     // If it's already a hex color, return it
     if (color.startsWith('#')) {
-        // console.log(`[DEBUG] "${color}" is already hex`);
         return color;
     }
 
     // If it's a named color, convert it using browser's color computation
     if (isValidColorName(color)) {
-        // console.log(`[DEBUG] "${color}" is a valid color name, converting...`);
         const tempDiv = document.createElement('div');
         tempDiv.style.color = color;
         document.body.appendChild(tempDiv);
         const computedColor = getComputedStyle(tempDiv).color;
         document.body.removeChild(tempDiv);
 
-        // console.log(`[DEBUG] "${color}" computed to RGB: "${computedColor}"`);
-
         // Convert RGB to hex
         const hexColor = rgbToHex(computedColor);
         if (hexColor) {
-            // console.log(`[DEBUG] "${color}" converted to hex: "${hexColor}"`);
             return hexColor;
         }
     }
 
-    // console.log(`[DEBUG] "${color}" conversion failed, using default`);
     // If conversion failed or it's an unknown format, return default
     return '#4A90E2';
 }
@@ -4803,31 +4937,15 @@ function clearRegexValidationError() {
 
 // Preview Toast Functions
 function showPreviewToast() {
-    console.log('[showPreviewToast] CALLED');
     const toast = document.getElementById('preview-toast');
     const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
     const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
     if (!toast) return;
 
-    console.log('[showPreviewToast] Toast element found');
-
     // Only show if actually previewing (selected indexes don't match the matching indexes)
     const isActuallyPreviewing =
         selectedRepoRuleIndex !== currentConfig?.matchingIndexes?.repoRule ||
         selectedBranchRuleIndex !== currentConfig?.matchingIndexes?.branchRule;
-
-    console.log(
-        '[showPreviewToast] isActuallyPreviewing:',
-        isActuallyPreviewing,
-        'selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-        'matchingRepoRule:',
-        currentConfig?.matchingIndexes?.repoRule,
-        'selectedBranchRuleIndex:',
-        selectedBranchRuleIndex,
-        'matchingBranchRule:',
-        currentConfig?.matchingIndexes?.branchRule,
-    );
 
     if (!isActuallyPreviewing) {
         hidePreviewToast();
@@ -4869,27 +4987,19 @@ function showPreviewToast() {
     const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) return;
 
-    console.log('[showPreviewToast] selectedRule:', selectedRule);
-
     // Check if this rule uses a profile (not virtual)
     const profileName = selectedRule.profileName || selectedRule.primaryColor;
     const profile = currentConfig?.advancedProfiles?.[profileName];
-
-    console.log('[showPreviewToast] profileName:', profileName, 'profile:', profile);
 
     let primaryColor = selectedRule.primaryColor;
     let secondaryBgColor = null;
     let secondaryFgColor = null;
 
     if (profile && !profile.virtual && profile.palette) {
-        console.log('[showPreviewToast] Using profile palette:', profile.palette);
-
         // Resolve primary color from palette
         const primaryActiveBg = profile.palette.primaryActiveBg;
         if (primaryActiveBg) {
-            console.log('[showPreviewToast] primaryActiveBg slot:', primaryActiveBg);
             const resolvedPrimary = resolveColorFromSlot(primaryActiveBg, selectedRule);
-            console.log('[showPreviewToast] resolved primary color:', resolvedPrimary);
             if (resolvedPrimary) {
                 primaryColor = resolvedPrimary;
             }
@@ -4899,27 +5009,13 @@ function showPreviewToast() {
         const secondaryActiveBg = profile.palette.secondaryActiveBg;
         const secondaryActiveFg = profile.palette.secondaryActiveFg;
 
-        console.log('[showPreviewToast] secondaryActiveBg slot:', secondaryActiveBg);
-        console.log('[showPreviewToast] secondaryActiveFg slot:', secondaryActiveFg);
-
         if (secondaryActiveBg) {
             secondaryBgColor = resolveColorFromSlot(secondaryActiveBg, selectedRule);
-            console.log('[showPreviewToast] resolved secondary bg:', secondaryBgColor);
         }
         if (secondaryActiveFg) {
             secondaryFgColor = resolveColorFromSlot(secondaryActiveFg, selectedRule);
-            console.log('[showPreviewToast] resolved secondary fg:', secondaryFgColor);
         }
     }
-
-    console.log(
-        '[showPreviewToast] Final colors - primary:',
-        primaryColor,
-        'secondaryBg:',
-        secondaryBgColor,
-        'secondaryFg:',
-        secondaryFgColor,
-    );
 
     // Apply the primary color to toast
     if (primaryColor) {
@@ -5048,10 +5144,29 @@ function addRepoRuleFromPreview() {
     }
     previewMode = false;
 
-    // Add a new repo rule for the current workspace
-    const currentRepoName = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    // Check if workspace is a git repo or local folder
+    const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
+    let repoQualifier = '';
+
+    if (isGitRepo) {
+        // Git repository - extract repo name from URL
+        repoQualifier = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+    } else {
+        // Local folder - create pattern with ! prefix and env var substitution
+        const folderPath = currentConfig.workspaceInfo?.repositoryUrl || '';
+        if (folderPath) {
+            // Send message to backend to simplify path, then complete action
+            vscode.postMessage({
+                command: 'simplifyPathForPreview',
+                data: { path: folderPath },
+            });
+            // Will receive response via 'pathSimplifiedForPreview' message
+            return; // Exit early, will complete in message handler
+        }
+    }
+
     const newRule = {
-        repoQualifier: currentRepoName,
+        repoQualifier: repoQualifier,
         primaryColor: getThemeAppropriateColor(),
     };
 
@@ -6138,11 +6253,11 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
                 ? matchedBranchRule.color
                 : null);
 
-        console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
-        console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);
-        console.log('[Profile Indicators] matchedBranchRule:', matchedBranchRule);
-        console.log('[Profile Indicators] repoProfileName:', repoProfileName);
-        console.log('[Profile Indicators] branchProfileName:', branchProfileName);
+        // console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
+        // console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);
+        // console.log('[Profile Indicators] matchedBranchRule:', matchedBranchRule);
+        // console.log('[Profile Indicators] repoProfileName:', repoProfileName);
+        // console.log('[Profile Indicators] branchProfileName:', branchProfileName);
 
         Object.keys(profiles).forEach((name) => {
             const el = document.createElement('div');
@@ -6158,33 +6273,33 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             const isRepoProfile = name === repoProfileName;
             const isBranchProfile = name === branchProfileName;
 
-            console.log(
-                `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
-            );
+            // console.log(
+            //     `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
+            // );
 
             // Create indicator container (even if empty, to maintain alignment)
             const indicatorContainer = document.createElement('span');
             indicatorContainer.className = 'profile-indicators';
 
-            if (isRepoProfile || isBranchProfile) {
-                console.log(`[Profile Indicators] Adding indicators for "${name}"`);
+            // if (isRepoProfile || isBranchProfile) {
+            //     console.log(`[Profile Indicators] Adding indicators for "${name}"`);
 
-                if (isRepoProfile) {
-                    const repoIcon = document.createElement('span');
-                    repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
-                    repoIcon.title = 'Applied to repository rule for this workspace';
-                    indicatorContainer.appendChild(repoIcon);
-                    console.log(`[Profile Indicators] Added repo icon for "${name}"`);
-                }
+            //     if (isRepoProfile) {
+            //         const repoIcon = document.createElement('span');
+            //         repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
+            //         repoIcon.title = 'Applied to repository rule for this workspace';
+            //         indicatorContainer.appendChild(repoIcon);
+            //         console.log(`[Profile Indicators] Added repo icon for "${name}"`);
+            //     }
 
-                if (isBranchProfile) {
-                    const branchIcon = document.createElement('span');
-                    branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
-                    branchIcon.title = 'Applied to branch rule for this workspace';
-                    indicatorContainer.appendChild(branchIcon);
-                    console.log(`[Profile Indicators] Added branch icon for "${name}"`);
-                }
-            }
+            //     if (isBranchProfile) {
+            //         const branchIcon = document.createElement('span');
+            //         branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
+            //         branchIcon.title = 'Applied to branch rule for this workspace';
+            //         indicatorContainer.appendChild(branchIcon);
+            //         console.log(`[Profile Indicators] Added branch icon for "${name}"`);
+            //     }
+            // }
 
             nameContainer.appendChild(indicatorContainer);
 
@@ -6927,9 +7042,9 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 }
 
                 // Debug: Check what slot was determined
-                if (currentSlot !== 'none') {
-                    console.log(`[Mapping Debug] ${key}: currentSlot = ${currentSlot}`);
-                }
+                // if (currentSlot !== 'none') {
+                //     console.log(`[Mapping Debug] ${key}: currentSlot = ${currentSlot}`);
+                // }
 
                 // Create warning indicator for uncolored keys in Starred tab
                 const warningIndicator = document.createElement('span');
@@ -7054,28 +7169,28 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 const filteredPaletteOptions = getFilteredPaletteOptions(key, allPaletteOptions, currentSlot);
 
                 // Debug: Check if current slot is in the filtered options
-                if (currentSlot !== 'none' && currentSlot !== '__fixed__') {
-                    const isInFiltered = filteredPaletteOptions.includes(currentSlot);
-                    console.log(
-                        `[Mapping Debug] ${key}: currentSlot "${currentSlot}" in filtered options?`,
-                        isInFiltered,
-                    );
-                    if (!isInFiltered) {
-                        console.log(`[Mapping Debug] ${key}: filtered options =`, filteredPaletteOptions);
-                        console.log(`[Mapping Debug] ${key}: all options =`, allPaletteOptions);
-                    }
-                }
+                // if (currentSlot !== 'none' && currentSlot !== '__fixed__') {
+                //     const isInFiltered = filteredPaletteOptions.includes(currentSlot);
+                //     console.log(
+                //         `[Mapping Debug] ${key}: currentSlot "${currentSlot}" in filtered options?`,
+                //         isInFiltered,
+                //     );
+                //     if (!isInFiltered) {
+                //         console.log(`[Mapping Debug] ${key}: filtered options =`, filteredPaletteOptions);
+                //         console.log(`[Mapping Debug] ${key}: all options =`, allPaletteOptions);
+                //     }
+                // }
 
-                filteredPaletteOptions.forEach((opt) => {
-                    const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
-                    const slotDef = profile.palette[opt];
-                    const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
-                    options.push({ value: opt, label, color });
+                // filteredPaletteOptions.forEach((opt) => {
+                //     const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
+                //     const slotDef = profile.palette[opt];
+                //     const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
+                //     options.push({ value: opt, label, color });
 
-                    if (opt === currentSlot) {
-                        console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
-                    }
-                });
+                //     if (opt === currentSlot) {
+                //         console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
+                //     }
+                // });
 
                 // Helper to create option element
                 const createOptionElement = (opt: DropdownOption, isSelected: boolean, index: number) => {

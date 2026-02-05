@@ -46,6 +46,8 @@
         <h3>Creating Your First Rules</h3>
         
         <ol>
+            <li>Open a workspace folder on a git repository</li>
+            <li>Depending on your settings, GWRC may ask if you want to colorize the repo for this workspace. If you are not prompted, click the palette icon in the status bar</li>
             <li>Open the <strong>Rules</strong> tab in the configuration panel</li>
             <li>Click <strong>"+ Add Repo Rule"</strong> to create a repository-based rule</li>
             <li>Enter a repository identifier (name, URL pattern, or path fragment)</li>
@@ -57,6 +59,13 @@
             <strong>Example Repository Rule:</strong><br>
             <code>my-project : #2E7D32</code><br>
             <em>This applies green tones when the repository name contains "my-project"</em>
+        </div>
+
+        <div class="note">
+            <strong>Important:</strong> Repository rules match against the actual <strong>repository URL</strong>, 
+            not the folder name where you cloned the repository. For example, if you clone 
+            <code>github.com/user/my-project</code> into a folder named <code>temp-folder</code>, the rule will 
+            still match against "my-project" (from the URL), not "temp-folder".
         </div>
 
         <div class="example">

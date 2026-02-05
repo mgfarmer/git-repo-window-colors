@@ -16,6 +16,7 @@
     font-size: var(--vscode-font-size, 13px);
     color: var(--vscode-editor-foreground);
     line-height: 1.6;
+    counter-reset: h2;
 }
 
 .help-content h1 {
@@ -34,6 +35,13 @@
     margin-top: 1.75em;
     margin-bottom: 0.75em;
     color: var(--vscode-editor-foreground);
+    counter-reset: h3;
+    counter-increment: h2;
+}
+
+.help-content h2::before {
+    content: counter(h2) '. ';
+    margin-right: 0.5em;
 }
 
 .help-content h3 {
@@ -42,6 +50,57 @@
     margin-top: 1.5em;
     margin-bottom: 0.5em;
     color: var(--vscode-editor-foreground);
+    counter-reset: h4;
+    counter-increment: h3;
+}
+
+.help-content h3::before {
+    content: counter(h2) '.' counter(h3) ' ';
+    margin-right: 0.5em;
+}
+
+.help-content h4 {
+    font-size: 1.05em;
+    font-weight: 600;
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+    counter-reset: h5;
+    counter-increment: h4;
+}
+
+.help-content h4::before {
+    content: counter(h2) '.' counter(h3) '.' counter(h4) ' ';
+    margin-right: 0.5em;
+}
+
+.help-content h5 {
+    font-size: 1em;
+    font-weight: 600;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+    counter-reset: h6;
+    counter-increment: h5;
+}
+
+.help-content h5::before {
+    content: counter(h2) '.' counter(h3) '.' counter(h4) '.' counter(h5) ' ';
+    margin-right: 0.5em;
+}
+
+.help-content h6 {
+    font-size: 0.95em;
+    font-weight: 600;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    color: var(--vscode-editor-foreground);
+    counter-increment: h6;
+}
+
+.help-content h6::before {
+    content: counter(h2) '.' counter(h3) '.' counter(h4) '.' counter(h5) '.' counter(h6) ' ';
+    margin-right: 0.5em;
 }
 
 .help-content p {

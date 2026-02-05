@@ -2,7 +2,14 @@ import * as vscode from 'vscode';
 import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
 import { generatePalette, PaletteAlgorithm } from '../paletteGenerator';
-import { getRepoRuleErrors, getBranchRuleErrors, validateRules } from '../extension';
+import {
+    getRepoRuleErrors,
+    getBranchRuleErrors,
+    validateRules,
+    simplifyPath,
+    validateLocalFolderPath,
+    expandEnvVars,
+} from '../extension';
 //import { outputChannel } from '../extension';
 
 // Build-time configuration for color picker type
@@ -35,7 +42,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private readonly _extensionUri: vscode.Uri;
     private readonly _context: vscode.ExtensionContext;
     private _disposables: vscode.Disposable[] = [];
-    private _workspaceInfo: { repositoryUrl: string; currentBranch: string } = { repositoryUrl: '', currentBranch: '' };
+    private _workspaceInfo: { repositoryUrl: string; currentBranch: string; isGitRepo?: boolean } = {
+        repositoryUrl: '',
+        currentBranch: '',
+        isGitRepo: true,
+    };
     private currentConfig: any = null;
     private _configurationListener: vscode.Disposable | undefined;
     private _previewRepoRuleIndex: number | null = null;
@@ -55,8 +66,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this._disposables.push(this._configurationListener);
     }
 
-    public setWorkspaceInfo(repositoryUrl: string, currentBranch: string): void {
-        this._workspaceInfo = { repositoryUrl, currentBranch };
+    public setWorkspaceInfo(repositoryUrl: string, currentBranch: string, isGitRepo: boolean = true): void {
+        this._workspaceInfo = { repositoryUrl, currentBranch, isGitRepo };
         // Refresh the webview if it's open
         if (this._panel) {
             this._sendConfigurationToWebview();
@@ -197,14 +208,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 if ((message.data as any).clearBranchPreview) {
                     this._previewBranchRuleContext = null;
                 }
-                console.log(
-                    '[configWebview] previewRepoRule received - index:',
-                    this._previewRepoRuleIndex,
-                    'previewEnabled:',
-                    this._previewModeEnabled,
-                    'clearBranchPreview:',
-                    (message.data as any).clearBranchPreview,
-                );
+
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
                 // Wait for colorCustomizations to update before refreshing
@@ -216,6 +220,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     index: (message.data as any).index,
                     tableName: (message.data as any).tableName || 'Default Rules',
                 };
+                this._previewRepoRuleIndex = (message.data as any).repoIndex ?? null;
                 this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
@@ -255,6 +260,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'renameBranchTable':
                 await this._handleRenameBranchTable(message.data.oldTableName!, message.data.newTableName!);
                 break;
+            case 'simplifyPath':
+                await this._handleSimplifyPath(message.data.path!);
+                break;
+            case 'simplifyPathForPreview':
+                await this._handleSimplifyPathForPreview(message.data.path!);
+                break;
         }
     }
 
@@ -291,6 +302,22 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Get currently applied color customizations
         const colorCustomizations = vscode.workspace.getConfiguration('workbench').get('colorCustomizations', {});
 
+        // Validate local folder paths and expand environment variables for tooltips
+        const localFolderPathValidation: { [index: number]: boolean | undefined } = {};
+        const expandedPaths: { [index: number]: string } = {};
+        repoRules.forEach((rule, index) => {
+            if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
+                const validationResult = validateLocalFolderPath(rule.repoQualifier);
+                // Only store validation result if it's not undefined (i.e., not a glob pattern)
+                if (validationResult !== undefined) {
+                    localFolderPathValidation[index] = validationResult;
+                }
+                // Expand the path for tooltip display (remove ! prefix first)
+                const pattern = rule.repoQualifier.substring(1);
+                expandedPaths[index] = expandEnvVars(pattern);
+            }
+        });
+
         // Calculate matching rule indexes using the same logic as the extension
         const matchingRepoRuleIndex = this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl);
 
@@ -310,12 +337,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             actualBranchRules,
             workspaceInfo.currentBranch,
         );
-
-        // console.log('[DEBUG] Sending matching indexes:', {
-        //     repoRule: matchingRepoRuleIndex,
-        //     branchRule: matchingBranchRuleIndex,
-        //     actualBranchRulesCount: actualBranchRules.length,
-        // });
 
         this.currentConfig = {
             repoRules,
@@ -351,6 +372,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 repoRules: repoRuleErrorsObj,
                 branchRules: branchRuleErrorsObj,
             },
+            localFolderPathValidation,
+            expandedPaths,
             matchingIndexes: {
                 repoRule: matchingRepoRuleIndex,
                 branchRule: matchingBranchRuleIndex,
@@ -359,8 +382,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             previewRepoRuleIndex: this._previewRepoRuleIndex,
             previewBranchRuleContext: this._previewBranchRuleContext,
         };
-
-        //console.log('[DEBUG] Sending configuration to webview: ', msgData);
 
         this._panel.webview.postMessage({
             command: 'configData',
@@ -586,6 +607,30 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _handleSimplifyPath(path: string): Promise<void> {
+        const simplifiedPath = simplifyPath(path);
+
+        // Send simplified path back to webview
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'pathSimplified',
+                data: { simplifiedPath },
+            });
+        }
+    }
+
+    private async _handleSimplifyPathForPreview(path: string): Promise<void> {
+        const simplifiedPath = simplifyPath(path);
+
+        // Send simplified path back to webview
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'pathSimplifiedForPreview',
+                data: { simplifiedPath },
+            });
+        }
+    }
+
     private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string } {
         return this._workspaceInfo;
     }
@@ -595,24 +640,76 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return -1;
         }
 
-        // console.log('[DEBUG] Matching repo rules:', {
-        //     repoRules: repoRules.map((r, i) => `${i}: ${r.repoQualifier}`),
-        //     repositoryUrl: repositoryUrl,
-        // });
-
         for (let i = 0; i < repoRules.length; i++) {
             // Skip disabled rules
             if ((repoRules[i] as any).enabled === false) continue;
 
-            // console.log(`[DEBUG] Testing repo rule ${i}: "${repoRules[i].repoQualifier}" against "${repositoryUrl}"`);
-            if (repositoryUrl.includes(repoRules[i].repoQualifier)) {
-                // console.log(`[DEBUG] Repo rule ${i} matched! Returning index ${i}`);
-                return i;
+            const repoQualifier = repoRules[i].repoQualifier;
+
+            // Check if this is a local folder pattern (starts with !)
+            if (repoQualifier.startsWith('!')) {
+                // For local folder patterns, use glob matching
+                // Import minimatch dynamically
+                const { minimatch } = require('minimatch');
+
+                // Remove ! prefix and expand environment variables
+                const cleanPattern = repoQualifier.substring(1);
+                const expandedPattern = this._expandEnvVars(cleanPattern);
+
+                // Normalize paths for comparison
+                const normalizedUrl = this._normalizePath(repositoryUrl);
+                const normalizedPattern = this._normalizePath(expandedPattern);
+
+                // Use minimatch for glob pattern matching
+                if (minimatch(normalizedUrl, normalizedPattern, { nocase: true })) {
+                    return i;
+                }
+            } else {
+                // Standard git repo matching - check if URL includes qualifier
+                if (repositoryUrl.includes(repoQualifier)) {
+                    return i;
+                }
             }
         }
 
-        // console.log('[DEBUG] No repo rule matched, returning -1');
         return -1;
+    }
+
+    private _normalizePath(filePath: string): string {
+        const path = require('path');
+        return path.normalize(filePath).toLowerCase().replace(/\\/g, '/');
+    }
+
+    private _expandEnvVars(pattern: string): string {
+        const os = require('os');
+        let expanded = pattern;
+
+        // Replace ~/ or ~\ or ~ at start (handle both Unix and Windows path separators)
+        if (expanded.startsWith('~/') || expanded.startsWith('~\\') || expanded === '~') {
+            expanded = expanded.replace(/^~/, os.homedir());
+        }
+
+        // List of supported environment variables
+        const envVars = [
+            { name: 'HOME', value: os.homedir() },
+            { name: 'USERPROFILE', value: os.homedir() },
+            { name: 'APPDATA', value: process.env.APPDATA || '' },
+            { name: 'LOCALAPPDATA', value: process.env.LOCALAPPDATA || '' },
+            { name: 'USER', value: process.env.USER || process.env.USERNAME || '' },
+        ];
+
+        // Replace $VAR or %VAR% style variables
+        for (const envVar of envVars) {
+            if (!envVar.value) continue;
+
+            // Unix style: $VAR
+            expanded = expanded.replace(new RegExp(`\\$${envVar.name}`, 'gi'), envVar.value);
+
+            // Windows style: %VAR%
+            expanded = expanded.replace(new RegExp(`%${envVar.name}%`, 'gi'), envVar.value);
+        }
+
+        return expanded;
     }
 
     private _getMatchingBranchRuleIndex(branchRules: BranchRule[], currentBranch: string): number {
@@ -620,38 +717,25 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return -1;
         }
 
-        // console.log('[DEBUG] Matching branch rules:', {
-        //     branchRules: branchRules.map((r, i) => `${i}: ${r.pattern}`),
-        //     currentBranch: currentBranch,
-        // });
-
         for (let i = 0; i < branchRules.length; i++) {
             // Skip disabled rules
             if ((branchRules[i] as any).enabled === false) continue;
 
-            // outputChannel.appendLine(
-            //     `[DEBUG] Testing branch rule ${i}: "${branchRules[i].pattern}" against "${currentBranch}"`,
-            // );
             try {
                 const regex = new RegExp(branchRules[i].pattern);
                 if (regex.test(currentBranch)) {
-                    // outputChannel.appendLine(`[DEBUG] Branch rule ${i} matched! Returning index ${i}`);
                     return i;
                 }
             } catch (error) {
-                // outputChannel.appendLine(`[DEBUG] Branch rule ${i} has invalid regex, skipping`);
                 // Invalid regex, skip this rule
                 continue;
             }
         }
 
-        // console.log('[DEBUG] No branch rule matched, returning -1');
         return -1;
     }
 
     private async _updateConfiguration(data: any): Promise<void> {
-        // console.log('[DEBUG] Backend _updateConfiguration called with:', data);
-
         if (!data) {
             vscode.window.showErrorMessage('No configuration data provided');
             return;
@@ -659,16 +743,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const config = vscode.workspace.getConfiguration('windowColors');
-            // console.log('[DEBUG] Current settingsconfiguration:', config);
-            // console.log('[DEBUG] New data to apply:', data);
             const updatePromises: Thenable<void>[] = [];
 
             // Update repository rules
             if (data.repoRules) {
-                // console.log('[DEBUG] Updating repo rules:', data.repoRules);
                 const repoRulesArray = data.repoRules.map((rule: RepoRule) => {
                     const formatted = this._formatRepoRule(rule);
-                    // console.log('[DEBUG]   Formatted rule:', rule, '->', formatted);
                     return formatted;
                 });
                 updatePromises.push(config.update('repoConfigurationList', repoRulesArray, true));
@@ -676,9 +756,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Update branch rules
             if (data.branchRules) {
-                // console.log('[DEBUG] Updating branch rules:', data.branchRules);
                 const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
-                    // console.log('[DEBUG]   branch rule:', rule);
                     // Always return JSON object format
                     return {
                         pattern: rule.pattern,
@@ -701,27 +779,21 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Update other settings
             if (data.otherSettings) {
-                // console.log('[DEBUG] Updating other settings:', data.otherSettings);
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
                     updatePromises.push(config.update(key, settings[key as keyof OtherSettings], true));
                 });
             }
 
-            // console.log('[DEBUG] Waiting for', updatePromises.length, 'configuration updates to complete...');
             await Promise.all(updatePromises);
-            // console.log('[DEBUG] All configuration updates completed results:', promiseResult);
+            console.log('[GRWC] Configuration saved, waiting 100ms for propagation...');
 
-            // If preview mode is active, re-apply the preview after configuration update
-            // This ensures that color changes during preview mode are immediately reflected
-            if (this._previewModeEnabled) {
-                await vscode.commands.executeCommand(
-                    '_grwc.internal.applyColors',
-                    'config update during preview',
-                    true,
-                );
-                await this._waitForColorCustomizationsUpdate();
-            }
+            // Wait a bit for VS Code to propagate the configuration changes
+            // The onDidChangeConfiguration event will automatically call doit() to apply colors
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            // Refresh the webview to recalculate matching indexes
+            this._sendConfigurationToWebview();
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);
@@ -1045,7 +1117,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 font-src ${webview.cspSource}; 
                 img-src ${webview.cspSource}; 
                 style-src 'unsafe-inline' ${webview.cspSource}; 
-                script-src 'nonce-${nonce}';">
+                script-src 'nonce-${nonce}'; 
+                connect-src ${webview.cspSource};">
             
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Git Repo Window Colors Configuration</title>
@@ -1460,21 +1533,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         this._panel = undefined;
-    }
-
-    private _shouldClearPreviewColorsOnClose(): boolean {
-        // If no workspace info, can't determine
-        if (!this._workspaceInfo || !this._workspaceInfo.repositoryUrl) {
-            // Not a git repo, should clear
-            return true;
-        }
-
-        // Check if there's a matching repo rule
-        const repoRules = this._getRepoRules();
-        const matchingIndex = this._getMatchingRepoRuleIndex(repoRules, this._workspaceInfo.repositoryUrl);
-
-        // No matching rule means not managed, should clear
-        return matchingIndex < 0;
     }
 
     public dispose(): void {
