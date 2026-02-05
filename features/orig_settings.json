@@ -1,4 +1,236 @@
 {
+    "github.copilot.chat.submitOnEnter": true,
+    "terminal.integrated.profiles.windows": {
+        "msys mingw64": {
+            "path": "C:/msys64/msys2_shell.cmd",
+            "args": ["-defterm", "-here", "-no-start", "-mingw64"]
+        }
+    },
+    "typescript.tsc.autoDetect": "off",
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/lib": true,
+        "**/coverage": true
+    },
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true
+    },
+    "editor.insertSpaces": true,
+    "[javascript]": {
+        "editor.tabSize": 4,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[json]": {
+        "editor.tabSize": 2,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[jsonc]": {
+        "editor.tabSize": 2,
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[css]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "files.insertFinalNewline": true,
+    "clang-format.language.typescript.enable": false,
+    "editor.rulers": [180],
+    "javascript.validate.enable": false,
+    "typescript.preferences.quoteStyle": "single",
+    "git.openRepositoryInParentFolders": "always",
+    "git.suggestSmartCommit": false,
+    "git.confirmSync": false,
+    "git.autofetch": true,
+    "security.workspace.trust.enabled": false,
+    "githubPullRequests.createOnPublishBranch": "never",
+    "explorer.confirmDelete": false,
+    "workbench.editor.empty.hint": "hidden",
+    "[shellscript]": {
+        "editor.defaultFormatter": "mads-hartmann.bash-ide-vscode"
+    },
+    "window.titleBarStyle": "custom",
+    "editor.formatOnSave": true,
+    "[typescript]": {
+        "editor.tabSize": 4,
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "window.customTitleBarVisibility": "auto",
+    "terminal.integrated.fontFamily": "JetBrainsMono Nerd Font",
+    "gitlens.launchpad.ignoredRepositories": ["sifive/vcdrom", "sifive/openocdcfg-generator"],
+    "editor.fontSize": 18,
+    "editor.fontFamily": "JetBrainsMono Nerd Font",
+    "editor.fontLigatures": true,
+    "terminal.integrated.fontSize": 18,
+    "workbench.colorCustomizations": {
+        "terminal.ansiBlue": "#00f",
+        "terminal.ansiGreen": "#0f0",
+        "terminal.ansiWhite": "#fff"
+    },
+    "workbench.tree.indent": 17,
+    "workbench.tree.renderIndentGuides": "always",
+    "workbench.preferredDarkColorTheme": "Blakai Theme",
+    "workbench.iconTheme": "vscode-icons",
+    "workbench.editor.closeOnFileDelete": true,
+    "workbench.editor.defaultBinaryEditor": "hexEditor.hexedit",
+    "trace-server.traceserver.path": "/home/kmills/.vscode/extensions/mips.atlasexplorer-0.0.136-linux-x64/trace-server/0.13.0-20250715-1723/trace-compass-server/jni/linux/run-trace-server.sh",
+    "files.exclude": {
+        "**/experiments/**/.experiment": false,
+        "**/reports/**/.report": false,
+        "**/.atlas-explorer": false
+    },
+    "gyrfalcon.showExperimentMetadataFolders": true,
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "explorer.confirmDragAndDrop": false,
+    "[markdown]": {
+        "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
+    },
+    "markdown-preview-enhanced.previewTheme": "atom-dark.css",
+    "settingsSync.ignoredSettings": ["trace-server.traceserver.arguments", "dev.containers.dockerPath"],
+    "[dockerfile]": {
+        "editor.defaultFormatter": "ms-azuretools.vscode-docker"
+    },
+    "dev.containers.dockerPath": "podman",
+    "accessibility.signalOptions.volume": 0,
+    "trace-server.traceserver.arguments": "/home/kmills/.vscode/extensions/mips.atlasexplorer-0.0.136-linux-x64/trace-server/0.13.0-20250715-1723/trace-compass-server/tracecompass-server -vmargs -Djava.library.path=/home/kmills/.vscode/extensions/mips.atlasexplorer-0.0.136-linux-x64/trace-server/0.13.0-20250715-1723/trace-compass-server/jni/linux -Daddr2line.path=/home/kmills/.vscode/extensions/mips.atlasexplorer-0.0.136-linux-x64/resources/2025-11-13-201326/linux/riscv64-mti-elf-addr2line",
+    "python.defaultInterpreterPath": "/home/kmills/git/mips-ae-pylib/.venv",
+    "atlasexplorer.cloudChannel": "development",
+    "atlasexplorer.cloudChannelRegion": "us-west-2",
+    "atlasexplorer.uploadElfFiles": "Always",
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "atlasexplorer.deleteFailedExperimentFolders": false,
+    "python.terminal.activateEnvironment": false,
+    "settingsSync.ignoredExtensions": ["mips.atlasexplorer"],
+    "atlasexplorer.showExperimentMetadataFolders": true,
+    "gitlens.launchpad.indicator.enabled": false,
+    "vsicons.dontShowNewVersionMessage": true,
+    "github.copilot.selectedCompletionModel": "",
+    "github.copilot.chat.reviewSelection.instructions": [
+        {
+            "file": ".copilot-instructions.md"
+        }
+    ],
+    "gitlens.ai.model": "vscode",
+    "gitlens.statusBar.enabled": false,
+    "gitlens.ai.vscode.model": "copilot:claude-sonnet-4.5",
+    "[python]": {
+        "diffEditor.ignoreTrimWhitespace": false
+    },
+    "diffEditor.ignoreTrimWhitespace": true,
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "editor.autoClosingBrackets": "never",
+    "gitlens.ai.gitkraken.model": "gemini:gemini-2.0-flash",
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false
+    },
+    "atlasexplorer.binutilsPath": "",
+    "atlasexplorer.chartHeight": "300",
+    "atlasexplorer.jsonIndent": 4,
+    "atlasexplorer.openReadme": false,
+    "atlasexplorer.openSummary": false,
+    "atlasexplorer.promptForExperimentName": true,
+    "chat.tools.terminal.autoApprove": {
+        "13": true,
+        "14": true,
+        "gh": true,
+        "npm install": true,
+        "node": true,
+        "npm run help": true,
+        "15)_'": true,
+        "npm run extract-major": true,
+        "mv": true,
+        "uv": true,
+        "./dev.sh": true,
+        "timeout": true,
+        "./run.sh": true,
+        "python": true,
+        "yarn watch": true,
+        "yarn install": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "./analyzer": true,
+        "/tmp/analyzer_output.json": true,
+        "jq": true,
+        "keys'": true,
+        "ninja": true,
+        "/dev/null": true,
+        "OUTPUT_FILE=$(cat": true,
+        "select(.type": true,
+        ".data.series[].data[]": true,
+        "select(.omittedChildren": true,
+        "length'": true,
+        ".[0:3]'": true,
+        "name,": true,
+        ".[0:5]'": true,
+        "omittedChildren)\"": true,
+        "warning:.*CallStack": true,
+        "Linking)\"": true,
+        "error)\"": true,
+        "select(.name": true,
+        "contains(\"start\"))": true,
+        ".name'": true,
+        "'EOF'": true,
+        "stats['Total": true,
+        "stats['Maximum": true,
+        "stats['Unique": true,
+        "88:": true,
+        "0:": true,
+        "key}:": true,
+        "value['val']}\")": true,
+        "list(data['Statistics'].keys())}\")": true,
+        "yarn add": true,
+        "yarn compile": true,
+        "./genBenchParams.py": true,
+        "flutter": true,
+        "adb": true,
+        "dart": true,
+        "./run_tray.sh": true,
+        "pgrep": true
+    },
+    "chat.agent.maxRequests": 50,
+    "atlasexplorer.globalEndpoint": "https://ep1.atlas.mips.com/",
+    "chat.editor.fontSize": 16,
+    "atlasexplorer.excludeFunctionSummaries": "__",
+    "atlasexplorer.reportViewerMode": "advanced",
+    "atlasexplorer.customExcludeFunctionsRegularExpression": "_.*",
+    "atlasexplorer.experimentNameTemplate": "{elf}_{ts}",
+    "atlasexplorer.cloudTimeout": 3000,
+    "workbench.startupEditor": "none",
+    "atlasexplorer.toolsVersion": "latest",
+    "chat.viewSessions.orientation": "stacked",
+    "claudeCode.preferredLocation": "panel",
+    "scm.repositories.explorer": true,
+    "scm.repositories.selectionMode": "single",
+    "debug.breakpointsView.presentation": "tree",
+    "chat.mcp.gallery.enabled": true,
+    "[dart]": {
+        "editor.formatOnSave": true,
+        "editor.formatOnType": true,
+        "editor.rulers": [80],
+        "editor.selectionHighlight": false,
+        "editor.tabCompletion": "onlySnippets",
+        "editor.wordBasedSuggestions": "off"
+    },
+    "dart.openDevTools": "flutter",
+    "chat.tools.urls.autoApprove": {
+        "https://pystray.readthedocs.io": {
+            "approveRequest": false,
+            "approveResponse": true
+        }
+    },
+    "atlasexplorer.FunctionFiltering.excludeFunctions": "Show all functions",
+    "workbench.colorTheme": "Experimental Dark",
+
+    "windowColors.removeManagedColors": "true",
+    "windowColors.automaticBranchIndicatorColorKnob": 60,
+    "windowColors.showBranchColumns": false,
+    "windowColors.showStatusIconWhenNoRuleMatches": false,
+    "windowColors.askToColorizeRepoWhenOpened": false,
     "windowColors.colorInactiveTitlebar": true,
     "windowColors.colorActiveTitlebar": true,
     "windowColors.invertBranchColorLogic": false,
