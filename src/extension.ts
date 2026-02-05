@@ -11,6 +11,10 @@ import { minimatch } from 'minimatch';
 
 let currentBranch: undefined | string = undefined;
 
+// Flag to track that migration ran and changed configuration
+// When true, init() should skip calling doit() because the config change event will handle it
+let migrationDidRun = false;
+
 // Track validation errors for rules (index -> error message)
 let repoRuleErrors: Map<number, string> = new Map();
 let branchRuleErrors: Map<number, string> = new Map();
@@ -776,7 +780,7 @@ function getCurrentConfigSchemaVersion(): number {
  */
 async function migrateConfigurationToJson(context: ExtensionContext): Promise<void> {
     const CURRENT_CONFIG_SCHEMA_VERSION = getCurrentConfigSchemaVersion();
-    const lastMigratedVersion = context.globalState.get<number>('configSchemaVersion', 0);
+    const lastMigratedVersion = 0; //context.globalState.get<number>('configSchemaVersion', 0);
 
     // Skip if already on current version
     if (lastMigratedVersion >= CURRENT_CONFIG_SCHEMA_VERSION) {
@@ -948,6 +952,9 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
             await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
             await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
 
+            // Signal that migration wrote configuration - init() should wait for config change event
+            migrationDidRun = true;
+
             outputChannel.appendLine(`v0 -> v1 migration completed:`);
             outputChannel.appendLine(
                 `  - Repo rules: ${migratedRepoList.length} (${repoRulesMigrated} migrated from string format)`,
@@ -1017,19 +1024,6 @@ function getAllConfigurationProperties(): string[] {
 }
 
 async function checkConfiguration(context: ExtensionContext): Promise<boolean> {
-    const extension = vscode.extensions.getExtension('KevinMills.git-repo-window-colors');
-    const currentVersion = extension?.packageJSON?.version || '0.0.0';
-    const lastCheckedVersion = context.globalState.get<string>('lastConfigCheckVersion', '');
-
-    // Only check configuration if version has changed (or never checked before)
-    if (lastCheckedVersion === currentVersion) {
-        return false; // No need to check, same version
-    }
-
-    outputChannel.appendLine(
-        `Version changed from ${lastCheckedVersion || 'initial'} to ${currentVersion}, checking configuration...`,
-    );
-
     // Get all configuration properties automatically
     const allProperties = getAllConfigurationProperties();
     const missingProperties: string[] = [];
@@ -1054,9 +1048,6 @@ async function checkConfiguration(context: ExtensionContext): Promise<boolean> {
         return true; // Stop activation until restart
     }
 
-    // All configuration items are present, update the last checked version
-    await context.globalState.update('lastConfigCheckVersion', currentVersion);
-    outputChannel.appendLine('Configuration check passed.');
     return false;
 }
 
@@ -1258,7 +1249,7 @@ export async function activate(context: ExtensionContext) {
                 e.affectsConfiguration('window.customTitleBarVisibility') ||
                 e.affectsConfiguration('workbench.colorTheme')
             ) {
-                console.log('[GRWC] Configuration affects windowColors or theme, will call doit()');
+                console.log('[GRWC] Configuration affects windowColors or theme');
                 // Clear simple mode profile cache when color settings change
                 if (
                     e.affectsConfiguration('windowColors.colorEditorTabs') ||
@@ -1270,10 +1261,18 @@ export async function activate(context: ExtensionContext) {
                 ) {
                     clearSimpleModeProfileCache();
                 }
-                // Check if we should use preview mode - use the tracked checkbox state
-                const usePreview = configProvider?.isPreviewModeEnabled() ?? false;
-                doit('settings change', usePreview);
-                updateStatusBarItem(); // Update status bar when configuration changes
+                // Only call doit() if git is initialized and we have repo info
+                // This handles the post-migration case where config changes fire before init()
+                if (gitRepository && gitRepoRemoteFetchUrl) {
+                    console.log('[GRWC] Git ready, calling doit()');
+                    // Check if we should use preview mode - use the tracked checkbox state
+                    const usePreview = configProvider?.isPreviewModeEnabled() ?? false;
+                    doit('settings change', usePreview);
+                    migrationDidRun = false; // Clear flag so init() won't call doit() again
+                    updateStatusBarItem(); // Update status bar when configuration changes
+                } else {
+                    console.log('[GRWC] Git not ready yet, skipping doit() - init() will handle it');
+                }
             }
         }),
     );
@@ -1308,6 +1307,10 @@ export async function activate(context: ExtensionContext) {
         });
     }
 
+    // Migrate configuration to JSON format if needed
+    // Sets migrationDidRun=true if migration actually changed settings
+    await migrateConfigurationToJson(context);
+
     if (gitApi.state === 'initialized') {
         await init();
     } else {
@@ -1320,9 +1323,6 @@ export async function activate(context: ExtensionContext) {
             }
         });
     }
-
-    // Migrate configuration to JSON format if needed
-    await migrateConfigurationToJson(context);
 }
 
 async function init() {
@@ -1343,6 +1343,12 @@ async function init() {
                 configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
             }
 
+            // If migration ran, the config change events have already fired by now,
+            // so the configuration is fresh. We can safely call doit().
+            if (migrationDidRun) {
+                outputChannel.appendLine('Migration ran - config is now fresh, calling colorizer');
+                migrationDidRun = false; // Reset flag
+            }
             doit('initial activation');
             updateStatusBarItem(); // Update status bar after initialization
 
@@ -1907,6 +1913,11 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     const repoConfigList = getRepoConfigList(true);
     if (repoConfigList === undefined) {
         outputChannel.appendLine('  No repo settings found.  Using branch mode only.');
+    } else {
+        outputChannel.appendLine(`  Loaded ${repoConfigList.length} repo rules`);
+        if (repoConfigList.length > 0) {
+            outputChannel.appendLine(`  First rule: ${JSON.stringify(repoConfigList[0])}`);
+        }
     }
 
     let activityBarColorKnob = getNumberSetting('activityBarColorKnob');
@@ -1941,6 +1952,8 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
                 workspaceFolderPath = workspace.workspaceFolders[0].uri.fsPath;
             }
+
+            outputChannel.appendLine(`  Matching against URL: ${gitRepoRemoteFetchUrl}`);
 
             let ruleIndex = 0;
             for (const item of repoConfigList) {

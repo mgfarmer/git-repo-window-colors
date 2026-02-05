@@ -1,0 +1,306 @@
+{
+  "repoConfigurationList": [
+    {
+      "repoQualifier": "mgfarmer/teletype.git",
+      "primaryColor": "aliceblue",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "mgfarmer",
+      "primaryColor": "#400000",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-ui",
+      "primaryColor": "#003000",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-cloud",
+      "primaryColor": "darkblue",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-cdk-global",
+      "primaryColor": "darkred",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-tools",
+      "primaryColor": "darkmagenta",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-cdk-channel",
+      "primaryColor": "#015d7b",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-binutils",
+      "primaryColor": "#008080",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-stf",
+      "primaryColor": "#ff4747",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "baremetal",
+      "primaryColor": "orange",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "pylib",
+      "primaryColor": "#bc1d08",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon-utils",
+      "primaryColor": "#028d94",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "gyrfalcon",
+      "primaryColor": "Profile 1",
+      "enabled": true,
+      "branchTableName": "__none__",
+      "profileName": "Profile 1"
+    },
+    {
+      "repoQualifier": "MIPS/atlas-explorer-samples.git",
+      "primaryColor": "#6c009e",
+      "enabled": true,
+      "branchTableName": "__none__"
+    },
+    {
+      "repoQualifier": "MIPS/Baremetal-microbenchmarks.git",
+      "primaryColor": "#4b0ab4",
+      "enabled": true,
+      "branchTableName": "__none__"
+    }
+  ],
+  "branchConfigurationList": [
+    "^(?!.*(main|master)).*:Profile 2"
+  ],
+  "removeManagedColors": "true",
+  "colorInactiveTitlebar": true,
+  "colorEditorTabs": true,
+  "colorStatusBar": true,
+  "activityBarColorKnob": -3,
+  "applyBranchColorToTabsAndStatusBar": false,
+  "showStatusIconWhenNoRuleMatches": false,
+  "askToColorizeRepoWhenOpened": false,
+  "enableProfilesAdvanced": true,
+  "advancedProfiles": {
+    "Profile 1": {
+      "palette": {
+        "primaryActiveBg": {
+          "source": "fixed",
+          "value": "#003775"
+        },
+        "primaryActiveFg": {
+          "source": "fixed",
+          "value": "floralwhite"
+        },
+        "primaryInactiveBg": {
+          "source": "fixed",
+          "value": "#00458a"
+        },
+        "primaryInactiveFg": {
+          "source": "fixed",
+          "value": "ghostwhite"
+        },
+        "secondaryActiveBg": {
+          "source": "fixed",
+          "value": "#5FA3E8"
+        },
+        "secondaryActiveFg": {
+          "source": "fixed",
+          "value": "#FFFFFF"
+        },
+        "secondaryInactiveBg": {
+          "source": "fixed",
+          "value": "#4278B0"
+        },
+        "secondaryInactiveFg": {
+          "source": "fixed",
+          "value": "#CCCCCC"
+        },
+        "quaternaryBg": {
+          "source": "fixed",
+          "value": "#2D2D30"
+        },
+        "quaternaryFg": {
+          "source": "fixed",
+          "value": "#D4D4D4"
+        },
+        "tertiaryBg": {
+          "source": "fixed",
+          "value": "#1E1E1E"
+        },
+        "tertiaryFg": {
+          "source": "fixed",
+          "value": "#CCCCCC"
+        }
+      },
+      "mappings": {
+        "activityBar.background": "primaryActiveBg",
+        "activityBar.foreground": "primaryActiveFg",
+        "activityBar.inactiveForeground": "primaryInactiveFg",
+        "statusBar.background": "primaryActiveBg",
+        "statusBar.foreground": "primaryActiveFg",
+        "titleBar.activeBackground": "primaryActiveBg",
+        "titleBar.activeForeground": "primaryActiveFg",
+        "titleBar.inactiveBackground": "primaryInactiveBg",
+        "titleBar.inactiveForeground": "primaryInactiveFg",
+        "tab.activeBackground": "primaryActiveBg",
+        "tab.activeForeground": "primaryActiveFg",
+        "tab.inactiveBackground": "primaryInactiveBg",
+        "tab.inactiveForeground": "primaryInactiveFg",
+        "breadcrumb.background": "primaryActiveBg",
+        "breadcrumb.foreground": "primaryActiveFg",
+        "editorGroupHeader.tabsBackground": {
+          "slot": "primaryActiveBg",
+          "opacity": 0.55
+        }
+      }
+    },
+    "Profile 2": {
+      "palette": {
+        "primaryActiveBg": {
+          "source": "fixed",
+          "value": "#2e037a"
+        },
+        "primaryActiveFg": {
+          "source": "fixed",
+          "value": "#ffffff"
+        },
+        "primaryInactiveBg": {
+          "source": "fixed",
+          "value": "#2E5C8A"
+        },
+        "primaryInactiveFg": {
+          "source": "fixed",
+          "value": "#CCCCCC"
+        },
+        "secondaryActiveBg": {
+          "source": "fixed",
+          "value": "#5FA3E8"
+        },
+        "secondaryActiveFg": {
+          "source": "fixed",
+          "value": "#FFFFFF"
+        },
+        "secondaryInactiveBg": {
+          "source": "fixed",
+          "value": "#4278B0"
+        },
+        "secondaryInactiveFg": {
+          "source": "fixed",
+          "value": "#CCCCCC"
+        },
+        "terminalBg": {
+          "source": "fixed",
+          "value": "#002b70"
+        },
+        "terminalFg": {
+          "source": "fixed",
+          "value": "#ff7300"
+        },
+        "quaternaryBg": {
+          "source": "fixed",
+          "value": "#2D2D30"
+        },
+        "quaternaryFg": {
+          "source": "fixed",
+          "value": "#D4D4D4"
+        }
+      },
+      "mappings": {
+        "activityBar.background": "primaryActiveBg",
+        "activityBar.foreground": "primaryActiveFg",
+        "activityBar.inactiveForeground": "primaryInactiveBg",
+        "statusBar.background": "secondaryActiveBg",
+        "statusBar.foreground": "secondaryActiveFg"
+      }
+    },
+    "Profile 2 (copy)": {
+      "palette": {
+        "primaryActiveBg": {
+          "source": "fixed",
+          "value": "#2e037a"
+        },
+        "primaryActiveFg": {
+          "source": "fixed",
+          "value": "#ffffff"
+        },
+        "primaryInactiveBg": {
+          "source": "fixed",
+          "value": "#2E5C8A"
+        },
+        "primaryInactiveFg": {
+          "source": "fixed",
+          "value": "#CCCCCC"
+        },
+        "secondaryActiveBg": {
+          "source": "fixed",
+          "value": "#5FA3E8"
+        },
+        "secondaryActiveFg": {
+          "source": "fixed",
+          "value": "#FFFFFF"
+        },
+        "secondaryInactiveBg": {
+          "source": "fixed",
+          "value": "#4278B0"
+        },
+        "secondaryInactiveFg": {
+          "source": "fixed",
+          "value": "#CCCCCC"
+        },
+        "terminalBg": {
+          "source": "fixed",
+          "value": "#002b70"
+        },
+        "terminalFg": {
+          "source": "fixed",
+          "value": "#ff7300"
+        },
+        "quaternaryBg": {
+          "source": "fixed",
+          "value": "#2D2D30"
+        },
+        "quaternaryFg": {
+          "source": "fixed",
+          "value": "#D4D4D4"
+        }
+      },
+      "mappings": {
+        "activityBar.background": "primaryActiveBg",
+        "activityBar.foreground": "primaryActiveFg",
+        "activityBar.inactiveForeground": "primaryInactiveBg",
+        "statusBar.background": "secondaryActiveBg",
+        "statusBar.foreground": "secondaryActiveFg",
+        "titleBar.activeBackground": "primaryActiveBg",
+        "titleBar.activeForeground": "primaryActiveFg",
+        "titleBar.inactiveForeground": "primaryInactiveFg",
+        "titleBar.inactiveBackground": "primaryInactiveBg"
+      }
+    }
+  },
+  "exportedAt": "2026-02-05T18:43:53.077Z",
+  "version": "1.5.0"
+}

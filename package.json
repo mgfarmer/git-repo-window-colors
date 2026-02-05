@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
     "icon": "img/grwc-icon.png",
-    "version": "1.5.16",
+    "version": "1.5.19",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -123,7 +123,7 @@
                                 }
                             ]
                         },
-                        "scope": "application",
+                        "scope": "window",
                         "uniqueItems": true
                     },
                     "windowColors.removeManagedColors": {
@@ -131,7 +131,7 @@
                         "type": "boolean",
                         "default": "true",
                         "description": "When no rules match, remove any colors that were set by this extension.  This is useful if you want to use the default colors for a repo that is not in the list. If this is unchecked, then you will need to remove any managed colors manually.",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.branchConfigurationList": {
                         "order": 4,
@@ -172,7 +172,7 @@
                             "^(feature/|feature-).*:green",
                             "^(?!(main|master)$).*:purple"
                         ],
-                        "scope": "application",
+                        "scope": "window",
                         "uniqueItems": true
                     },
                     "windowColors.sharedBranchTables": {
@@ -214,28 +214,28 @@
                             ]
                         },
                         "default": {},
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.colorInactiveTitlebar": {
                         "order": 8,
                         "type": "boolean",
                         "default": "true",
                         "description": "Check to apply color changes to the inactive window title bar.",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.colorEditorTabs": {
                         "order": 11,
                         "type": "boolean",
                         "default": "false",
                         "description": "Check to apply color changes to editor tabs (and sidebar title area).",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.colorStatusBar": {
                         "order": 14,
                         "type": "boolean",
                         "default": "false",
                         "description": "Check to apply color changes to editor tabs (and sidebar title area).",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.activityBarColorKnob": {
                         "order": 17,
@@ -244,13 +244,13 @@
                         "minimum": -10,
                         "default": 0,
                         "description": "Lighten or darken the non-title bar colors by this factor between -10 and 10. A value of zero is no difference.",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.configSchemaVersion": {
                         "type": "number",
                         "default": 1,
                         "markdownDescription": "**Internal use only.** Current configuration schema version. Do not modify manually.",
-                        "scope": "application",
+                        "scope": "window",
                         "order": 9999
                     },
                     "windowColors.applyBranchColorToTabsAndStatusBar": {
@@ -258,56 +258,56 @@
                         "type": "boolean",
                         "default": "false",
                         "description": "In addition to the Activity Bar, apply the branch color to the editor tabs and status bar",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.showStatusIconWhenNoRuleMatches": {
                         "order": 26,
                         "type": "boolean",
                         "default": false,
                         "description": "When checked, the status bar icon is only shown when no rule matches the current repository. When unchecked, the status bar icon is always shown when the workspace is a git repository. The icon is never shown when the workspace is not a git repository.",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.askToColorizeRepoWhenOpened": {
                         "order": 27,
                         "type": "boolean",
                         "default": true,
                         "description": "When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules.",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.enableProfilesAdvanced": {
                         "order": 28,
                         "type": "boolean",
                         "default": false,
                         "description": "Enable the advanced Profiles feature. When enabled, the Profiles tab will be visible in the configuration interface, allowing you to define reusable color palettes and map them to specific UI elements.",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.previewSelectedRepoRule": {
                         "order": 29,
                         "type": "boolean",
                         "default": false,
                         "description": "When enabled, the currently selected repository rule will be previewed in the current window, regardless of whether the workspace matches that rule. This allows you to test how a rule looks before applying it to a repository.",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.lastExportPath": {
                         "order": 30,
                         "type": "string",
                         "default": "",
                         "description": "Last directory used for exporting configuration (internal setting)",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.lastImportPath": {
                         "order": 31,
                         "type": "string",
                         "default": "",
                         "description": "Last directory used for importing configuration (internal setting)",
-                        "scope": "application"
+                        "scope": "window"
                     },
                     "windowColors.advancedProfiles": {
                         "order": 32,
                         "markdownDescription": "Named configuration profiles for Advanced Mode.",
                         "type": "object",
                         "default": {},
-                        "scope": "application",
+                        "scope": "window",
                         "additionalProperties": {
                             "type": "object",
                             "properties": {
@@ -337,7 +337,35 @@
                                     "type": "object",
                                     "description": "Maps VS Code keys to palette slots",
                                     "additionalProperties": {
-                                        "type": "string"
+                                        "oneOf": [
+                                            {
+                                                "type": "string",
+                                                "description": "Palette slot name or 'none'"
+                                            },
+                                            {
+                                                "type": "object",
+                                                "description": "Mapping with opacity and/or fixed color",
+                                                "properties": {
+                                                    "slot": {
+                                                        "type": "string",
+                                                        "description": "Palette slot name or '__fixed__'"
+                                                    },
+                                                    "opacity": {
+                                                        "type": "number",
+                                                        "description": "Opacity value (0.0 to 1.0)",
+                                                        "minimum": 0,
+                                                        "maximum": 1
+                                                    },
+                                                    "fixedColor": {
+                                                        "type": "string",
+                                                        "description": "Fixed color value (when slot is '__fixed__')"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "slot"
+                                                ]
+                                            }
+                                        ]
                                     }
                                 }
                             }
