@@ -35,7 +35,6 @@ export interface OtherSettings {
     activityBarColorKnob: number;
     showStatusIconWhenNoRuleMatches: boolean;
     askToColorizeRepoWhenOpened: boolean;
-    enableProfilesAdvanced: boolean;
     previewSelectedRepoRule: boolean;
 }
 

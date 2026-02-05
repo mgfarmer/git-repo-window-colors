@@ -488,7 +488,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             activityBarColorKnob: config.get<number>('activityBarColorKnob', 0),
             showStatusIconWhenNoRuleMatches: config.get<boolean>('showStatusIconWhenNoRuleMatches', true),
             askToColorizeRepoWhenOpened: config.get<boolean>('askToColorizeRepoWhenOpened', true),
-            enableProfilesAdvanced: config.get<boolean>('enableProfilesAdvanced', false),
             previewSelectedRepoRule: config.get<boolean>('previewSelectedRepoRule', false),
         };
     }

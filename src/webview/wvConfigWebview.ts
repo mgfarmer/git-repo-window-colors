@@ -1728,13 +1728,11 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     // Create header
     const thead = table.createTHead();
     const headerRow = thead.insertRow();
-    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
-    const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
         <th scope="col" class="select-column">Sel</th>
         <th scope="col">Actions</th>
         <th scope="col">Repository Qualifier</th>
-        <th scope="col">Color${colorSuffix}</th>
+        <th scope="col">Color or Profile</th>
         <th scope="col" class="branch-table-column">Branch Table</th>
     `;
 
@@ -2305,13 +2303,11 @@ function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?:
     // Create header
     const thead = table.createTHead();
     const headerRow = thead.insertRow();
-    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
-    const colorSuffix = profilesEnabled ? ' or Profile' : '';
     headerRow.innerHTML = `
         <th scope="col" class="select-column">Sel</th>
         <th scope="col">Actions</th>
         <th scope="col">Branch Pattern</th>
-        <th scope="col">Color${colorSuffix}</th>
+        <th scope="col">Color or Profile</th>
     `;
 
     // Create body
@@ -2410,8 +2406,7 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
 
 function createColorInputHTML(color: string, ruleType: string, index: number, field: string): string {
     const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
-    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
-    const placeholder = profilesEnabled ? 'e.g., blue, #4A90E2, MyProfile' : 'e.g., blue, #4A90E2';
+    const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
     if (USE_NATIVE_COLOR_PICKER) {
         const hexColor = convertColorToHex(color);
@@ -2505,15 +2500,14 @@ function renderOtherSettings(settings: any) {
 
     // Check if the selected repo rule is using a non-virtual profile
     const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
-    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
 
     // Only disable controls if using an actual user-defined profile (not a virtual one)
     // Virtual profiles are temporary profiles created for simple color rules
     let isProfileRule = false;
-    if (profilesEnabled && selectedRule?.profileName) {
+    if (selectedRule?.profileName) {
         const profile = currentConfig?.advancedProfiles?.[selectedRule.profileName];
         isProfileRule = profile && !profile.virtual;
-    } else if (profilesEnabled && selectedRule?.primaryColor) {
+    } else if (selectedRule?.primaryColor) {
         const profile = currentConfig?.advancedProfiles?.[selectedRule.primaryColor];
         isProfileRule = profile && !profile.virtual;
     }
@@ -5216,11 +5210,8 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
     // Check if this is a palette slot input (should not show profiles)
     const isPaletteSlot = input.hasAttribute('data-palette-slot');
 
-    // Check if profiles are enabled
-    const profilesEnabled = currentConfig?.otherSettings?.enableProfilesAdvanced ?? false;
-
-    // 1. Add profile section (only for non-palette inputs and when profiles are enabled)
-    if (!isPaletteSlot && profilesEnabled) {
+    // 1. Add profile section (only for non-palette inputs)
+    if (!isPaletteSlot) {
         matches.push('__PROFILES_HEADER__'); // Special marker for "Profiles" header
 
         if (currentConfig?.advancedProfiles) {
@@ -5241,7 +5232,7 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
                 matches.push('__NO_MATCHES__'); // Special marker for "no matches"
             }
         } else if (value.length === 0) {
-            // Profiles are enabled but none are defined and filter is empty
+            // No profiles defined and filter is empty
             matches.push('__NO_PROFILES__'); // Special marker for "none defined"
         }
     }
