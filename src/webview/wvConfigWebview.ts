@@ -5629,6 +5629,7 @@ const THEME_KEY_LABELS: Record<string, string> = {
     'titleBar.inactiveBackground': 'Title Bar: Inactive Background',
     'titleBar.inactiveForeground': 'Title Bar: Inactive Foreground',
     'titleBar.border': 'Title Bar: Border',
+    'sideBarTitle.background': 'Sidebar Title: Background',
 
     // Activity Bar
     'activityBar.background': 'Activity Bar: Background',
@@ -5763,6 +5764,7 @@ const SECTION_DEFINITIONS: { [name: string]: string[] } = {
         'editorGroupHeader.tabsBackground',
         'breadcrumb.background',
         'breadcrumb.foreground',
+        'sideBarTitle.background',
     ],
     'Command Center': [
         'commandCenter.background',
@@ -7168,29 +7170,12 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 const allPaletteOptions = Object.keys(profile.palette);
                 const filteredPaletteOptions = getFilteredPaletteOptions(key, allPaletteOptions, currentSlot);
 
-                // Debug: Check if current slot is in the filtered options
-                // if (currentSlot !== 'none' && currentSlot !== '__fixed__') {
-                //     const isInFiltered = filteredPaletteOptions.includes(currentSlot);
-                //     console.log(
-                //         `[Mapping Debug] ${key}: currentSlot "${currentSlot}" in filtered options?`,
-                //         isInFiltered,
-                //     );
-                //     if (!isInFiltered) {
-                //         console.log(`[Mapping Debug] ${key}: filtered options =`, filteredPaletteOptions);
-                //         console.log(`[Mapping Debug] ${key}: all options =`, allPaletteOptions);
-                //     }
-                // }
-
-                // filteredPaletteOptions.forEach((opt) => {
-                //     const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
-                //     const slotDef = profile.palette[opt];
-                //     const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
-                //     options.push({ value: opt, label, color });
-
-                //     if (opt === currentSlot) {
-                //         console.log(`[Mapping Debug] ${key}: Selected option "${opt}"`);
-                //     }
-                // });
+                filteredPaletteOptions.forEach((opt) => {
+                    const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
+                    const slotDef = profile.palette[opt];
+                    const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
+                    options.push({ value: opt, label, color });
+                });
 
                 // Helper to create option element
                 const createOptionElement = (opt: DropdownOption, isSelected: boolean, index: number) => {
@@ -7264,8 +7249,12 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Update selected display
                 const updateSelectedDisplay = (value: string) => {
-                    const opt = options.find((o) => o.value === value);
-                    if (!opt) return;
+                    let opt = options.find((o) => o.value === value);
+
+                    // Fallback: if option not found, use a placeholder to prevent empty display
+                    if (!opt) {
+                        opt = { value: value || 'none', label: value || 'None' };
+                    }
 
                     // Clear current content (except arrow)
                     while (selectedDisplay.firstChild && selectedDisplay.firstChild !== arrow) {

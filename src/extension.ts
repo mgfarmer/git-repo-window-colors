@@ -1068,9 +1068,6 @@ export async function activate(context: ExtensionContext) {
         return; // Stop activation until restart
     }
 
-    // Migrate configuration to JSON format if needed
-    await migrateConfigurationToJson(context);
-
     // Create status bar item
     createStatusBarItem(context);
 
@@ -1323,6 +1320,9 @@ export async function activate(context: ExtensionContext) {
             }
         });
     }
+
+    // Migrate configuration to JSON format if needed
+    await migrateConfigurationToJson(context);
 }
 
 async function init() {
