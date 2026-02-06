@@ -1131,7 +1131,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         </head>
         <body>
             <!-- Preview Mode Toast -->
-            <div id="preview-toast" class="preview-toast" role="status" aria-live="polite" title="You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.">
+            <div id="preview-toast" class="preview-toast" role="status" aria-live="polite" data-tooltip="You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.">
                 <span class="preview-toast-text">PREVIEW MODE</span>
                 <button class="preview-toast-reset-btn" data-action="resetToMatchingRules">reset</button>
             </div>
@@ -1141,7 +1141,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="branch-tables-tab" id="tab-branch-tables">Branch Tables</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
-                <button type="button" class="help-button-global" data-action="openContextualHelp" title="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
+                <button type="button" class="help-button-global" data-action="openContextualHelp" data-tooltip="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
             </div>
             
             <div class="config-container" role="main" aria-label="Git Repository Window Colors Configuration">
@@ -1151,33 +1151,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         <section class="repo-panel" aria-labelledby="repo-rules-heading">
                             <div class="panel-header">
                                 <h2 id="repo-rules-heading">Repository Rules 
-                                    <button class="tooltip panel-tooltip help-icon" 
+                                    <button class="help-icon" 
                                             type="button"
                                             aria-label="Help for Repository Rules"
-                                            aria-describedby="repo-rules-tooltip"
-                                            tabindex="0"><span class="codicon codicon-info"></span>
-                                        <span class="tooltiptext" 
-                                            id="repo-rules-tooltip" 
-                                            role="tooltip" 
-                                            aria-hidden="true">
-                                            <strong>Repository Rules</strong><br>
-                                            Configure colors for specific repositories. Rules are matched in order from top to bottom.<br><br>
-                                            <strong>Repository Qualifier:</strong> Part of your repo URL (e.g., "myrepo", "github.com/user/repo")<br>
-                                            <strong>Primary Color:</strong> Main window color for this repository<br>
-                                            <strong>Branch Mode:</strong> Choose between Global or Local branch rules for this repository
-                                        </span>
-                                    </button>
+                                            tabindex="0"
+                                            data-tooltip-html="<strong>Repository Rules</strong><br>Configure colors for specific repositories. Rules are matched in order from top to bottom.<br><br><strong>Repository Qualifier:</strong> Part of your repo URL (e.g., &quot;myrepo&quot;, &quot;github.com/user/repo&quot;)<br><strong>Primary Color:</strong> Main window color for this repository<br><strong>Branch Mode:</strong> Choose between Global or Local branch rules for this repository"
+                                            data-tooltip-max-width="400"><span class="codicon codicon-info"></span></button>
                                 </h2>
                                 <button type="button" 
-                                        class="header-add-button tooltip panel-tooltip-left" 
+                                        class="header-add-button" 
                                         data-action="addRepoRule" 
-                                        title="Add a new repository rule"
+                                        data-tooltip-html="Add a new repository rule. Rules are processed in order, with the first match being applied.<br><br><strong>Tip:</strong> Use Ctrl+Alt+R as a keyboard shortcut."
+                                        data-tooltip-max-width="350"
                                         aria-label="Add Repository Rule (Ctrl+Alt+R)">
                                     + Add
-                                    <span class="tooltiptext" role="tooltip">
-                                        Add a new repository rule. Rules are processed in order, with the first match being applied.
-                                        <br><br><strong>Tip:</strong> Use Ctrl+Alt+R as a keyboard shortcut.
-                                    </span>
                                 </button>
                             </div>
                             <div class="section-help" aria-describedby="repo-rules-heading">
@@ -1193,48 +1180,32 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                         type="button"
                                         aria-label="Collapse Branch Rules Table"
                                         aria-expanded="true"
-                                        title="Collapse section">
+                                        data-tooltip="Collapse section">
                                     <span class="codicon codicon-chevron-right"></span>
                                 </button>
                                 <button class="branch-expand-btn" 
                                         type="button"
                                         aria-label="Expand Branch Rules Table"
-                                        title="Expand section"
+                                        data-tooltip="Expand section"
                                         style="display: none;">
                                     <span class="codicon codicon-chevron-left"></span>
                                 </button>
                                 <div class="panel-header">
                                     <h2 id="branch-rules-heading">Branch Rules Table
-                                        <button class="tooltip panel-tooltip help-icon" 
+                                        <button class="help-icon" 
                                                 type="button"
                                                 aria-label="Help for Branch Rules Table"
-                                                aria-describedby="branch-rules-tooltip"
-                                                tabindex="0"><span class="codicon codicon-info"></span>
-                                            <span class="tooltiptext" 
-                                                id="branch-rules-tooltip" 
-                                                role="tooltip" 
-                                                aria-hidden="true">
-                                                <strong>Branch Rules Table</strong><br>
-                                                Configure colors for branch name patterns across all repositories.<br><br>
-                                                <strong>Pattern:</strong> Regular expression to match branch names<br>
-                                                <strong>Examples:</strong><br>
-                                                • <code>feature/.*</code> - All feature branches<br>
-                                                • <code>main|master</code> - Main branches<br>
-                                                • <code>release-.*</code> - Release branches<br>
-                                                • <code>hotfix.*</code> - Hotfix branches
-                                            </span>
-                                        </button>
+                                                tabindex="0"
+                                                data-tooltip-html="<strong>Branch Rules Table</strong><br>Configure colors for branch name patterns across all repositories.<br><br><strong>Pattern:</strong> Regular expression to match branch names<br><strong>Examples:</strong><br>• <code>feature/.*</code> - All feature branches<br>• <code>main|master</code> - Main branches<br>• <code>release-.*</code> - Release branches<br>• <code>hotfix.*</code> - Hotfix branches"
+                                                data-tooltip-max-width="400"><span class="codicon codicon-info"></span></button>
                                     </h2>
                                     <button type="button" 
-                                            class="header-add-button branch-add-button tooltip panel-tooltip-left" 
+                                            class="header-add-button branch-add-button" 
                                             data-action="addBranchRule" 
-                                            title="Add a new branch rule"
+                                            data-tooltip-html="Add a new branch rule. Branch rules override repository rules for matching branch patterns.<br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut."
+                                            data-tooltip-max-width="350"
                                             aria-label="Add Branch Rule (Ctrl+Alt+B)">
                                         + Add
-                                        <span class="tooltiptext" role="tooltip">
-                                            Add a new branch rule. Branch rules override repository rules for matching branch patterns.
-                                            <br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut.
-                                        </span>
                                     </button>
                                 </div>
                                 <div class="section-help">
@@ -1251,48 +1222,37 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 type="button"
                                 aria-label="Collapse Other Settings"
                                 aria-expanded="true"
-                                title="Collapse section">
+                                data-tooltip="Collapse section">
                             <span class="codicon codicon-chevron-down"></span>
                         </button>
                         <button class="settings-expand-btn" 
                                 type="button"
                                 aria-label="Expand Other Settings"
-                                title="Expand section"
+                                data-tooltip="Expand section"
                                 style="display: none;">
                             <span class="codicon codicon-chevron-up"></span>
                         </button>
                         <div class="panel-header">
                             <h2 id="other-settings-heading">Other Settings
-                                <button class="tooltip bottom-panel-tooltip help-icon" 
+                                <button class="help-icon" 
                                     type="button"
                                     aria-label="Help for Other Settings"
-                                    aria-describedby="other-settings-tooltip"
-                                    tabindex="0"><span class="codicon codicon-info"></span>
-                                <span class="tooltiptext" 
-                                    id="other-settings-tooltip" 
-                                    role="tooltip" 
-                                    aria-hidden="true">
-                                    <strong>Other Settings</strong><br>
-                                    Configure other behavior and appearance options.<br><br>
-                                    <strong>* Simple Colors Only:</strong> Settings marked with an asterisk (*) only apply when using simple colors in your rules. When using Profiles, these color-related settings are controlled by the profile configuration.<br><br>
-                                    <strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br>
-                                    <strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-179° to +179°)<br><br>
-                                    Toggle various UI elements that should be colored by the extension.
-                                </span>
-                            </button>
+                                    tabindex="0"
+                                    data-tooltip-html="<strong>Other Settings</strong><br>Configure other behavior and appearance options.<br><br><strong>* Simple Colors Only:</strong> Settings marked with an asterisk (*) only apply when using simple colors in your rules. When using Profiles, these color-related settings are controlled by the profile configuration.<br><br><strong>Activity Bar Color Knob:</strong> Adjust brightness of non-title bar elements (-10 to +10)<br><strong>Branch Hue Rotation:</strong> Automatic color shift for branch indicators (-179° to +179°)<br><br>Toggle various UI elements that should be colored by the extension."
+                                    data-tooltip-max-width="450"><span class="codicon codicon-info"></span></button>
                             </h2>
                             <div class="import-export-buttons">
                                 <button type="button" 
                                         class="import-export-button" 
                                         data-action="exportConfig" 
-                                        title="Export current configuration to a JSON file"
+                                        data-tooltip="Export current configuration to a JSON file"
                                         aria-label="Export Configuration">
                                     📤 Export Config
                                 </button>
                                 <button type="button" 
                                         class="import-export-button" 
                                         data-action="importConfig" 
-                                        title="Import configuration from a JSON file"
+                                        data-tooltip="Import configuration from a JSON file"
                                         aria-label="Import Configuration">
                                     📥 Import Config
                                 </button>
@@ -1310,14 +1270,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         <section class="profiles-list-section">
                            <div class="panel-header">
                                 <h2>Profiles
-                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Profiles Help"><span class="codicon codicon-info"></span>
-                                        <span class="tooltiptext">
-                                            <strong>Profiles</strong><br>
-                                            Define reusable color schemes (profiles) that can be applied to repository rules.
-                                        </span>
-                                    </span>
+                                    <span class="help-icon" tabindex="0" role="button" aria-label="Profiles Help"
+                                          data-tooltip-html="<strong>Profiles</strong><br>Define reusable color schemes (profiles) that can be applied to repository rules."
+                                          data-tooltip-max-width="350"><span class="codicon codicon-info"></span></span>
                                 </h2>
-                                <button type="button" class="header-add-button" data-action="addProfile">+ Add</button>
+                                <button type="button" class="header-add-button" data-action="addProfile" data-tooltip="Add a new color profile">+ Add</button>
                            </div>
                            <div id="profilesList" class="profiles-list"></div>
                         </section>
@@ -1326,20 +1283,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             <div class="profile-header">
                                 <input type="text" id="profileNameInput" placeholder="Profile Name">
                                 <div class="profile-actions">
-                                   <button type="button" class="profile-action-btn" data-action="duplicateProfile" title="Duplicate Profile" aria-label="Duplicate Profile"><span class="codicon codicon-copy"></span></button>
-                                   <button type="button" class="profile-action-btn" data-action="deleteProfile" title="Delete Profile" aria-label="Delete Profile"><span class="codicon codicon-trash"></span></button>
+                                   <button type="button" class="profile-action-btn" data-action="duplicateProfile" data-tooltip="Duplicate Profile" aria-label="Duplicate Profile"><span class="codicon codicon-copy"></span></button>
+                                   <button type="button" class="profile-action-btn" data-action="deleteProfile" data-tooltip="Delete Profile" aria-label="Delete Profile"><span class="codicon codicon-trash"></span></button>
                                 </div>
                             </div>
                             
                             <div class="palette-editor-section">
                                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                                     <h3 style="margin: 0;">Reference Palette
-                                        <span class="tooltip right-bottom-tooltip help-icon" tabindex="0" role="button" aria-label="Palette Help"><span class="codicon codicon-info"></span>
-                                            <span class="tooltiptext">
-                                                <strong>Reference Palette</strong><br>
-                                                Define reference colors that can be used in the mappings.<br><br>
-                                            </span>
-                                        </span>
+                                        <span class="help-icon" tabindex="0" role="button" aria-label="Palette Help"
+                                              data-tooltip-html="<strong>Reference Palette</strong><br>Define reference colors that can be used in the mappings."
+                                              data-tooltip-max-width="350"><span class="codicon codicon-info"></span></span>
                                     </h3>
                                     <div class="palette-generator-container">
                                         <div id="paletteToast" class="palette-toast" style="display: none;">
@@ -1349,7 +1303,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                                 <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
                                             </div>
                                         </div>
-                                        <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" title="Generate palette colors from Primary Active Background using color theory algorithms" aria-label="Generate Pleasing Palette from Primary Active Background">
+                                        <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" data-tooltip="Generate palette colors from Primary Active Background using color theory algorithms" data-tooltip-position="top" aria-label="Generate Pleasing Palette from Primary Active Background">
                                             <span class="codicon codicon-wand"></span>
                                             <span class="codicon codicon-chevron-down"></span>
                                         </button>
@@ -1373,52 +1327,31 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                                 <h3 style="margin: 0;">
                                     Mappings
-                                    <span class="tooltip right-tooltip help-icon" tabindex="0" role="button" aria-label="Mappings Help"><span class="codicon codicon-info"></span>
-                                        <span class="tooltiptext">
-                                            <strong>Section Mappings</strong><br>
-                                            Map UI elements (like Title Bar, Status Bar) to one of the palette slots defined above.
-                                        </span>
-                                    </span>
+                                    <span class="help-icon" tabindex="0" role="button" aria-label="Mappings Help"
+                                          data-tooltip-html="<strong>Section Mappings</strong><br>Map UI elements (like Title Bar, Status Bar) to one of the palette slots defined above."
+                                          data-tooltip-max-width="350"><span class="codicon codicon-info"></span></span>
                                 </h3>
                                 <div style="display: flex; align-items: center; gap: 16px;">
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="checkbox" id="syncFgBgCheckbox" checked style="cursor: pointer;">
                                         <span>Synchronize fg/bg selections</span>
-                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Synchronize Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
-                                            <span class="tooltiptext">
-                                                <strong>Synchronize Foreground/Background</strong><br>
-                                                When enabled, selecting a foreground color automatically sets the corresponding background color (and vice versa).<br><br>
-                                                For example, selecting "Primary Active Foreground" will automatically set "Primary Active Background" to its corresponding palette slot.
-                                            </span>
-                                        </span>
+                                        <span class="help-icon" tabindex="0" role="button" aria-label="Synchronize Help" style="margin-left: 0;"
+                                              data-tooltip-html="<strong>Synchronize Foreground/Background</strong><br>When enabled, selecting a foreground color automatically sets the corresponding background color (and vice versa).<br><br>For example, selecting &quot;Primary Active Foreground&quot; will automatically set &quot;Primary Active Background&quot; to its corresponding palette slot."
+                                              data-tooltip-max-width="400"><span class="codicon codicon-info"></span></span>
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="checkbox" id="syncActiveInactiveCheckbox" checked style="cursor: pointer;">
                                         <span>Synchronize active/inactive selections</span>
-                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Active/Inactive Sync Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
-                                            <span class="tooltiptext">
-                                                <strong>Synchronize Active/Inactive</strong><br>
-                                                When enabled, selecting an active element automatically sets the corresponding inactive element (and vice versa).<br><br>
-                                                For example, selecting "Title Bar Active Foreground" will automatically set "Title Bar Inactive Foreground" to its corresponding palette slot.<br><br>
-                                                <strong>Combined Effect:</strong> When both sync options are enabled, changing one element can automatically configure up to 4 related elements (active/inactive × foreground/background).
-                                            </span>
-                                        </span>
+                                        <span class="help-icon" tabindex="0" role="button" aria-label="Active/Inactive Sync Help" style="margin-left: 0;"
+                                              data-tooltip-html="<strong>Synchronize Active/Inactive</strong><br>When enabled, selecting an active element automatically sets the corresponding inactive element (and vice versa).<br><br>For example, selecting &quot;Title Bar Active Foreground&quot; will automatically set &quot;Title Bar Inactive Foreground&quot; to its corresponding palette slot.<br><br><strong>Combined Effect:</strong> When both sync options are enabled, changing one element can automatically configure up to 4 related elements (active/inactive × foreground/background)."
+                                              data-tooltip-max-width="450"><span class="codicon codicon-info"></span></span>
                                     </label>
                                     <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
                                         <input type="checkbox" id="limitOptionsCheckbox" style="cursor: pointer;">
                                         <span>Limit options</span>
-                                        <span class="tooltip left-tooltip help-icon" tabindex="0" role="button" aria-label="Limit Options Help" style="margin-left: 0;"><span class="codicon codicon-info"></span>
-                                            <span class="tooltiptext">
-                                                <strong>Limit Dropdown Options</strong><br>
-                                                When enabled, dropdown menus will only show palette slots that match the element's characteristics.<br><br>
-                                                <strong>Examples:</strong><br>
-                                                • Background elements only show background palette slots (e.g., Primary Active Bg, Secondary Inactive Bg)<br>
-                                                • Foreground elements only show foreground palette slots<br>
-                                                • Active elements prefer active palette slots<br>
-                                                • Inactive elements prefer inactive palette slots<br><br>
-                                                This helps avoid accidentally assigning mismatched color types and makes it easier to find the right palette slot.
-                                            </span>
-                                        </span>
+                                        <span class="help-icon" tabindex="0" role="button" aria-label="Limit Options Help" style="margin-left: 0;"
+                                              data-tooltip-html="<strong>Limit Dropdown Options</strong><br>When enabled, dropdown menus will only show palette slots that match the element's characteristics.<br><br><strong>Examples:</strong><br>• Background elements only show background palette slots (e.g., Primary Active Bg, Secondary Inactive Bg)<br>• Foreground elements only show foreground palette slots<br>• Active elements prefer active palette slots<br>• Inactive elements prefer inactive palette slots<br><br>This helps avoid accidentally assigning mismatched color types and makes it easier to find the right palette slot."
+                                              data-tooltip-max-width="450"><span class="codicon codicon-info"></span></span>
                                     </label>
                                 </div>
                             </div>
@@ -1449,16 +1382,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     <section class="report-panel">
                         <div class="panel-header">
                             <h2>Color Report
-                                <button class="tooltip panel-tooltip help-icon" 
+                                <button class="help-icon" 
                                         type="button"
                                         aria-label="Help for Color Report"
-                                        tabindex="0"><span class="codicon codicon-info"></span>
-                                    <span class="tooltiptext" role="tooltip">
-                                        <strong>Color Report</strong><br>
-                                        Detailed report showing all theme elements that are currently being colored,
-                                        the applied colors, and which rules or profiles are applying them.
-                                    </span>
-                                </button>
+                                        tabindex="0"
+                                        data-tooltip-html="<strong>Color Report</strong><br>Detailed report showing all theme elements that are currently being colored, the applied colors, and which rules or profiles are applying them."
+                                        data-tooltip-max-width="400"><span class="codicon codicon-info"></span></button>
                             </h2>
                         </div>
                         <div id="reportContent" role="region" aria-label="Color report table">

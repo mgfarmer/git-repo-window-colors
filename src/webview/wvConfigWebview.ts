@@ -15,6 +15,9 @@ import {
 // Import dialog utilities
 import { showInputDialog, showMessageDialog } from './dialogUtils';
 
+// Import tooltip utilities
+import { showTooltip, hideTooltip, hideTooltipImmediate, attachTooltip, setupDelegatedTooltips } from './tooltipUtils';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
@@ -49,6 +52,9 @@ function initTabs() {
             const tabId = target.getAttribute('aria-controls');
             if (!tabId) return;
 
+            // Close any open branch table dropdowns when switching tabs
+            closeAllBranchTableDropdowns();
+
             document.querySelectorAll('.tab-button').forEach((b) => {
                 b.classList.remove('active');
                 b.setAttribute('aria-selected', 'false');
@@ -66,16 +72,37 @@ function initTabs() {
 }
 initTabs();
 
+// Helper function to close all branch table dropdowns
+function closeAllBranchTableDropdowns() {
+    document.querySelectorAll('.dropdown-options.branch-table-options').forEach((dropdown) => {
+        (dropdown as HTMLElement).style.display = 'none';
+    });
+    document.querySelectorAll('.branch-table-dropdown').forEach((dropdown) => {
+        dropdown.setAttribute('aria-expanded', 'false');
+    });
+}
+
 // Close branch table dropdowns when clicking outside
 document.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
-    // Don't close if clicking inside a branch table dropdown
-    if (!target.closest('.branch-table-dropdown')) {
-        document.querySelectorAll('.branch-table-dropdown .dropdown-options').forEach((dropdown) => {
-            (dropdown as HTMLElement).style.display = 'none';
-            (dropdown.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
-        });
+    // Don't close if clicking inside a branch table dropdown or its options
+    if (!target.closest('.branch-table-dropdown') && !target.closest('.dropdown-options.branch-table-options')) {
+        closeAllBranchTableDropdowns();
     }
+});
+
+// Close branch table dropdowns when scrolling (they use position:fixed so would become orphaned)
+document.addEventListener(
+    'scroll',
+    () => {
+        closeAllBranchTableDropdowns();
+    },
+    true,
+); // Use capture to catch scroll events on all scrollable containers
+
+// Close branch table dropdowns when window is resized
+window.addEventListener('resize', () => {
+    closeAllBranchTableDropdowns();
 });
 
 // HTML Color Names for auto-complete
@@ -259,6 +286,10 @@ vscode.postMessage({
 
 // Accessibility enhancement functions
 function initializeAccessibility() {
+    // Set up delegated tooltip handling for the entire document
+    // Tooltips using data-tooltip attributes will be handled automatically
+    setupDelegatedTooltips(document.body);
+
     // Set up keyboard navigation for help buttons
     document.addEventListener('keydown', function (event) {
         if ((event.target as HTMLElement)?.classList?.contains('help-icon')) {
@@ -1574,11 +1605,17 @@ function handleDocumentKeydown(event: KeyboardEvent) {
 
     // Handle escape key to close branch table dropdowns
     if (event.key === 'Escape') {
-        const openDropdowns = document.querySelectorAll('.branch-table-dropdown .dropdown-options[style*="block"]');
-        if (openDropdowns.length > 0) {
-            openDropdowns.forEach((dropdown) => {
+        const openDropdowns = document.querySelectorAll('.dropdown-options.branch-table-options');
+        let closedAny = false;
+        openDropdowns.forEach((dropdown) => {
+            if ((dropdown as HTMLElement).style.display === 'block') {
                 (dropdown as HTMLElement).style.display = 'none';
-                (dropdown.parentElement as HTMLElement)?.setAttribute('aria-expanded', 'false');
+                closedAny = true;
+            }
+        });
+        if (closedAny) {
+            document.querySelectorAll('.branch-table-dropdown').forEach((dropdown) => {
+                dropdown.setAttribute('aria-expanded', 'false');
             });
             event.preventDefault();
             event.stopPropagation();
@@ -1966,7 +2003,8 @@ function createBranchTableDropdown(
 
     // Dropdown options container
     const optionsContainer = document.createElement('div');
-    optionsContainer.className = 'dropdown-options';
+    optionsContainer.className = 'dropdown-options branch-table-options';
+    optionsContainer.setAttribute('data-repo-index', String(repoRuleIndex));
     optionsContainer.style.display = 'none';
     optionsContainer.style.position = 'fixed';
     optionsContainer.style.width = 'max-content';
@@ -2105,9 +2143,9 @@ function createBranchTableDropdown(
             const repoList = reposUsingTable.slice(0, maxReposToShow).join(', ');
             const remaining = reposUsingTable.length - maxReposToShow;
             const tooltipText = remaining > 0 ? `Used by: ${repoList}...and ${remaining} more` : `Used by: ${repoList}`;
-            optionDiv.title = tooltipText;
+            optionDiv.setAttribute('data-tooltip', tooltipText);
         } else {
-            optionDiv.title = 'Not used by any repository rules';
+            optionDiv.setAttribute('data-tooltip', 'Not used by any repository rules');
         }
 
         if (isSelected) {
@@ -2211,9 +2249,14 @@ function createBranchTableDropdown(
         const isOpen = optionsContainer.style.display === 'block';
 
         // Close all other dropdowns first
-        document.querySelectorAll('.branch-table-dropdown .dropdown-options').forEach((other) => {
+        document.querySelectorAll('.dropdown-options.branch-table-options').forEach((other) => {
             if (other !== optionsContainer) {
                 (other as HTMLElement).style.display = 'none';
+            }
+        });
+        document.querySelectorAll('.branch-table-dropdown').forEach((dd) => {
+            if (dd !== dropdown) {
+                dd.setAttribute('aria-expanded', 'false');
             }
         });
 
@@ -2244,6 +2287,22 @@ function createBranchTableDropdown(
         dropdown.setAttribute('aria-expanded', String(!isOpen));
     });
 
+    // Close dropdown when it loses focus (with a small delay to allow clicking options)
+    dropdown.addEventListener('focusout', (e) => {
+        const relatedTarget = (e as FocusEvent).relatedTarget as HTMLElement;
+        // Don't close if focus moved to an option within this dropdown's options
+        if (relatedTarget && (optionsContainer.contains(relatedTarget) || dropdown.contains(relatedTarget))) {
+            return;
+        }
+        // Small delay to allow click events to process first
+        setTimeout(() => {
+            if (!dropdown.contains(document.activeElement) && !optionsContainer.contains(document.activeElement)) {
+                optionsContainer.style.display = 'none';
+                dropdown.setAttribute('aria-expanded', 'false');
+            }
+        }, 150);
+    });
+
     // Initialize selected display
     updateSelectedDisplay(selectedTableName);
 
@@ -2260,11 +2319,11 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
     const isSelected = selectedRepoRuleIndex === index;
 
     // For local folder rules, create a tooltip showing the expanded path
-    let tooltipText = '';
+    let tooltipAttr = '';
     if (rule.repoQualifier && rule.repoQualifier.startsWith('!')) {
         const expandedPath = expandedPaths[index];
         if (expandedPath) {
-            tooltipText = `Resolved path: ${expandedPath}`;
+            tooltipAttr = ` data-tooltip="Resolved path: ${escapeHtml(expandedPath)}"`;
         }
     }
 
@@ -2287,8 +2346,7 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
                    id="repo-qualifier-${index}"
                    value="${escapeHtml(rule.repoQualifier || '')}" 
                    placeholder="e.g., myrepo or github.com/user/repo"
-                   aria-label="Repository qualifier for rule ${index + 1}"
-                   ${tooltipText ? `title="${escapeHtml(tooltipText)}"` : ''}
+                   aria-label="Repository qualifier for rule ${index + 1}"${tooltipAttr}
                    data-action="updateRepoRule(${index}, 'repoQualifier', this.value)">
         </td>
         <td class="color-cell">
@@ -2437,7 +2495,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
         const hexColor = isSpecialNone ? '#808080' : convertColorToHex(color);
         const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
         const noneIndicator = isSpecialNone
-            ? '<span class="none-indicator" title="Excluded from coloring">⊘</span>'
+            ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
             : '';
         return `
             <div class="color-input-container native-picker${isSpecialNone ? ' is-none' : ''}">
@@ -2447,7 +2505,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                        id="${ruleType}-${field}-${index}"
                        value="${hexColor}" 
                        ${colorPickerDisplay}
-                       title="Click to use a color picker, shift-click to choose a random color"
+                       data-tooltip="Click to use a color picker, shift-click to choose a random color"
                        data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
                        aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
                 <input type="text" 
@@ -2469,7 +2527,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                 <div class="color-swatch" 
                      style="${swatchStyle}"
                      data-action="openColorPicker('${ruleType}', ${index}, '${field}')"
-                     title="${isSpecialNone ? 'Excluded from coloring' : 'Click to use a color picker, shift-click to choose a random color'}">${swatchContent}</div>
+                     data-tooltip="${isSpecialNone ? 'Excluded from coloring' : 'Click to use a color picker, shift-click to choose a random color'}">${swatchContent}</div>
                 <input type="text" 
                        class="color-input" 
                        id="${ruleType}-${field}-${index}"
@@ -2491,39 +2549,39 @@ function createReorderControlsHTML(index: number, ruleType: string, totalCount: 
 
     // Disable drag handle when there's only one entry
     const isDragDisabled = totalCount <= 1;
+    const dragTooltip = isDragDisabled
+        ? 'Cannot reorder when only one rule exists'
+        : 'Drag this handle to reorder rules. Rules are processed from top to bottom.';
 
     return `
         <div class="reorder-buttons">
-            <div class="drag-handle tooltip right-tooltip${isDragDisabled ? ' disabled' : ''}" 
+            <div class="drag-handle${isDragDisabled ? ' disabled' : ''}" 
                  ${isDragDisabled ? '' : 'draggable="true"'} 
                  data-drag-index="${index}"
                  data-drag-type="${ruleType}"
-                 title="${isDragDisabled ? 'Cannot reorder single entry' : 'Drag to reorder'}"
+                 data-tooltip="${escapeHtml(dragTooltip)}"
+                 data-tooltip-position="right"
                  tabindex="${isDragDisabled ? '-1' : '0'}"
                  role="button"
                  aria-label="Drag handle for rule ${index + 1}"
-                 ${isDragDisabled ? 'aria-disabled="true"' : ''}><span class="codicon codicon-gripper"></span>
-                <span class="tooltiptext" role="tooltip">
-                    ${isDragDisabled ? 'Cannot reorder when only one rule exists' : 'Drag this handle to reorder rules. Rules are processed from top to bottom.'}
-                </span>
-            </div>
+                 ${isDragDisabled ? 'aria-disabled="true"' : ''}><span class="codicon codicon-gripper"></span></div>
             <button class="reorder-btn" 
                     data-action="moveRule(${index}, '${ruleType}', -1)" 
-                    title="Move up"
+                    data-tooltip="Move up"
                     aria-label="Move rule ${index + 1} up"
                     ${index === 0 ? 'disabled' : ''}><span class="codicon codicon-triangle-up"></span></button>
             <button class="reorder-btn" 
                     data-action="moveRule(${index}, '${ruleType}', 1)" 
-                    title="Move down"
+                    data-tooltip="Move down"
                     aria-label="Move rule ${index + 1} down"
                     ${index === totalCount - 1 ? 'disabled' : ''}><span class="codicon codicon-triangle-down"></span></button>
             <button class="eye-btn" 
                     data-action="toggleRule(${index}, '${ruleType}')"
-                    title="${eyeTitle}"
+                    data-tooltip="${eyeTitle}"
                     aria-label="Toggle ${ruleType} rule ${index + 1}">${eyeIcon}</button>
             <button class="delete-btn" 
                     data-action="delete${ruleType.charAt(0).toUpperCase() + ruleType.slice(1)}Rule(${index})"
-                    title="Delete this rule"
+                    data-tooltip="Delete this rule"
                     aria-label="Delete ${ruleType} rule ${index + 1}"><span class="codicon codicon-trash"></span></button>
         </div>
     `;
@@ -2560,7 +2618,9 @@ function renderOtherSettings(settings: any) {
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div class="settings-grid">
-                        <div class="setting-item tooltip ${disabledClass}">
+                        <div class="setting-item ${disabledClass}"
+                             data-tooltip="Apply repository colors to the status bar at the bottom of the VS Code window. This gives the repository color more prominence."
+                             data-tooltip-position="top">
                             <label>
                                 <input type="checkbox" 
                                        id="color-status-bar"
@@ -2569,12 +2629,10 @@ function renderOtherSettings(settings: any) {
                                        data-action="updateOtherSetting('colorStatusBar', this.checked)">
                                 Color Status Bar
                             </label>
-                            <span class="tooltiptext" role="tooltip">
-                                Apply repository colors to the status bar at the bottom of the VS Code window. 
-                                This give the repository color more prominence.
-                            </span>
                         </div>
-                        <div class="setting-item tooltip ${disabledClass}">
+                        <div class="setting-item ${disabledClass}"
+                             data-tooltip="Apply repository colors to editor tabs. This gives the repository color more prominence."
+                             data-tooltip-position="top">
                             <label>
                                 <input type="checkbox" 
                                        id="color-editor-tabs"
@@ -2583,11 +2641,10 @@ function renderOtherSettings(settings: any) {
                                        data-action="updateOtherSetting('colorEditorTabs', this.checked)">
                                 Color Editor Tabs
                             </label>
-                            <span class="tooltiptext" role="tooltip">
-                                Apply repository colors to editor tabs. This give the repository color more prominence.
-                            </span>
                         </div>
-                        <div class="setting-item tooltip ${disabledClass}">
+                        <div class="setting-item ${disabledClass}"
+                             data-tooltip="Apply colors to the title bar even when the VS Code window is not focused. This maintains visual identification when switching between applications."
+                             data-tooltip-position="top">
                             <label>
                                 <input type="checkbox" 
                                        id="color-inactive-titlebar"
@@ -2596,14 +2653,12 @@ function renderOtherSettings(settings: any) {
                                        data-action="updateOtherSetting('colorInactiveTitlebar', this.checked)">
                                 Color Inactive Title Bar
                             </label>
-                            <span class="tooltiptext" role="tooltip">
-                                Apply colors to the title bar even when the VS Code window is not focused. 
-                                This maintains visual identification when switching between applications.
-                            </span>
                         </div>
                     </div>
                     <div class="settings-grid">
-                        <div class="setting-item range-slider tooltip ${disabledClass}">
+                        <div class="setting-item range-slider ${disabledClass}"
+                             data-tooltip="Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). Negative values make colors darker, positive values make them lighter. Zero means no adjustment."
+                             data-tooltip-position="top">
                             <label for="activity-bar-knob">Color Knob:</label>
                             <div class="range-controls">
                                 <input type="range" 
@@ -2616,11 +2671,6 @@ function renderOtherSettings(settings: any) {
                                        aria-label="Color adjustment from -10 to +10">
                                 <span id="activity-bar-knob-value" class="value-display">${settings.activityBarColorKnob || 0}</span>
                             </div>
-                            <span class="tooltiptext" role="tooltip">
-                                Adjust the brightness of non-title bar elements (activity bar, editor tabs, and status bar). 
-                                Negative values make colors darker, positive values make them lighter. Zero means no adjustment. 
-                                Provided for fine-tuning the look and feel.
-                            </span>
                         </div>
                     </div>
                 </div>
@@ -2629,7 +2679,9 @@ function renderOtherSettings(settings: any) {
             <div class="settings-section">
                 <h3>Other Options</h3>
                 <div class="settings-grid">
-                    <div class="setting-item tooltip">
+                    <div class="setting-item"
+                         data-tooltip="When enabled, selecting any repository rule will preview its colors in the workspace without loading a workspace that matches the previewed rule. This is useful for testing how different rules look without having to open every repository."
+                         data-tooltip-position="top">
                         <label>
                             <input type="checkbox" 
                                    id="preview-selected-repo-rule"
@@ -2638,13 +2690,10 @@ function renderOtherSettings(settings: any) {
                                    data-extra-action="handlePreviewModeChange">
                             Preview Selected Rules
                         </label>
-                        <span class="tooltiptext" role="tooltip">
-                            When enabled, selecting any repository rule will preview its colors in the workspace 
-                            without loading a workspace that matches the previewed rule. This is useful for testing how different 
-                            rules look without having to open every repository.
-                        </span>
                     </div>
-                    <div class="setting-item tooltip">
+                    <div class="setting-item"
+                         data-tooltip="When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown."
+                         data-tooltip-position="top">
                         <label>
                             <input type="checkbox" 
                                    id="ask-to-colorize-repo-when-opened"
@@ -2652,9 +2701,6 @@ function renderOtherSettings(settings: any) {
                                    data-action="updateOtherSetting('askToColorizeRepoWhenOpened', this.checked)">
                             Ask to colorize repository when opened
                         </label>
-                        <span class="tooltiptext" role="tooltip">
-                            When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules. When disabled, no prompt will be shown.
-                        </span>
                     </div>
                 </div>
             </div>
@@ -2766,7 +2812,7 @@ function renderBranchTablesTab(config: any) {
                             class="vscode-button secondary"
                             onclick="deleteBranchTableFromMgmt('${escapeHtml(tableName).replace(/'/g, "\\'")}')"
                             ${usageCount > 0 ? 'disabled' : ''}
-                            title="${usageCount > 0 ? 'Table is in use by ' + usageCount + ' repo rule' + (usageCount !== 1 ? 's' : '') : 'Delete this table'}">
+                            data-tooltip="${usageCount > 0 ? 'Table is in use by ' + usageCount + ' repo rule' + (usageCount !== 1 ? 's' : '') : 'Delete this table'}">
                         Delete
                     </button>
                 </div>
@@ -3701,7 +3747,7 @@ function updateCopyFromButton(showButton: boolean) {
     copyBtn.type = 'button';
     copyBtn.className = 'copy-from-button';
     copyBtn.textContent = '📋 Copy From...';
-    copyBtn.title = 'Copy branch rules from global or another repository';
+    copyBtn.setAttribute('data-tooltip', 'Copy branch rules from global or another repository');
     copyBtn.setAttribute('aria-label', 'Copy branch rules from another source');
 
     // Insert before the Add button in the container
@@ -6563,6 +6609,7 @@ function setupPaletteGenerator() {
     // Toggle dropdown on button click
     generatorBtn.onclick = (e) => {
         e.stopPropagation();
+        hideTooltipImmediate(); // Hide tooltip when dropdown opens
         const isVisible = dropdown.style.display !== 'none';
         dropdown.style.display = isVisible ? 'none' : 'block';
     };

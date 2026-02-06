@@ -983,8 +983,8 @@ input[type='range'] {
 .tooltip .tooltiptext {
     visibility: hidden;
     width: 300px;
-    background-color: var(--vscode-editorHoverWidget-background);
-    color: var(--vscode-editorHoverWidget-foreground);
+    background-color: #1e1e1e;
+    color: #e0e0e0;
     text-align: left;
     border-radius: 4px;
     padding: 8px 12px;
@@ -997,8 +997,8 @@ input[type='range'] {
     transition: opacity 0.3s;
     font-size: 12px;
     line-height: 1.4;
-    border: 1px solid var(--vscode-editorHoverWidget-border);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid #555555;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
     word-wrap: break-word;
     white-space: normal;
     max-width: 300px;
@@ -1012,7 +1012,7 @@ input[type='range'] {
     margin-left: -5px;
     border-width: 5px;
     border-style: solid;
-    border-color: var(--vscode-editorHoverWidget-border) transparent transparent transparent;
+    border-color: #555555 transparent transparent transparent;
 }
 .tooltip:hover .tooltiptext {
     visibility: visible;
@@ -1027,7 +1027,7 @@ input[type='range'] {
 .tooltip.panel-tooltip .tooltiptext::after {
     top: auto;
     bottom: 100%;
-    border-color: transparent transparent var(--vscode-editorHoverWidget-border) transparent;
+    border-color: transparent transparent #555555 transparent;
 }
 
 /* Branch Add button tooltip - render below and to the left */
@@ -1042,7 +1042,7 @@ input[type='range'] {
     bottom: 100%;
     left: 270px;
     margin-left: -5px;
-    border-color: transparent transparent var(--vscode-editorHoverWidget-border) transparent;
+    border-color: transparent transparent #555555 transparent;
 }
 
 /* Bottom panel tooltips - render above to avoid clipping */
@@ -1053,7 +1053,7 @@ input[type='range'] {
 .tooltip.bottom-panel-tooltip .tooltiptext::after {
     top: 100%;
     bottom: auto;
-    border-color: var(--vscode-editorHoverWidget-border) transparent transparent transparent;
+    border-color: #555555 transparent transparent transparent;
 }
 
 /* Left-positioned tooltips to avoid right edge clipping */
@@ -1073,7 +1073,7 @@ input[type='range'] {
     left: auto;
     margin-right: 0;
     margin-top: -5px;
-    border-color: transparent transparent transparent var(--vscode-editorHoverWidget-border);
+    border-color: transparent transparent transparent #555555;
 }
 
 /* Right-positioned tooltips for reorder controls to avoid left edge clipping */
@@ -1090,7 +1090,7 @@ input[type='range'] {
     left: -5px;
     margin-left: 0;
     margin-top: -5px;
-    border-color: transparent var(--vscode-editorHoverWidget-border) transparent transparent;
+    border-color: transparent #555555 transparent transparent;
 }
 
 /* Right-bottom-positioned tooltips to avoid both left and top edge clipping */
@@ -1107,7 +1107,7 @@ input[type='range'] {
     left: -5px;
     margin-left: 0;
     margin-top: 0;
-    border-color: transparent var(--vscode-editorHoverWidget-border) transparent transparent;
+    border-color: transparent #555555 transparent transparent;
 }
 
 /* Help text styles */
@@ -1159,6 +1159,22 @@ input[type='range'] {
 .help-icon:hover .tooltiptext {
     visibility: visible;
     opacity: 1;
+}
+
+/* JavaScript-based tooltip styling (grwc-tooltip) */
+.grwc-tooltip {
+    font-family: var(--vscode-font-family);
+}
+.grwc-tooltip strong {
+    font-weight: 600;
+    color: #ffffff;
+}
+.grwc-tooltip code {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
 }
 
 /* Enhanced keyboard navigation */
