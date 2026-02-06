@@ -683,6 +683,9 @@ window.addEventListener('message', (event) => {
         case 'paletteGenerated':
             handlePaletteGenerated(message.data);
             break;
+        case 'palettePreviews':
+            handlePalettePreviews(message.data);
+            break;
         case 'starredKeysUpdated':
             if (message.data && message.data.starredKeys) {
                 starredKeys = message.data.starredKeys;
@@ -6599,6 +6602,249 @@ function countTotalActiveMappings(profile: AdvancedProfile): number {
 
 let paletteGeneratorInitialized = false;
 
+// Algorithm definitions with metadata
+const PALETTE_ALGORITHMS = [
+    {
+        id: 'balanced',
+        name: 'Balanced Tetradic',
+        description: 'Colors evenly spaced 90° apart on the color wheel. Professional and versatile.',
+    },
+    {
+        id: 'monochromatic',
+        name: 'Monochromatic',
+        description: 'Same hue with varying lightness and saturation. Cohesive and elegant.',
+    },
+    {
+        id: 'bold-contrast',
+        name: 'Bold Contrast',
+        description: 'High saturation with complementary colors. Vibrant and eye-catching.',
+    },
+    {
+        id: 'analogous',
+        name: 'Analogous',
+        description: 'Adjacent hues (±30°). Harmonious and serene with subtle variation.',
+    },
+    {
+        id: 'analogous-minor-plus',
+        name: 'Analogous Minor+',
+        description: 'Small positive hue steps (+10°). Very subtle, gentle color progression.',
+    },
+    {
+        id: 'analogous-minor-minus',
+        name: 'Analogous Minor-',
+        description: 'Small negative hue steps (-10°). Very subtle progression in opposite direction.',
+    },
+    {
+        id: 'split-complementary',
+        name: 'Split-Complementary',
+        description: 'Base color plus two colors adjacent to its complement. Balanced contrast.',
+    },
+    {
+        id: 'triadic',
+        name: 'Triadic',
+        description: 'Three colors 120° apart. Vibrant and balanced with strong visual interest.',
+    },
+    { id: 'square', name: 'Square', description: 'Four colors 90° apart with uniform saturation. Bold and dynamic.' },
+];
+
+/**
+ * Convert hex color to HSL components
+ */
+function hexToHsl(hex: string): [number, number, number] {
+    // Remove # if present
+    hex = hex.replace(/^#/, '');
+
+    // Parse RGB
+    const r = parseInt(hex.substring(0, 2), 16) / 255;
+    const g = parseInt(hex.substring(2, 4), 16) / 255;
+    const b = parseInt(hex.substring(4, 6), 16) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+
+    let h = 0;
+    let s = 0;
+
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+        switch (max) {
+            case r:
+                h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+                break;
+            case g:
+                h = ((b - r) / d + 2) / 6;
+                break;
+            case b:
+                h = ((r - g) / d + 4) / 6;
+                break;
+        }
+    }
+
+    return [h * 360, s * 100, l * 100];
+}
+
+/**
+ * Convert HSL to hex color
+ */
+function hslToHex(h: number, s: number, l: number): string {
+    h = ((h % 360) + 360) % 360; // Normalize hue to 0-360
+    s = Math.max(0, Math.min(100, s)) / 100;
+    l = Math.max(0, Math.min(100, l)) / 100;
+
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+
+    let r = 0,
+        g = 0,
+        b = 0;
+
+    if (h < 60) {
+        r = c;
+        g = x;
+        b = 0;
+    } else if (h < 120) {
+        r = x;
+        g = c;
+        b = 0;
+    } else if (h < 180) {
+        r = 0;
+        g = c;
+        b = x;
+    } else if (h < 240) {
+        r = 0;
+        g = x;
+        b = c;
+    } else if (h < 300) {
+        r = x;
+        g = 0;
+        b = c;
+    } else {
+        r = c;
+        g = 0;
+        b = x;
+    }
+
+    const toHex = (v: number) =>
+        Math.round((v + m) * 255)
+            .toString(16)
+            .padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+/**
+ * Generate preview colors for a palette algorithm (client-side approximation)
+ */
+function generatePreviewColors(primaryHex: string, algorithm: string): string[] {
+    const [h, s, l] = hexToHsl(primaryHex);
+
+    switch (algorithm) {
+        case 'balanced':
+            return [
+                primaryHex,
+                hslToHex(h + 90, s * 0.9, l),
+                hslToHex(h + 180, s * 0.85, l),
+                hslToHex(h + 270, s * 0.95, l),
+            ];
+        case 'monochromatic':
+            return [
+                primaryHex,
+                hslToHex(h, s * 0.8, Math.min(100, l + 8)),
+                hslToHex(h, s * 0.6, Math.min(100, l + 16)),
+                hslToHex(h, s * 0.4, Math.min(100, l + 24)),
+            ];
+        case 'bold-contrast':
+            return [
+                primaryHex,
+                hslToHex(h + 120, Math.min(100, s * 1.3), l),
+                hslToHex(h + 180, Math.min(100, s * 1.3), l),
+                hslToHex(h + 240, Math.min(100, s * 1.3), l),
+            ];
+        case 'analogous':
+            return [
+                primaryHex,
+                hslToHex(h + 30, s * 0.95, l),
+                hslToHex(h + 60, s * 0.9, l),
+                hslToHex(h - 30, s * 0.95, l),
+            ];
+        case 'analogous-minor-plus':
+            return [
+                primaryHex,
+                hslToHex(h + 10, s * 0.95, l),
+                hslToHex(h + 20, s * 0.9, l),
+                hslToHex(h + 30, s * 0.85, l),
+            ];
+        case 'analogous-minor-minus':
+            return [
+                primaryHex,
+                hslToHex(h - 10, s * 0.95, l),
+                hslToHex(h - 20, s * 0.9, l),
+                hslToHex(h - 30, s * 0.85, l),
+            ];
+        case 'split-complementary':
+            return [primaryHex, hslToHex(h + 150, s, l), hslToHex(h + 180, s * 0.9, l), hslToHex(h + 210, s, l)];
+        case 'triadic':
+            return [primaryHex, hslToHex(h + 120, s, l), hslToHex(h + 240, s * 0.95, l), hslToHex(h + 60, s * 0.85, l)];
+        case 'square':
+            return [primaryHex, hslToHex(h + 90, s, l), hslToHex(h + 180, s, l), hslToHex(h + 270, s, l)];
+        default:
+            return [primaryHex, primaryHex, primaryHex, primaryHex];
+    }
+}
+
+/**
+ * Build the algorithm cards in the dropdown
+ */
+function buildPaletteAlgorithmCards(dropdown: HTMLElement, primaryColor: string | undefined) {
+    dropdown.innerHTML = '';
+
+    const defaultColor = '#4a9cd6'; // Fallback blue if no primary set
+    const baseColor = primaryColor || defaultColor;
+
+    PALETTE_ALGORITHMS.forEach((algo) => {
+        const colors = generatePreviewColors(baseColor, algo.id);
+
+        const card = document.createElement('div');
+        card.className = 'palette-algorithm-card';
+        card.setAttribute('data-algorithm', algo.id);
+
+        card.innerHTML = `
+            <div class="card-title">${algo.name}</div>
+            <div class="card-description">${algo.description}</div>
+            <div class="card-swatches">
+                <div class="swatch" style="background-color: ${colors[0]}"></div>
+                <div class="swatch" style="background-color: ${colors[1]}"></div>
+                <div class="swatch" style="background-color: ${colors[2]}"></div>
+                <div class="swatch" style="background-color: ${colors[3]}"></div>
+            </div>
+        `;
+
+        card.addEventListener('click', () => {
+            if (selectedProfileName) {
+                generatePalette(algo.id);
+                hidePaletteGeneratorDropdown();
+            }
+        });
+
+        dropdown.appendChild(card);
+    });
+}
+
+// Store reference to the dropdown element
+let paletteGeneratorDropdown: HTMLElement | null = null;
+
+/**
+ * Hide the palette generator dropdown
+ */
+function hidePaletteGeneratorDropdown() {
+    if (paletteGeneratorDropdown) {
+        paletteGeneratorDropdown.style.display = 'none';
+    }
+}
+
 /**
  * Sets up the palette generator wand button and dropdown menu
  */
@@ -6609,35 +6855,73 @@ function setupPaletteGenerator() {
     }
 
     const generatorBtn = document.getElementById('paletteGeneratorBtn');
-    const dropdown = document.getElementById('paletteGeneratorDropdown');
+    if (!generatorBtn) return;
 
-    if (!generatorBtn || !dropdown) return;
+    // Create dropdown and append to body for proper z-index stacking
+    paletteGeneratorDropdown = document.createElement('div');
+    paletteGeneratorDropdown.className = 'palette-generator-dropdown';
+    paletteGeneratorDropdown.id = 'paletteGeneratorDropdown';
+    document.body.appendChild(paletteGeneratorDropdown);
 
     // Toggle dropdown on button click
     generatorBtn.onclick = (e) => {
         e.stopPropagation();
         hideTooltipImmediate(); // Hide tooltip when dropdown opens
-        const isVisible = dropdown.style.display !== 'none';
-        dropdown.style.display = isVisible ? 'none' : 'block';
+
+        if (!paletteGeneratorDropdown) return;
+
+        const isVisible = paletteGeneratorDropdown.style.display !== 'none';
+
+        if (!isVisible) {
+            // Build/update cards with current primary color before showing
+            let primaryColor: string | undefined;
+            if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
+                primaryColor = currentConfig.advancedProfiles[selectedProfileName].palette.primaryActiveBg?.value;
+            }
+            buildPaletteAlgorithmCards(paletteGeneratorDropdown, primaryColor);
+
+            // Request accurate previews from the extension (will update swatches when received)
+            if (primaryColor) {
+                vscode.postMessage({
+                    command: 'requestPalettePreviews',
+                    data: {
+                        primaryBg: primaryColor,
+                    },
+                });
+            }
+
+            // Position dropdown relative to the button
+            const btnRect = generatorBtn.getBoundingClientRect();
+            const dropdownHeight = 500; // Approximate max height
+            const viewportHeight = window.innerHeight;
+            const spaceBelow = viewportHeight - btnRect.bottom;
+
+            // Position aligned to right edge of button
+            paletteGeneratorDropdown.style.right = window.innerWidth - btnRect.right + 'px';
+            paletteGeneratorDropdown.style.left = 'auto';
+
+            // If not enough space below, flip upward
+            if (spaceBelow < dropdownHeight && btnRect.top > spaceBelow) {
+                paletteGeneratorDropdown.style.bottom = viewportHeight - btnRect.top + 4 + 'px';
+                paletteGeneratorDropdown.style.top = 'auto';
+            } else {
+                paletteGeneratorDropdown.style.top = btnRect.bottom + 4 + 'px';
+                paletteGeneratorDropdown.style.bottom = 'auto';
+            }
+        }
+
+        paletteGeneratorDropdown.style.display = isVisible ? 'none' : 'block';
     };
 
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
-        if (!generatorBtn.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
-            dropdown.style.display = 'none';
+        if (
+            paletteGeneratorDropdown &&
+            !generatorBtn.contains(e.target as Node) &&
+            !paletteGeneratorDropdown.contains(e.target as Node)
+        ) {
+            paletteGeneratorDropdown.style.display = 'none';
         }
-    });
-
-    // Handle algorithm selection
-    const algorithmOptions = dropdown.querySelectorAll('.palette-algorithm-option');
-    algorithmOptions.forEach((option) => {
-        option.addEventListener('click', (e) => {
-            const algorithm = (e.target as HTMLElement).getAttribute('data-algorithm');
-            if (algorithm && selectedProfileName) {
-                generatePalette(algorithm);
-                dropdown.style.display = 'none';
-            }
-        });
     });
 
     paletteGeneratorInitialized = true;
@@ -6694,6 +6978,35 @@ function handlePaletteGenerated(data: { advancedProfiles: any; generatedPalette:
     if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
         renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
     }
+}
+
+/**
+ * Handles palette previews from the extension - updates dropdown swatches with accurate colors
+ */
+function handlePalettePreviews(data: {
+    previews: Array<{ algorithm: string; colors: [string, string, string, string] }>;
+}) {
+    if (!paletteGeneratorDropdown || paletteGeneratorDropdown.style.display === 'none') {
+        return; // Don't update if dropdown is hidden
+    }
+
+    const previews = data.previews;
+    if (!previews || !Array.isArray(previews)) {
+        return;
+    }
+
+    // Update each card's swatches with the accurate server-generated colors
+    previews.forEach((preview) => {
+        const card = paletteGeneratorDropdown?.querySelector(`[data-algorithm="${preview.algorithm}"]`);
+        if (card) {
+            const swatches = card.querySelectorAll('.swatch');
+            swatches.forEach((swatch, index) => {
+                if (preview.colors[index]) {
+                    (swatch as HTMLElement).style.backgroundColor = preview.colors[index];
+                }
+            });
+        }
+    });
 }
 
 /**

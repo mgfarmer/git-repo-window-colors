@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AdvancedProfile } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
-import { generatePalette, PaletteAlgorithm } from '../paletteGenerator';
+import { generatePalette, generateAllPalettePreviews, PaletteAlgorithm } from '../paletteGenerator';
 import {
     getRepoRuleErrors,
     getBranchRuleErrors,
@@ -247,6 +247,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'generatePalette':
                 await this._handlePaletteGeneration(message.data.paletteData!);
+                break;
+            case 'requestPalettePreviews':
+                await this._handlePalettePreviewsRequest(message.data.primaryBg!);
                 break;
             case 'toggleStarredKey':
                 await this._handleToggleStarredKey(message.data.mappingKey!);
@@ -1036,6 +1039,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private async _handlePalettePreviewsRequest(primaryBg: string): Promise<void> {
+        if (!this._panel) {
+            return;
+        }
+
+        try {
+            // Generate previews for all algorithms using the same code as actual generation
+            const previews = generateAllPalettePreviews(primaryBg);
+
+            // Send previews back to the webview
+            this._panel.webview.postMessage({
+                command: 'palettePreviews',
+                data: {
+                    previews: previews,
+                },
+            });
+        } catch (error) {
+            console.error('Failed to generate palette previews:', error);
+        }
+    }
+
     private _openColorPicker(colorPickerData: any): void {
         // Skip VS Code color picker if using native HTML color picker
         if (USE_NATIVE_COLOR_PICKER) {
@@ -1307,15 +1331,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                             <span class="codicon codicon-wand"></span>
                                             <span class="codicon codicon-chevron-down"></span>
                                         </button>
-                                        <div class="palette-generator-dropdown" id="paletteGeneratorDropdown" style="display: none;">
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="balanced" data-tooltip="Colors evenly spaced 90° apart on the color wheel. Professional and versatile." data-tooltip-position="left">Balanced Tetradic</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="monochromatic" data-tooltip="Same hue with varying lightness and saturation. Cohesive and elegant." data-tooltip-position="left">Monochromatic</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="bold-contrast" data-tooltip="High saturation with complementary colors. Vibrant and eye-catching." data-tooltip-position="left">Bold Contrast</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="analogous" data-tooltip="Adjacent hues (±30°). Harmonious and serene with subtle variation." data-tooltip-position="left">Analogous</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="split-complementary" data-tooltip="Base color plus two colors adjacent to its complement. Balanced contrast without tension." data-tooltip-position="left">Split-Complementary</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="triadic" data-tooltip="Three colors 120° apart. Vibrant and balanced with strong visual interest." data-tooltip-position="left">Triadic</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="square" data-tooltip="Four colors 90° apart with uniform saturation. Bold and dynamic." data-tooltip-position="left">Square</button>
-                                        </div>
+                                        <!-- Dropdown is created dynamically and appended to body -->
                                     </div>
                                 </div>
                                 <div id="paletteEditor" class="palette-grid">

@@ -54,6 +54,7 @@ export interface WebviewMessage {
         | 'clearPreview'
         | 'clearBranchPreview'
         | 'generatePalette'
+        | 'requestPalettePreviews'
         | 'toggleStarredKey'
         | 'createBranchTable'
         | 'deleteBranchTable'
@@ -89,6 +90,8 @@ export interface WebviewMessage {
             primaryBg: string;
             algorithm: string;
         };
+        // Palette preview request
+        primaryBg?: string;
         mappingKey?: string;
         // Branch table management data
         tableName?: string;

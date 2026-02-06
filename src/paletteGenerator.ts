@@ -6,9 +6,28 @@ export type PaletteAlgorithm =
     | 'monochromatic'
     | 'bold-contrast'
     | 'analogous'
+    | 'analogous-minor-plus'
+    | 'analogous-minor-minus'
     | 'split-complementary'
     | 'triadic'
     | 'square';
+
+export const PALETTE_ALGORITHMS: PaletteAlgorithm[] = [
+    'balanced',
+    'monochromatic',
+    'bold-contrast',
+    'analogous',
+    'analogous-minor-plus',
+    'analogous-minor-minus',
+    'split-complementary',
+    'triadic',
+    'square',
+];
+
+export interface PalettePreview {
+    algorithm: PaletteAlgorithm;
+    colors: [string, string, string, string]; // primary, secondary, tertiary, quaternary background colors
+}
 
 export interface GeneratedPalette {
     primaryActiveBg: string;
@@ -105,6 +124,16 @@ export function generatePalette(primaryBg: string, algorithm: PaletteAlgorithm =
             backgrounds = generateAnalogousPalette(base, isDark);
             break;
 
+        case 'analogous-minor-plus':
+            // Small positive hue steps (+10°) for subtle variation
+            backgrounds = generateAnalogousMinorPlusPalette(base, isDark);
+            break;
+
+        case 'analogous-minor-minus':
+            // Small negative hue steps (-10°) for subtle variation
+            backgrounds = generateAnalogousMinorMinusPalette(base, isDark);
+            break;
+
         case 'split-complementary':
             // Base + two colors adjacent to complement for balanced contrast
             backgrounds = generateSplitComplementaryPalette(base, isDark);
@@ -150,6 +179,64 @@ export function generatePalette(primaryBg: string, algorithm: PaletteAlgorithm =
         quaternaryInactiveBg: inactiveBackgrounds[3],
         quaternaryInactiveFg: foregrounds[3], // Same as active for readability
     };
+}
+
+/**
+ * Generates preview colors for all palette algorithms
+ * Returns the 4 active background colors for each algorithm
+ *
+ * @param primaryBg - The primary background color to base previews on
+ * @returns Array of preview objects with algorithm name and 4 background colors
+ */
+export function generateAllPalettePreviews(primaryBg: string): PalettePreview[] {
+    const isDark = isThemeDark();
+    const base = chroma(primaryBg);
+
+    return PALETTE_ALGORITHMS.map((algorithm) => {
+        let backgrounds: chroma.Color[];
+
+        switch (algorithm) {
+            case 'balanced':
+                backgrounds = generateBalancedPalette(base, isDark);
+                break;
+            case 'monochromatic':
+                backgrounds = generateMonochromaticPalette(base, isDark);
+                break;
+            case 'bold-contrast':
+                backgrounds = generateBoldContrastPalette(base, isDark);
+                break;
+            case 'analogous':
+                backgrounds = generateAnalogousPalette(base, isDark);
+                break;
+            case 'analogous-minor-plus':
+                backgrounds = generateAnalogousMinorPlusPalette(base, isDark);
+                break;
+            case 'analogous-minor-minus':
+                backgrounds = generateAnalogousMinorMinusPalette(base, isDark);
+                break;
+            case 'split-complementary':
+                backgrounds = generateSplitComplementaryPalette(base, isDark);
+                break;
+            case 'triadic':
+                backgrounds = generateTriadicPalette(base, isDark);
+                break;
+            case 'square':
+                backgrounds = generateSquarePalette(base, isDark);
+                break;
+            default:
+                backgrounds = generateBalancedPalette(base, isDark);
+        }
+
+        return {
+            algorithm,
+            colors: [backgrounds[0].hex(), backgrounds[1].hex(), backgrounds[2].hex(), backgrounds[3].hex()] as [
+                string,
+                string,
+                string,
+                string,
+            ],
+        };
+    });
 }
 
 /**
@@ -223,6 +310,42 @@ function generateAnalogousPalette(base: any, isDark: boolean): any[] {
         chroma.lch(targetLightness, targetChroma * 0.95, (h + 30) % 360), // +30°
         chroma.lch(targetLightness, targetChroma * 0.9, (h + 60) % 360), // +60°
         chroma.lch(targetLightness, targetChroma * 0.95, (h - 30 + 360) % 360), // -30°
+    ];
+}
+
+/**
+ * Analogous Minor+ - Small positive hue steps (+10°) for very subtle variation
+ * Creates a gentle progression through the color wheel
+ */
+function generateAnalogousMinorPlusPalette(base: any, isDark: boolean): any[] {
+    const [l, c, h] = base.lch();
+
+    const targetLightness = isDark ? Math.max(l, 55) : Math.min(l, 55);
+    const targetChroma = Math.min(c, 60);
+
+    return [
+        base, // Primary (unchanged)
+        chroma.lch(targetLightness, targetChroma * 0.95, (h + 10) % 360), // +10°
+        chroma.lch(targetLightness, targetChroma * 0.9, (h + 20) % 360), // +20°
+        chroma.lch(targetLightness, targetChroma * 0.85, (h + 30) % 360), // +30°
+    ];
+}
+
+/**
+ * Analogous Minor- - Small negative hue steps (-10°) for very subtle variation
+ * Creates a gentle progression through the color wheel in the opposite direction
+ */
+function generateAnalogousMinorMinusPalette(base: any, isDark: boolean): any[] {
+    const [l, c, h] = base.lch();
+
+    const targetLightness = isDark ? Math.max(l, 55) : Math.min(l, 55);
+    const targetChroma = Math.min(c, 60);
+
+    return [
+        base, // Primary (unchanged)
+        chroma.lch(targetLightness, targetChroma * 0.95, (h - 10 + 360) % 360), // -10°
+        chroma.lch(targetLightness, targetChroma * 0.9, (h - 20 + 360) % 360), // -20°
+        chroma.lch(targetLightness, targetChroma * 0.85, (h - 30 + 360) % 360), // -30°
     ];
 }
 

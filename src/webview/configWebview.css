@@ -1767,16 +1767,69 @@ button:focus {
 }
 
 .palette-generator-dropdown {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    margin-top: 4px;
+    position: fixed;
     background: var(--vscode-dropdown-background);
     border: 1px solid var(--vscode-dropdown-border);
     border-radius: 3px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-    min-width: 180px;
+    z-index: 10000;
+    min-width: 260px;
+    padding: 4px;
+    display: none;
+}
+
+.palette-algorithm-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    transition:
+        border-color 0.15s,
+        background-color 0.15s;
+}
+
+.palette-algorithm-card:last-child {
+    margin-bottom: 0;
+}
+
+.palette-algorithm-card:hover {
+    border-color: var(--vscode-focusBorder);
+    background: var(--vscode-list-hoverBackground);
+}
+
+.palette-algorithm-card:active {
+    background: var(--vscode-list-activeSelectionBackground);
+}
+
+.palette-algorithm-card .card-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--vscode-foreground);
+    margin-bottom: 2px;
+}
+
+.palette-algorithm-card .card-description {
+    font-style: italic;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 6px;
+    line-height: 1.3;
+}
+
+.palette-algorithm-card .card-swatches {
+    display: flex;
+    gap: 3px;
+}
+
+.palette-algorithm-card .swatch {
+    flex: 1;
+    height: 16px;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .palette-algorithm-option {
