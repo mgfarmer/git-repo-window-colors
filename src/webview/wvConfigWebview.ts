@@ -6597,10 +6597,17 @@ function countTotalActiveMappings(profile: AdvancedProfile): number {
     return total;
 }
 
+let paletteGeneratorInitialized = false;
+
 /**
  * Sets up the palette generator wand button and dropdown menu
  */
 function setupPaletteGenerator() {
+    // Only initialize once to prevent duplicate event listeners
+    if (paletteGeneratorInitialized) {
+        return;
+    }
+
     const generatorBtn = document.getElementById('paletteGeneratorBtn');
     const dropdown = document.getElementById('paletteGeneratorDropdown');
 
@@ -6632,6 +6639,8 @@ function setupPaletteGenerator() {
             }
         });
     });
+
+    paletteGeneratorInitialized = true;
 }
 
 // Store previous palette for undo functionality
@@ -6653,8 +6662,10 @@ function generatePalette(algorithm: string) {
         return;
     }
 
-    // Store current palette for undo
-    previousPalette = JSON.parse(JSON.stringify(profile.palette));
+    // Store current palette for undo (only if not already stored - preserves original state)
+    if (!previousPalette) {
+        previousPalette = JSON.parse(JSON.stringify(profile.palette));
+    }
 
     // Send message to extension to generate palette
     vscode.postMessage({
@@ -6725,21 +6736,19 @@ function hidePaletteToast() {
 // Store references to event handlers so they can be removed
 let paletteAcceptHandler: ((e: Event) => void) | null = null;
 let paletteUndoHandler: ((e: Event) => void) | null = null;
+let paletteToastInitialized = false;
 
 /**
- * Sets up the palette toast event handlers
+ * Sets up the palette toast event handlers (called only once)
  */
 function setupPaletteToast() {
+    // Only initialize once
+    if (paletteToastInitialized) {
+        return;
+    }
+
     const acceptBtn = document.getElementById('paletteToastAccept');
     const undoBtn = document.getElementById('paletteToastUndo');
-
-    // Remove old event listeners if they exist
-    if (acceptBtn && paletteAcceptHandler) {
-        acceptBtn.removeEventListener('click', paletteAcceptHandler);
-    }
-    if (undoBtn && paletteUndoHandler) {
-        undoBtn.removeEventListener('click', paletteUndoHandler);
-    }
 
     // Create new handlers
     paletteAcceptHandler = () => {
@@ -6767,6 +6776,8 @@ function setupPaletteToast() {
     if (undoBtn) {
         undoBtn.addEventListener('click', paletteUndoHandler);
     }
+
+    paletteToastInitialized = true;
 }
 
 function renderProfileEditor(name: string, profile: AdvancedProfile) {

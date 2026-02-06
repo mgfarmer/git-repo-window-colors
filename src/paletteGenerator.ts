@@ -1,7 +1,14 @@
 import chroma from 'chroma-js';
 import { window } from 'vscode';
 
-export type PaletteAlgorithm = 'balanced' | 'monochromatic' | 'bold-contrast';
+export type PaletteAlgorithm =
+    | 'balanced'
+    | 'monochromatic'
+    | 'bold-contrast'
+    | 'analogous'
+    | 'split-complementary'
+    | 'triadic'
+    | 'square';
 
 export interface GeneratedPalette {
     primaryActiveBg: string;
@@ -93,6 +100,26 @@ export function generatePalette(primaryBg: string, algorithm: PaletteAlgorithm =
             backgrounds = generateBoldContrastPalette(base, isDark);
             break;
 
+        case 'analogous':
+            // Adjacent hues (±30°) for a harmonious, serene palette
+            backgrounds = generateAnalogousPalette(base, isDark);
+            break;
+
+        case 'split-complementary':
+            // Base + two colors adjacent to complement for balanced contrast
+            backgrounds = generateSplitComplementaryPalette(base, isDark);
+            break;
+
+        case 'triadic':
+            // Three colors 120° apart for vibrant but balanced results
+            backgrounds = generateTriadicPalette(base, isDark);
+            break;
+
+        case 'square':
+            // Four colors 90° apart with consistent saturation
+            backgrounds = generateSquarePalette(base, isDark);
+            break;
+
         default:
             backgrounds = generateBalancedPalette(base, isDark);
     }
@@ -179,5 +206,75 @@ function generateBoldContrastPalette(base: any, isDark: boolean): any[] {
         chroma.lch(targetLightness, boldChroma, (h + 120) % 360), // Triadic 1
         chroma.lch(targetLightness, boldChroma, (h + 180) % 360), // Complementary
         chroma.lch(targetLightness, boldChroma, (h + 240) % 360), // Triadic 2
+    ];
+}
+
+/**
+ * Analogous - Adjacent hues (±30°) for harmonious, serene palettes
+ */
+function generateAnalogousPalette(base: any, isDark: boolean): any[] {
+    const [l, c, h] = base.lch();
+
+    const targetLightness = isDark ? Math.max(l, 55) : Math.min(l, 55);
+    const targetChroma = Math.min(c, 60);
+
+    return [
+        base, // Primary (unchanged)
+        chroma.lch(targetLightness, targetChroma * 0.95, (h + 30) % 360), // +30°
+        chroma.lch(targetLightness, targetChroma * 0.9, (h + 60) % 360), // +60°
+        chroma.lch(targetLightness, targetChroma * 0.95, (h - 30 + 360) % 360), // -30°
+    ];
+}
+
+/**
+ * Split-Complementary - Base + two colors adjacent to the complement
+ * Provides contrast without the tension of direct complementary colors
+ */
+function generateSplitComplementaryPalette(base: any, isDark: boolean): any[] {
+    const [l, c, h] = base.lch();
+
+    const targetLightness = isDark ? Math.max(l, 55) : Math.min(l, 55);
+    const targetChroma = Math.min(c, 55);
+
+    return [
+        base, // Primary (unchanged)
+        chroma.lch(targetLightness, targetChroma, (h + 150) % 360), // Complement -30°
+        chroma.lch(targetLightness, targetChroma * 0.9, (h + 180) % 360), // Direct complement (subtle)
+        chroma.lch(targetLightness, targetChroma, (h + 210) % 360), // Complement +30°
+    ];
+}
+
+/**
+ * Triadic - Three colors 120° apart for vibrant but balanced palettes
+ */
+function generateTriadicPalette(base: any, isDark: boolean): any[] {
+    const [l, c, h] = base.lch();
+
+    const targetLightness = isDark ? Math.max(l, 55) : Math.min(l, 55);
+    const targetChroma = Math.min(c, 60);
+
+    return [
+        base, // Primary (unchanged)
+        chroma.lch(targetLightness, targetChroma, (h + 120) % 360), // +120°
+        chroma.lch(targetLightness, targetChroma * 0.95, (h + 240) % 360), // +240°
+        chroma.lch(targetLightness, targetChroma * 0.85, (h + 60) % 360), // +60° (mid-point accent)
+    ];
+}
+
+/**
+ * Square - Four colors 90° apart with uniform saturation
+ * Similar to balanced but maintains consistent chroma for bolder effect
+ */
+function generateSquarePalette(base: any, isDark: boolean): any[] {
+    const [l, c, h] = base.lch();
+
+    const targetLightness = isDark ? Math.max(l, 55) : Math.min(l, 55);
+    const targetChroma = Math.min(c, 65); // Slightly higher chroma for bold look
+
+    return [
+        base, // Primary (unchanged)
+        chroma.lch(targetLightness, targetChroma, (h + 90) % 360), // +90°
+        chroma.lch(targetLightness, targetChroma, (h + 180) % 360), // +180°
+        chroma.lch(targetLightness, targetChroma, (h + 270) % 360), // +270°
     ];
 }

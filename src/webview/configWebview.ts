@@ -1308,9 +1308,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                             <span class="codicon codicon-chevron-down"></span>
                                         </button>
                                         <div class="palette-generator-dropdown" id="paletteGeneratorDropdown" style="display: none;">
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="balanced">Balanced Tetradic</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="monochromatic">Monochromatic</button>
-                                            <button type="button" class="palette-algorithm-option" data-algorithm="bold-contrast">Bold Contrast</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="balanced" data-tooltip="Colors evenly spaced 90° apart on the color wheel. Professional and versatile." data-tooltip-position="left">Balanced Tetradic</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="monochromatic" data-tooltip="Same hue with varying lightness and saturation. Cohesive and elegant." data-tooltip-position="left">Monochromatic</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="bold-contrast" data-tooltip="High saturation with complementary colors. Vibrant and eye-catching." data-tooltip-position="left">Bold Contrast</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="analogous" data-tooltip="Adjacent hues (±30°). Harmonious and serene with subtle variation." data-tooltip-position="left">Analogous</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="split-complementary" data-tooltip="Base color plus two colors adjacent to its complement. Balanced contrast without tension." data-tooltip-position="left">Split-Complementary</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="triadic" data-tooltip="Three colors 120° apart. Vibrant and balanced with strong visual interest." data-tooltip-position="left">Triadic</button>
+                                            <button type="button" class="palette-algorithm-option" data-algorithm="square" data-tooltip="Four colors 90° apart with uniform saturation. Bold and dynamic." data-tooltip-position="left">Square</button>
                                         </div>
                                     </div>
                                 </div>
