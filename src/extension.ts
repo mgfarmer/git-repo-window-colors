@@ -1062,6 +1062,53 @@ export async function activate(context: ExtensionContext) {
     // Create status bar item
     createStatusBarItem(context);
 
+    // Register the configuration webview provider early so it's available regardless of workspace state
+    configProvider = new ConfigWebviewProvider(context.extensionUri, context);
+    context.subscriptions.push(configProvider);
+
+    // Register openConfig command early so it works even without a workspace
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.openConfig', () => {
+            configProvider.show(context.extensionUri);
+        }),
+    );
+
+    // Register export/import commands early (they work without workspace)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.exportConfig', async () => {
+            await exportConfiguration();
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.importConfig', async () => {
+            await importConfiguration();
+        }),
+    );
+
+    // Register internal command for webview to trigger color updates
+    // Silently ignore if no workspace - the webview shows its own toast
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            '_grwc.internal.applyColors',
+            (reason: string, usePreviewMode: boolean = false) => {
+                if (!workspace.workspaceFolders) {
+                    return;
+                }
+                doit(reason || 'internal command', usePreviewMode);
+            },
+        ),
+    );
+
+    // Register internal command to clear preview colors
+    context.subscriptions.push(
+        vscode.commands.registerCommand('_grwc.internal.clearPreviewColors', () => {
+            if (workspace.workspaceFolders) {
+                undoColors();
+            }
+        }),
+    );
+
     if (!isGitModelAvailable()) {
         outputChannel.appendLine('Git extension not available.');
         outputChannel.appendLine('Do you have git installed?');
@@ -1153,35 +1200,11 @@ export async function activate(context: ExtensionContext) {
         }),
     );
 
-    // Register the configuration webview command
-    configProvider = new ConfigWebviewProvider(context.extensionUri, context);
-    context.subscriptions.push(configProvider);
-
-    context.subscriptions.push(
-        vscode.commands.registerCommand('windowColors.openConfig', () => {
-            configProvider.show(context.extensionUri);
-        }),
-    );
-
     // Register debug command to clear first-time flag
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.clearFirstTimeFlag', async () => {
             await context.globalState.update('grwc.hasShownGettingStarted', undefined);
             vscode.window.showInformationMessage('First-time flag cleared. Close and reopen the config panel to test.');
-        }),
-    );
-
-    // Register export configuration command
-    context.subscriptions.push(
-        vscode.commands.registerCommand('windowColors.exportConfig', async () => {
-            await exportConfiguration();
-        }),
-    );
-
-    // Register import configuration command
-    context.subscriptions.push(
-        vscode.commands.registerCommand('windowColors.importConfig', async () => {
-            await importConfiguration();
         }),
     );
 
@@ -1196,16 +1219,6 @@ export async function activate(context: ExtensionContext) {
             // Open the configuration editor (preview mode will show if no rule matches)
             configProvider.show(context.extensionUri);
         }),
-    );
-
-    // Register internal command for webview to trigger color updates
-    context.subscriptions.push(
-        vscode.commands.registerCommand(
-            '_grwc.internal.applyColors',
-            (reason: string, usePreviewMode: boolean = false) => {
-                doit(reason || 'internal command', usePreviewMode);
-            },
-        ),
     );
 
     // Register internal commands for branch table management
@@ -1230,13 +1243,6 @@ export async function activate(context: ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('_grwc.internal.getBranchTableUsageCount', (tableName: string) => {
             return getBranchTableUsageCount(tableName);
-        }),
-    );
-
-    // Register internal command to clear preview colors (used when closing config panel)
-    context.subscriptions.push(
-        vscode.commands.registerCommand('_grwc.internal.clearPreviewColors', () => {
-            undoColors();
         }),
     );
 

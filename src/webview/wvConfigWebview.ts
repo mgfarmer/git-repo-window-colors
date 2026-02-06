@@ -1042,10 +1042,11 @@ function renderConfiguration(config: any) {
     renderColorReport(config);
 
     // Show/hide preview toast based on preview mode and whether we're previewing a different rule
-    // Show toast only if the selected rule is different from the matching rule
+    // Also show "no workspace" toast if preview mode is on but there's no workspace open
+    const hasWorkspace = config.workspaceInfo?.hasWorkspace ?? true;
     const matchingRuleIndex = config.matchingIndexes?.repoRule ?? -1;
     const isPreviewingDifferentRule = selectedRepoRuleIndex !== matchingRuleIndex;
-    if (previewMode && isPreviewingDifferentRule) {
+    if (previewMode && (!hasWorkspace || isPreviewingDifferentRule)) {
         showPreviewToast();
     } else {
         hidePreviewToast();
@@ -4970,6 +4971,21 @@ function showPreviewToast() {
     const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
     if (!toast) return;
 
+    // Check if there's no open workspace
+    const hasWorkspace = currentConfig?.workspaceInfo?.hasWorkspace ?? true;
+    if (!hasWorkspace) {
+        // Show special message for no workspace
+        if (toastText) {
+            toastText.textContent = 'Previews require an open workspace folder';
+        }
+        if (resetBtn) {
+            resetBtn.style.display = 'none';
+        }
+        toast.title = 'Color preview requires an open workspace. Open a folder or workspace to preview colors.';
+        toast.classList.add('visible');
+        return;
+    }
+
     // Only show if actually previewing (selected indexes don't match the matching indexes)
     const isActuallyPreviewing =
         selectedRepoRuleIndex !== currentConfig?.matchingIndexes?.repoRule ||
@@ -4978,6 +4994,11 @@ function showPreviewToast() {
     if (!isActuallyPreviewing) {
         hidePreviewToast();
         return;
+    }
+
+    // Reset toast text to PREVIEW MODE (in case it was changed to NO WORKSPACE)
+    if (toastText) {
+        toastText.textContent = 'PREVIEW MODE';
     }
 
     // Check if we're in "no matching rule" scenario

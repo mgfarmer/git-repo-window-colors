@@ -630,8 +630,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string } {
-        return this._workspaceInfo;
+    private _getWorkspaceInfo(): { repositoryUrl: string; currentBranch: string; hasWorkspace: boolean } {
+        return {
+            ...this._workspaceInfo,
+            hasWorkspace:
+                vscode.workspace.workspaceFolders !== undefined && vscode.workspace.workspaceFolders.length > 0,
+        };
     }
 
     private _getMatchingRepoRuleIndex(repoRules: RepoRule[], repositoryUrl: string): number {
