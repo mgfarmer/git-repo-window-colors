@@ -1,9 +1,9 @@
 {
     "name": "git-repo-window-colors",
     "displayName": "Git Repo Window Colors",
-    "description": "Customize the color of each window's activityBar, titleBar, tabs, and status bar based on the git repository name and branch.",
+    "description": "Visually distinguish VS Code windows with configurable and automatic coloring based on repository, branch, or local folder. Supports customizable rules, reusable color profiles, and it works with your preferred theme, because you are in control.",
     "icon": "img/grwc-icon.png",
-    "version": "1.5.20",
+    "version": "1.5.21",
     "preview": true,
     "publisher": "KevinMills",
     "author": {

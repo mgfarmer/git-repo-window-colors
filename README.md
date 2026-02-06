@@ -5,7 +5,7 @@
 > **If you are considering switching to a prerelease version of this extension, please be aware of this:**
 >
 > **Prerelease versions of this extension may be unstable and buggy and may iterate rapidly.**
-> 
+>
 > **It is recommended that you do NOT use the prerelease version unless you are actively engaged with the extension developer for testing purposes.**  
 >
 > **Configuration settings may NOT be preserved when switching to or between prerelease versions.  We will make our best effort to preserve configurations when upgrading to new released versions.**
@@ -41,7 +41,31 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 ## ⚡ Configuration Editor
 
-![alt](https://github.com/mgfarmer/git-repo-window-colors/blob/master/img/config-editor.png?raw=true)
+The configuration editor has multiple tabs.
+
+### The Rules Tab
+
+Define repository-specific color rules and assign branch tables. Rules are matched in priority order against your repository URL or local folder path.
+
+![alt](https://github.com/mgfarmer/git-repo-window-colors/blob/master/img/rules_tab.png?raw=true)
+
+### The Branch Tables Tab
+
+Manage reusable sets of branch rules that can be shared across multiple repositories. Perfect for consistent branch coloring across related groups of repositories.
+
+![alt](https://github.com/mgfarmer/git-repo-window-colors/blob/master/img/branch_tab.png?raw=true)
+
+### The Profiles Tab
+
+Build advanced color profiles with fine-grained control over individual VS Code UI elements. Profiles can be referenced by name in any rule.
+
+![alt](https://github.com/mgfarmer/git-repo-window-colors/blob/master/img/profile_tab.png?raw=true)
+
+### The Color Report Tab
+
+View a comprehensive report of all active color customizations in your current workspace, useful for debugging and understanding which rules are being applied.
+
+![alt](https://github.com/mgfarmer/git-repo-window-colors/blob/master/img/color_tab.png?raw=true)
 
 ## ⚡ Why You Need This
 
