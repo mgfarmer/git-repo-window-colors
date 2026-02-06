@@ -1,20 +1,10 @@
 # Git Repo Window Colors
 
-> **⚠️ PRERELEASE WARNING**  
->
-> **If you are considering switching to a prerelease version of this extension, please be aware of this:**
->
-> **Prerelease versions of this extension may be unstable and buggy and may iterate rapidly.**
->
-> **It is recommended that you do NOT use the prerelease version unless you are actively engaged with the extension developer for testing purposes.**  
->
-> **Configuration settings may NOT be preserved when switching to or between prerelease versions.  We will make our best effort to preserve configurations when upgrading to new released versions.**
->
-> **Please export your current configuration prior to switching.**
-
 **Never lose track of which repository you're working in again.**
 
-Transform your VS Code experience by automatically applying distinctive colors to your workspace based on the Git repository you have open. Perfect for developers juggling multiple projects, this extension provides instant visual identification across all your VS Code windows.
+Transform your VS Code experience by applying distinctive colors to your workspace based on the Git repository you have open. Perfect for developers juggling multiple projects, this extension provides instant visual identification across all your VS Code windows.
+
+> ⚠️ **[PRERELEASE WARNING](#️-prerelease-warning)** - Please read if considering installing a prerelease version
 
 ---
 
@@ -24,6 +14,7 @@ Transform your VS Code experience by automatically applying distinctive colors t
 
 - Brand new visual configuration interface
 - **Advanced Color Profiles** for complete UI customization (optional)
+- Support for non-repository folders
 - Drag & drop rule reordering for priority-based matching
 - Built-in color picker with support for hex, RGB, HSL, and named colors (with autocomplete)
 - Real-time validation and error handling
@@ -34,14 +25,12 @@ Transform your VS Code experience by automatically applying distinctive colors t
 - Optional status bar icon (palette symbol)
 - Configurable visibility: show always or only when no rules match
 - One-click access to configuration editor
-- Intelligent hiding for non-Git workspaces
-- Seamless integration with existing VS Code UI patterns
 
 ---
 
-## ⚡ Configuration Editor
+## ⚡ Configuration Editor UI
 
-The configuration editor has multiple tabs.
+The configuration editor has multiple tabs.  Each tab has dedicate context sensitive help documentation available from the help icon at the top right.
 
 ### The Rules Tab
 
@@ -76,7 +65,7 @@ View a comprehensive report of all active color customizations in your current w
 ✅ **Instant Recognition** - Spot the right window immediately  
 ✅ **Highly Customizable** - Fine-tune colors for your workflow  
 ✅ **Branch-Aware** - Different colors for feature branches, hotfixes, etc.  
-✅ **Taskbar Integration** - Colored thumbnails in Windows/Mac/Linux dock previews  
+✅ **Taskbar** - Colored thumbnails in Windows/Mac/Linux dock previews  
 
 ---
 
@@ -127,7 +116,7 @@ Create patterns that work across ALL repositories:
 **Examples:**
 
 - `feature/.*:purple` → All feature branches, regardless of repository, are purple
-- `hotfix.*:red` → All hotfix branches, regardless of repository, are red  
+- `hotfix.*:red` → All hotfix branches, regardless of repository, are red
 - `JIRA-123.*:orange` → Specific ticket work, regardless of repository, is orange
 
 Just like Repo Rules, you can tune the color to your preferences.
@@ -137,19 +126,18 @@ able to match any complex branch naming strategy.
 
 ---
 
-## 🎨 Color Profiles (Advanced)
+## 🎨 Color Profiles
 
-**Note:** Profiles are an **optional advanced feature** for users who want complete control over their workspace appearance. The existing simple color-based system continues to work exactly as before - no changes required to your current configuration!
+**Note:** Profiles are an **optional advanced feature** for users who want more control over their workspace appearance. The existing simple color-based system continues to work exactly as before - no changes required to your current configuration!
 
 ### What Are Profiles?
 
-Color Profiles provide a comprehensive way to define complete color schemes for your VS Code workspace. Instead of applying a single color and letting the extension automatically derive colors for various UI elements, profiles give you **precise control** over every colorable element.
+Color Profiles provide a comprehensive way to define more complex color schemes for your VS Code workspace. Instead of applying a single color and letting the extension automatically derive colors for a small set of UI elements, profiles give you **precise control** over many more UI elements.
 
 **When to Use Profiles:**
 
-- ✅ You want consistent, branded color schemes across multiple repositories
-- ✅ You need specific colors for different UI elements (title bar, activity bar, tabs, etc.)
-- ✅ You're creating a shared team color standard
+- ✅ You want consistent color schemes across multiple repositories
+- ✅ You want specific colors for different UI elements (title bar, activity bar, tabs, etc.)
 - ✅ You want to reuse color schemes across different branches or repositories
 
 **When to Use Simple Colors:**
@@ -160,7 +148,7 @@ Color Profiles provide a comprehensive way to define complete color schemes for 
 
 ### How Profiles Work
 
-1. **Create a Profile** - Define a palette of colors and map them to VS Code UI elements
+1. **Create a Profile** - Define a palette of colors and map them to 60+ VS Code UI elements
 2. **Reference the Profile** - Use the profile name in repository or branch rules instead of a color
 3. **Automatic Application** - The profile applies whenever that rule matches
 
@@ -168,9 +156,9 @@ Color Profiles provide a comprehensive way to define complete color schemes for 
 
 ```
 Repository Rules:
-- company-frontend:Blue Corporate
-- company-backend:Blue Corporate
-- company-mobile:Blue Corporate
+- company-org/frontend:Blue Corporate
+- company-org/backend:Blue Corporate
+- company-org/mobile:Blue Corporate
 ```
 
 ### Profile Components
@@ -183,8 +171,8 @@ Each profile consists of two parts:
 - Primary Inactive Background & Foreground  
 - Secondary Active Background & Foreground
 - Secondary Inactive Background & Foreground
-- Tertiary Background & Foreground
-- Quartenary Background & Foreground
+- Tertiary Background & Foreground (for accent colors)
+- Quartenary Background & Foreground (for accent colors)
 
 **2. Mappings** (which palette colors go where)
 
@@ -207,6 +195,7 @@ Each profile consists of two parts:
 - Use the color picker or enter color values directly
 - Set opacity on individual UI elements for subtle effects
 - Leave mappings set to "none" to use VS Code's default colors
+- Use the palette generator to create full palettes from a singe primary background color
 
 ### Using Profiles in Rules
 
@@ -244,30 +233,30 @@ You can mix and match simple colors with profiles:
 
 ### Example Use Cases
 
-**Case 1: Consistent Team Branding**
+#### Case 1: Consistent Team Branding**
 
-```
+``` text
 Create "Company Blue" profile → Reference in all company repos
 ```
 
-**Case 2: Feature Branch Highlighting**
+#### Case 2: Feature Branch Highlighting**
 
-```
+``` text
 Repo uses simple blue → Feature branches use "Feature Work" profile
 Result: Most of the time simple blue, but feature branches get special highlighting
 ```
 
-**Case 3: Project-Specific Schemes**
+#### Case 3: Project-Specific Schemes**
 
-```
+``` text
 Frontend repos: "Light Theme" profile
 Backend repos: "Dark Theme" profile  
 DevOps repos: "Terminal Focus" profile
 ```
 
-**Case 4: Branch Type Indication**
+#### Case 4: Branch Type Indication**
 
-```
+``` text
 Base Repo: "Standard" profile
 Hotfix branches: "Alert Red" profile (overrides critical elements)
 Release branches: "Calm Green" profile (overrides with soothing colors)
@@ -287,6 +276,7 @@ Release branches: "Calm Green" profile (overrides with soothing colors)
 
 - **Visual Rule Builder** - No JSON editing
 - **Drag & Drop Reordering** - Priority-based rule matching
+- **Drag & Drop Color Assigments** - easily assign palette colors to UI elements
 - **Built-in Color Picker** - Supports hex, RGB, HSL, named colors
 - **HTML Color Autocomplete** - Intelligent suggestions for all 140 standard HTML color names with visual previews
 - **Real-time Preview** - See changes instantly for your current workspace.
@@ -297,12 +287,7 @@ When entering colors in text fields:
 
 - **Smart Autocomplete** - Type any part of a color name (e.g., "blue", "dark", "light") to see matching suggestions
 - **Visual Color Preview** - Each autocomplete suggestion includes a color swatch for instant recognition
-- **Random Color Generator** - If specifying a color is too much work, just roll the dice!
-
-### Keyboard Shortcuts
-
-- `Ctrl+Alt+R` - Add Repository Rule
-- `Ctrl+Alt+B` - Add Branch Rule
+- **Random Color Generator** - If specifying a color is too much work, just shift-clik the color swatch!
 
 ---
 
@@ -340,15 +325,19 @@ Quick access to essential functions:
 
 Configure which VS Code elements get colored:
 
-- Title bar *(primary)*
-- Activity bar *(recommended)*
-- Editor tabs *(optional)*
-- Status bar *(optional)*
-- Inactive window title *(optional - but highly recommended)*
+- Simple Color Mode
+  - Title bar *(primary)*
+  - Activity bar *(recommended)*
+  - Editor tabs *(optional)*
+  - Status bar *(optional)*
+  - Inactive window title *(optional - but highly recommended)*
+- Profiles
+  - All simple mode elements plus 60+ additional UI elements
 
 ### Sync Ready
 
 - **Settings Sync Compatible** - Colors follow you across machines
+- **Settings are VSCode Profile Compatible** - Each VSCode profile can have it's onw settings.
 - **Team Friendly** - Configurations don't pollute repository settings (unless you commit .vscode/settings.json to the repo). And you can share common configs across your team.
 
 ### Configuration Import/Export 🆕
@@ -391,10 +380,22 @@ Perfect for **team collaboration** and **standardizing workspace colors** across
 
 ## 💬 Support
 
-**Found a bug?** Include output from the "Git Repo Window Colors" channel in your issue report.
+**Found a bug?** Include output from the "Git Repo Window Colors" output channel in your issue report.
 
 **Feature request?** We're always looking to make developers more productive!
 
+## ⚠️ PRERELEASE WARNING**  
+>
+> **If you are considering switching to a prerelease version of this extension, please be aware of this:**
+>
+> **Prerelease versions of this extension may be unstable and buggy and may iterate rapidly.**
+>
+> **It is recommended that you do NOT use the prerelease version unless you are actively engaged with the extension developer for testing purposes.**  
+>
+> **Configuration settings may NOT be preserved when switching to or between prerelease versions.  We will make our best effort to preserve configurations when upgrading to new released versions.**
+>
+> **Please export your current configuration prior to switching.**
+>
 ---
 
 *Transform your workflow. Install Git Repo Window Colors today and never lose track of your projects again.*
