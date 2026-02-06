@@ -19,6 +19,7 @@ Transform your VS Code experience by applying distinctive colors to your workspa
 - Built-in color picker with support for hex, RGB, HSL, and named colors (with autocomplete)
 - Real-time validation and error handling
 - Smart tooltips and contextual help throughout the interface
+- Preview configurations without opening every workspace.
 
 ### Status Bar Icon Integration
 
@@ -55,6 +56,38 @@ Build advanced color profiles with fine-grained control over individual VS Code 
 View a comprehensive report of all active color customizations in your current workspace, useful for debugging and understanding which rules are being applied.
 
 ![alt](https://github.com/mgfarmer/git-repo-window-colors/blob/master/img/color_tab.png?raw=true)
+
+---
+
+## 🔍 Live Preview Feature
+
+**Test your color configurations instantly without opening different workspaces!**
+
+The extension now includes a powerful preview feature that lets you see how your color rules will look without the need to open each repository or switch branches.
+
+### How It Works
+
+When you select any repository rule or branch rule in the configuration editor, simply enable the **Preview Selected Rules** checkbox (located in the Other Settings section). The extension will immediately apply the colors from that rule to your current workspace, giving you an instant preview of how the configuration will look.
+
+**Key Benefits:**
+
+- ✅ **No workspace switching needed** - Preview all your rules from a single workspace
+- ✅ **Instant feedback** - See color changes in real-time as you adjust rules
+- ✅ **Easy comparison** - Quickly switch between different rules to compare color schemes
+
+### Using Preview Mode
+
+1. Open the configuration editor
+2. Enable the **Preview Selected Rules** checkbox in the Other Settings section
+3. Navigate to the Rules or Branch Tables tab
+4. Click on any repository rule or branch rule to select it
+5. The colors from that rule will immediately apply to your workspace
+
+**Preview Indicator:** When in preview mode, you'll see a "PREVIEW MODE" badge at the top of the configuration editor to remind you that you're viewing preview colors, not the actual workspace colors.
+
+**Note:** Preview mode is a temporary visualization tool. Your actual color rules will still match based on your repository URL and branch name when preview mode is disabled.
+
+---
 
 ## ⚡ Why You Need This
 
@@ -154,7 +187,7 @@ Color Profiles provide a comprehensive way to define more complex color schemes 
 
 **Example:** Create a "Blue Corporate" profile that matches your company branding, then reference it across multiple repositories:
 
-```
+``` text
 Repository Rules:
 - company-org/frontend:Blue Corporate
 - company-org/backend:Blue Corporate
@@ -165,7 +198,7 @@ Repository Rules:
 
 Each profile consists of two parts:
 
-**1. Palette Slots**
+**1. Palette Slots** (your base colors)
 
 - Primary Active Background & Foreground
 - Primary Inactive Background & Foreground  
