@@ -1307,6 +1307,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             <div class="profile-header">
                                 <input type="text" id="profileNameInput" placeholder="Profile Name">
                                 <div class="profile-actions">
+                                   <div class="palette-generator-container">
+                                        <div id="paletteToast" class="palette-toast" style="display: none;">
+                                            <span class="palette-toast-message">Palette generated</span>
+                                            <div class="palette-toast-actions">
+                                                <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
+                                                <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" data-tooltip="First select a Primary Active Background color, then use this to generate a harmonious palette using a selection of color theory algorithms" data-tooltip-position="bottom" aria-label="Generate Pleasing Palette from Primary Active Background">
+                                            <span class="codicon codicon-wand"></span>
+                                            <span class="codicon codicon-chevron-down"></span>
+                                        </button>
+                                        <!-- Dropdown is created dynamically and appended to body -->
+                                   </div>
                                    <button type="button" class="profile-action-btn" data-action="duplicateProfile" data-tooltip="Duplicate Profile" aria-label="Duplicate Profile"><span class="codicon codicon-copy"></span></button>
                                    <button type="button" class="profile-action-btn" data-action="deleteProfile" data-tooltip="Delete Profile" aria-label="Delete Profile"><span class="codicon codicon-trash"></span></button>
                                 </div>
@@ -1319,20 +1333,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                               data-tooltip-html="<strong>Reference Palette</strong><br>Define reference colors that can be used in the mappings."
                                               data-tooltip-max-width="350"><span class="codicon codicon-info"></span></span>
                                     </h3>
-                                    <div class="palette-generator-container">
-                                        <div id="paletteToast" class="palette-toast" style="display: none;">
-                                            <span class="palette-toast-message">Palette generated</span>
-                                            <div class="palette-toast-actions">
-                                                <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
-                                                <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
-                                            </div>
-                                        </div>
-                                        <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" data-tooltip="Generate palette colors from Primary Active Background using color theory algorithms" data-tooltip-position="top" aria-label="Generate Pleasing Palette from Primary Active Background">
-                                            <span class="codicon codicon-wand"></span>
-                                            <span class="codicon codicon-chevron-down"></span>
-                                        </button>
-                                        <!-- Dropdown is created dynamically and appended to body -->
-                                    </div>
                                 </div>
                                 <div id="paletteEditor" class="palette-grid">
                                     <!-- Grid of palette slots -->
