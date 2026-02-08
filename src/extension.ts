@@ -1103,39 +1103,34 @@ export async function activate(context: ExtensionContext) {
             // Always ensure the configurator is open first
             configProvider.show(context.extensionUri);
 
-            const tours = configProvider.getRegisteredTours();
+            let tours = configProvider.getRegisteredTours();
 
             if (tours.length === 0) {
                 // No tours registered yet - wait a moment for tours to register
                 await new Promise((resolve) => setTimeout(resolve, 500));
-                const toursAfterOpen = configProvider.getRegisteredTours();
-                if (toursAfterOpen.length === 0) {
+                tours = configProvider.getRegisteredTours();
+                if (tours.length === 0) {
                     vscode.window.showInformationMessage('No tours available.');
                     return;
                 }
-                // Show quick pick with available tours
-                const items = toursAfterOpen.map((t) => ({
-                    label: t.commandTitle,
-                    tourId: t.tourId,
-                }));
-                const selected = await vscode.window.showQuickPick(items, {
-                    placeHolder: 'Select a tour to start',
-                });
-                if (selected) {
-                    configProvider.startTour(selected.tourId);
-                }
-            } else {
-                // Show quick pick with available tours
-                const items = tours.map((t) => ({
-                    label: t.commandTitle,
-                    tourId: t.tourId,
-                }));
-                const selected = await vscode.window.showQuickPick(items, {
-                    placeHolder: 'Select a tour to start',
-                });
-                if (selected) {
-                    configProvider.startTour(selected.tourId);
-                }
+            }
+
+            // If only one tour, start it directly
+            if (tours.length === 1) {
+                configProvider.startTour(tours[0].tourId);
+                return;
+            }
+
+            // Show quick pick with available tours
+            const items = tours.map((t) => ({
+                label: t.commandTitle,
+                tourId: t.tourId,
+            }));
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a tour to start',
+            });
+            if (selected) {
+                configProvider.startTour(selected.tourId);
             }
         }),
     );

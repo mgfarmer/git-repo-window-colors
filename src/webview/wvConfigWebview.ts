@@ -341,8 +341,32 @@ function registerHints() {
     );
 }
 
+// Register all tours with the tour manager
+function registerTours() {
+    tourManager.register(
+        new Tour({
+            id: 'gettingStarted',
+            commandTitle: 'Getting Started Tour',
+            steps: [
+                {
+                    targetSelector: '.help-button-global',
+                    html: `<strong>Help</strong><br>
+                       You can always get detailed, context-sensitive help by clicking 
+                       this icon. Each section of the configurator has its own 
+                       help page with tips and examples.`,
+                    position: 'bottom',
+                    maxWidth: 320,
+                },
+            ],
+        }),
+    );
+}
+
 // Initialize hints
 registerHints();
+
+// Initialize tours
+registerTours();
 
 // Request initial configuration
 vscode.postMessage({
