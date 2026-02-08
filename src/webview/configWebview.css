@@ -698,16 +698,18 @@ h2 {
     border: 1px solid var(--vscode-menu-border);
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    min-width: 200px;
-    max-width: 300px;
-    max-height: 300px;
+    min-width: 250px;
+    max-width: 350px;
+    max-height: 400px;
     overflow-y: auto;
     z-index: 1000;
     padding: 4px 0;
 }
 
 .copy-from-option {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     width: 100%;
     background: transparent;
     color: var(--vscode-menu-foreground);
@@ -724,6 +726,52 @@ h2 {
 .copy-from-option:hover {
     background: var(--vscode-menu-selectionBackground);
     color: var(--vscode-menu-selectionForeground);
+}
+
+/* Table header entries - visually distinct */
+.copy-from-table-header {
+    font-weight: 600;
+    background: var(--vscode-sideBar-background);
+    border-bottom: 1px solid var(--vscode-menu-separatorBackground);
+    margin-top: 4px;
+    padding: 8px 12px;
+}
+.copy-from-table-header:first-child {
+    margin-top: 0;
+}
+.copy-from-table-header .codicon {
+    opacity: 0.8;
+}
+.copy-from-table-header:hover {
+    background: var(--vscode-menu-selectionBackground);
+}
+
+/* Count badge in table headers */
+.copy-from-count {
+    font-weight: 400;
+    opacity: 0.7;
+    font-size: 11px;
+    margin-left: auto;
+}
+
+/* Individual rule entries - indented under tables */
+.copy-from-rule {
+    padding-left: 28px;
+    font-size: 11px;
+    opacity: 0.9;
+}
+.copy-from-rule:hover {
+    opacity: 1;
+}
+
+/* Color swatch for rules */
+.copy-from-rule-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .copy-from-no-options {

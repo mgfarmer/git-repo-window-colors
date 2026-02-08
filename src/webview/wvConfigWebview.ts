@@ -26,6 +26,8 @@ declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
 
 const vscode = acquireVsCodeApi();
+// Store vscode on window for other modules (e.g., hintUtils.ts) to access
+(window as any).vscode = vscode;
 let currentConfig: any = null;
 let starredKeys: string[] = [];
 let validationTimeout: any = null;
@@ -324,6 +326,17 @@ function registerHints() {
                Click here to add your first repository color rule.`,
             position: 'bottom',
             maxWidth: 280,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'copyFromButton',
+            html: `<strong>Copy Rules</strong><br>
+               Use this button to copy rules from other tables. You can copy 
+               an entire table at once or select individual rules to import.`,
+            position: 'left',
+            maxWidth: 300,
         }),
     );
 }
@@ -3430,9 +3443,16 @@ function updateBranchRule(index: number, field: string, value: string) {
 }
 
 function selectRepoRule(index: number) {
-    if (!currentConfig?.repoRules?.[index]) return;
+    console.log(
+        `[selectRepoRule] Called with index: ${index}, current selectedRepoRuleIndex: ${selectedRepoRuleIndex}`,
+    );
+    if (!currentConfig?.repoRules?.[index]) {
+        console.log(`[selectRepoRule] No rule found at index ${index}, returning`);
+        return;
+    }
 
     selectedRepoRuleIndex = index;
+    console.log(`[selectRepoRule] Set selectedRepoRuleIndex to ${index}`);
 
     // Reset branch rule selection when switching repos so it reinitializes
     selectedBranchRuleIndex = -1;
@@ -3633,6 +3653,19 @@ async function showCreateTableDialog(repoRuleIndex: number) {
             rules: [],
         };
 
+        // Check if this is the second table (first user-created table)
+        // and show the Copy From hint
+        const tableCount = Object.keys(currentConfig.sharedBranchTables).length;
+        if (tableCount === 2) {
+            // Delay showing the hint until after the UI updates
+            setTimeout(() => {
+                const copyFromBtn = document.querySelector('.copy-from-button');
+                if (copyFromBtn) {
+                    hintManager.tryShow('copyFromButton', copyFromBtn as HTMLElement);
+                }
+            }, 500);
+        }
+
         // Update the repo rule to use the new table
         if (currentConfig.repoRules?.[repoRuleIndex]) {
             console.log(
@@ -3744,10 +3777,20 @@ async function deleteBranchTableFromMgmt(tableName: string) {
 }
 
 function renderBranchRulesForSelectedRepo() {
-    if (!currentConfig || selectedRepoRuleIndex === -1) return;
+    console.log(`[renderBranchRulesForSelectedRepo] Called, selectedRepoRuleIndex: ${selectedRepoRuleIndex}`);
+    if (!currentConfig || selectedRepoRuleIndex === -1) {
+        console.log(`[renderBranchRulesForSelectedRepo] Early return - no config or selectedRepoRuleIndex is -1`);
+        return;
+    }
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
-    if (!selectedRule) return;
+    if (!selectedRule) {
+        console.log(`[renderBranchRulesForSelectedRepo] No selectedRule at index ${selectedRepoRuleIndex}`);
+        return;
+    }
+    console.log(
+        `[renderBranchRulesForSelectedRepo] selectedRule.repoQualifier: ${selectedRule.repoQualifier}, branchTableName: ${selectedRule.branchTableName}`,
+    );
 
     // Check if this is a local folder rule
     const isLocalFolderRule = selectedRule.repoQualifier && selectedRule.repoQualifier.startsWith('!');
@@ -3798,9 +3841,11 @@ function renderBranchRulesForSelectedRepo() {
 
     // Get table name - default to '__none__' if not set
     const tableName = selectedRule.branchTableName || '__none__';
+    console.log(`[renderBranchRulesForSelectedRepo] tableName: ${tableName}`);
 
     // If no table selected, show empty message
     if (!tableName || tableName === '__none__') {
+        console.log(`[renderBranchRulesForSelectedRepo] No table selected, showing empty message`);
         const header = document.querySelector('#branch-rules-heading');
         if (header) {
             header.innerHTML = `<span class="codicon codicon-circle-slash"></span> No Branch Table`;
@@ -3814,6 +3859,7 @@ function renderBranchRulesForSelectedRepo() {
 
     const branchTable = currentConfig.sharedBranchTables?.[tableName];
     const branchRules = branchTable?.rules || [];
+    console.log(`[renderBranchRulesForSelectedRepo] Rendering table "${tableName}" with ${branchRules.length} rules`);
 
     // Update section header with editable table name
     const header = document.querySelector('#branch-rules-heading');
@@ -3910,6 +3956,7 @@ function updateCopyFromButton(showButton: boolean) {
     copyBtn.className = 'copy-from-button';
     copyBtn.textContent = '📋 Copy From...';
     copyBtn.setAttribute('data-tooltip', 'Copy branch rules from another branch table.');
+    copyBtn.setAttribute('data-tooltip-position', 'left');
     copyBtn.setAttribute('aria-label', 'Copy branch rules from another branch table.');
 
     // Insert before the Add button in the container
@@ -3952,31 +3999,101 @@ function showCopyFromMenu(event: Event) {
     menu.className = 'copy-from-menu';
     menu.setAttribute('role', 'menu');
 
-    // Add Global option if there are global rules
-    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
-        const option = document.createElement('button');
-        option.type = 'button';
-        option.className = 'copy-from-option';
-        option.textContent = `Global Rules (${currentConfig.branchRules.length})`;
-        option.setAttribute('role', 'menuitem');
-        option.setAttribute('data-source-type', 'global');
-        menu.appendChild(option);
+    // Get the current table name (the one we're copying TO)
+    const currentTableName =
+        selectedRepoRuleIndex >= 0
+            ? currentConfig?.repoRules?.[selectedRepoRuleIndex]?.branchTableName || '__none__'
+            : '__none__';
+
+    // Add options for shared branch tables (excluding the current table)
+    if (currentConfig?.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            if (tableName === currentTableName) continue; // Skip current table
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (!table.rules || table.rules.length === 0) continue; // Skip empty
+
+            // Table header - copies all rules
+            const tableHeader = document.createElement('button');
+            tableHeader.type = 'button';
+            tableHeader.className = 'copy-from-option copy-from-table-header';
+            tableHeader.innerHTML = `<span class="codicon codicon-table"></span> ${tableName} <span class="copy-from-count">(all ${table.rules.length})</span>`;
+            tableHeader.setAttribute('role', 'menuitem');
+            tableHeader.setAttribute('data-source-type', 'table');
+            tableHeader.setAttribute('data-source-table', tableName);
+            menu.appendChild(tableHeader);
+
+            // Individual rules from this table
+            table.rules.forEach((rule: any, ruleIndex: number) => {
+                const ruleOption = document.createElement('button');
+                ruleOption.type = 'button';
+                ruleOption.className = 'copy-from-option copy-from-rule';
+                const patternDisplay = rule.pattern.length > 25 ? rule.pattern.substring(0, 22) + '...' : rule.pattern;
+                ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${rule.color || '#888'};"></span> ${patternDisplay}`;
+                ruleOption.setAttribute('role', 'menuitem');
+                ruleOption.setAttribute('data-source-type', 'table-rule');
+                ruleOption.setAttribute('data-source-table', tableName);
+                ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
+                ruleOption.title = rule.pattern; // Full pattern in tooltip
+                menu.appendChild(ruleOption);
+            });
+        }
     }
 
-    // Add options for other repos with local rules
+    // Add Global option if there are global rules (legacy)
+    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
+        const globalHeader = document.createElement('button');
+        globalHeader.type = 'button';
+        globalHeader.className = 'copy-from-option copy-from-table-header';
+        globalHeader.innerHTML = `<span class="codicon codicon-globe"></span> Global Rules <span class="copy-from-count">(all ${currentConfig.branchRules.length})</span>`;
+        globalHeader.setAttribute('role', 'menuitem');
+        globalHeader.setAttribute('data-source-type', 'global');
+        menu.appendChild(globalHeader);
+
+        // Individual global rules
+        currentConfig.branchRules.forEach((rule: any, ruleIndex: number) => {
+            const ruleOption = document.createElement('button');
+            ruleOption.type = 'button';
+            ruleOption.className = 'copy-from-option copy-from-rule';
+            const patternDisplay = rule.pattern.length > 25 ? rule.pattern.substring(0, 22) + '...' : rule.pattern;
+            ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${rule.color || '#888'};"></span> ${patternDisplay}`;
+            ruleOption.setAttribute('role', 'menuitem');
+            ruleOption.setAttribute('data-source-type', 'global-rule');
+            ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
+            ruleOption.title = rule.pattern;
+            menu.appendChild(ruleOption);
+        });
+    }
+
+    // Add options for other repos with local rules (legacy)
     if (currentConfig?.repoRules) {
         currentConfig.repoRules.forEach((rule: any, index: number) => {
             if (index === selectedRepoRuleIndex) return; // Skip current repo
             if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
 
-            const option = document.createElement('button');
-            option.type = 'button';
-            option.className = 'copy-from-option';
-            option.textContent = `${rule.repoQualifier} (${rule.branchRules.length})`;
-            option.setAttribute('role', 'menuitem');
-            option.setAttribute('data-source-type', 'repo');
-            option.setAttribute('data-source-index', String(index));
-            menu.appendChild(option);
+            const repoHeader = document.createElement('button');
+            repoHeader.type = 'button';
+            repoHeader.className = 'copy-from-option copy-from-table-header';
+            repoHeader.innerHTML = `<span class="codicon codicon-repo"></span> ${rule.repoQualifier} <span class="copy-from-count">(all ${rule.branchRules.length})</span>`;
+            repoHeader.setAttribute('role', 'menuitem');
+            repoHeader.setAttribute('data-source-type', 'repo');
+            repoHeader.setAttribute('data-source-index', String(index));
+            menu.appendChild(repoHeader);
+
+            // Individual repo rules
+            rule.branchRules.forEach((branchRule: any, ruleIndex: number) => {
+                const ruleOption = document.createElement('button');
+                ruleOption.type = 'button';
+                ruleOption.className = 'copy-from-option copy-from-rule';
+                const patternDisplay =
+                    branchRule.pattern.length > 25 ? branchRule.pattern.substring(0, 22) + '...' : branchRule.pattern;
+                ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${branchRule.color || '#888'};"></span> ${patternDisplay}`;
+                ruleOption.setAttribute('role', 'menuitem');
+                ruleOption.setAttribute('data-source-type', 'repo-rule');
+                ruleOption.setAttribute('data-source-index', String(index));
+                ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
+                ruleOption.title = branchRule.pattern;
+                menu.appendChild(ruleOption);
+            });
         });
     }
 
@@ -4009,19 +4126,33 @@ function showCopyFromMenu(event: Event) {
 }
 
 function handleCopyFromSelection(event: Event) {
-    const target = event.target as HTMLElement;
-    if (!target.classList.contains('copy-from-option')) return;
+    // Find the button element (might click on inner span)
+    let target = event.target as HTMLElement;
+    while (target && !target.classList.contains('copy-from-option')) {
+        target = target.parentElement as HTMLElement;
+    }
+    if (!target || !target.classList.contains('copy-from-option')) return;
 
     event.preventDefault();
     event.stopPropagation();
 
     const sourceType = target.getAttribute('data-source-type');
     const sourceIndex = target.getAttribute('data-source-index');
+    const sourceTable = target.getAttribute('data-source-table');
+    const sourceRuleIndex = target.getAttribute('data-source-rule-index');
 
-    if (sourceType === 'global') {
+    if (sourceType === 'table' && sourceTable) {
+        copyBranchRulesFrom('table', -1, sourceTable);
+    } else if (sourceType === 'table-rule' && sourceTable && sourceRuleIndex !== null) {
+        copyBranchRulesFrom('table-rule', parseInt(sourceRuleIndex, 10), sourceTable);
+    } else if (sourceType === 'global') {
         copyBranchRulesFrom('global', -1);
+    } else if (sourceType === 'global-rule' && sourceRuleIndex !== null) {
+        copyBranchRulesFrom('global-rule', parseInt(sourceRuleIndex, 10));
     } else if (sourceType === 'repo' && sourceIndex !== null) {
         copyBranchRulesFrom('repo', parseInt(sourceIndex, 10));
+    } else if (sourceType === 'repo-rule' && sourceIndex !== null && sourceRuleIndex !== null) {
+        copyBranchRulesFrom('repo-rule', parseInt(sourceIndex, 10), undefined, parseInt(sourceRuleIndex, 10));
     }
 
     // Remove menu
@@ -4029,7 +4160,12 @@ function handleCopyFromSelection(event: Event) {
     if (menu) menu.remove();
 }
 
-function copyBranchRulesFrom(sourceType: 'global' | 'repo', sourceIndex: number) {
+function copyBranchRulesFrom(
+    sourceType: 'global' | 'repo' | 'table' | 'table-rule' | 'global-rule' | 'repo-rule',
+    sourceIndex: number,
+    sourceTableName?: string,
+    sourceRuleIndex?: number,
+) {
     if (!currentConfig || selectedRepoRuleIndex === -1) return;
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
@@ -4037,31 +4173,74 @@ function copyBranchRulesFrom(sourceType: 'global' | 'repo', sourceIndex: number)
 
     // Get source rules
     let sourceRules: any[] = [];
-    if (sourceType === 'global') {
+    if (sourceType === 'table' && sourceTableName) {
+        const sourceTable = currentConfig.sharedBranchTables?.[sourceTableName];
+        if (sourceTable) {
+            sourceRules = sourceTable.rules || [];
+        }
+    } else if (sourceType === 'table-rule' && sourceTableName) {
+        // Copy a single rule from a table
+        const sourceTable = currentConfig.sharedBranchTables?.[sourceTableName];
+        if (sourceTable?.rules?.[sourceIndex]) {
+            sourceRules = [sourceTable.rules[sourceIndex]];
+        }
+    } else if (sourceType === 'global') {
         sourceRules = currentConfig.branchRules || [];
+    } else if (sourceType === 'global-rule') {
+        // Copy a single global rule
+        if (currentConfig.branchRules?.[sourceIndex]) {
+            sourceRules = [currentConfig.branchRules[sourceIndex]];
+        }
     } else if (sourceType === 'repo') {
         const sourceRepo = currentConfig.repoRules?.[sourceIndex];
         if (sourceRepo) {
             sourceRules = sourceRepo.branchRules || [];
         }
+    } else if (sourceType === 'repo-rule' && sourceRuleIndex !== undefined) {
+        // Copy a single rule from a repo
+        const sourceRepo = currentConfig.repoRules?.[sourceIndex];
+        if (sourceRepo?.branchRules?.[sourceRuleIndex]) {
+            sourceRules = [sourceRepo.branchRules[sourceRuleIndex]];
+        }
     }
 
     if (sourceRules.length === 0) return;
 
-    // Initialize local branchRules if needed
-    if (!selectedRule.branchRules) {
-        selectedRule.branchRules = [];
-    }
+    // Determine the target: shared branch table or local rules
+    const targetTableName = selectedRule.branchTableName;
 
-    // Deep clone and append rules (not replace!)
-    sourceRules.forEach((rule) => {
-        const clonedRule = {
-            pattern: rule.pattern,
-            color: rule.color,
-            enabled: rule.enabled !== false, // Default to true
-        };
-        selectedRule.branchRules!.push(clonedRule);
-    });
+    if (targetTableName && targetTableName !== '__none__' && currentConfig.sharedBranchTables?.[targetTableName]) {
+        // Copy to shared branch table
+        const targetTable = currentConfig.sharedBranchTables[targetTableName];
+        if (!targetTable.rules) {
+            targetTable.rules = [];
+        }
+
+        // Deep clone and append rules
+        sourceRules.forEach((rule) => {
+            const clonedRule = {
+                pattern: rule.pattern,
+                color: rule.color,
+                enabled: rule.enabled !== false, // Default to true
+            };
+            targetTable.rules.push(clonedRule);
+        });
+    } else {
+        // Fallback: copy to local branchRules (legacy behavior)
+        if (!selectedRule.branchRules) {
+            selectedRule.branchRules = [];
+        }
+
+        // Deep clone and append rules (not replace!)
+        sourceRules.forEach((rule) => {
+            const clonedRule = {
+                pattern: rule.pattern,
+                color: rule.color,
+                enabled: rule.enabled !== false, // Default to true
+            };
+            selectedRule.branchRules!.push(clonedRule);
+        });
+    }
 
     // Re-render
     renderBranchRulesForSelectedRepo();
@@ -7276,6 +7455,9 @@ function setupPaletteToast() {
 }
 
 function renderProfileEditor(name: string, profile: AdvancedProfile) {
+    // Clean up any orphaned mapping dropdown options from previous render
+    document.querySelectorAll('.dropdown-options.mapping-dropdown-options').forEach((el) => el.remove());
+
     // Name Input
     const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
     if (nameInput) {
@@ -7665,7 +7847,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 label.textContent = THEME_KEY_LABELS[key] || key;
                 label.style.fontSize = '12px';
                 label.style.color = 'var(--vscode-foreground)';
-                label.style.minWidth = '200px';
+                label.style.minWidth = '220px';
                 label.style.flexShrink = '0';
 
                 // Get current mapping value (handle both string and object formats)
@@ -7749,6 +7931,10 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         e.dataTransfer.getData('application/x-palette-slot') || e.dataTransfer.getData('text/plain');
                     if (!slotName) return;
 
+                    // User successfully performed drag & drop, so dismiss the hint
+                    // (they obviously know about this feature now)
+                    hintManager.markShown('dragDropMapping');
+
                     // Set the dropdown value
                     select.setAttribute('data-value', slotName);
                     (select as any).value = slotName;
@@ -7780,19 +7966,16 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 arrow.style.pointerEvents = 'none';
                 selectedDisplay.appendChild(arrow);
 
-                // Dropdown options container
+                // Dropdown options container (appended to body for proper z-index stacking)
                 const optionsContainer = document.createElement('div');
-                optionsContainer.className = 'dropdown-options';
+                optionsContainer.className = 'dropdown-options mapping-dropdown-options';
                 optionsContainer.style.display = 'none';
-                optionsContainer.style.position = 'absolute';
-                optionsContainer.style.top = '100%';
-                optionsContainer.style.left = '0';
-                optionsContainer.style.right = '0';
+                optionsContainer.style.position = 'fixed';
                 optionsContainer.style.background = 'var(--vscode-dropdown-background)';
                 optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
                 optionsContainer.style.maxHeight = '200px';
                 optionsContainer.style.overflowY = 'auto';
-                optionsContainer.style.zIndex = '1000';
+                optionsContainer.style.zIndex = '10000';
                 optionsContainer.style.marginTop = '2px';
 
                 // Build options
@@ -7951,6 +8134,13 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     e.stopPropagation();
                     const isOpen = optionsContainer.style.display === 'block';
 
+                    // Close all other mapping dropdowns first
+                    document.querySelectorAll('.dropdown-options.mapping-dropdown-options').forEach((other) => {
+                        if (other !== optionsContainer) {
+                            (other as HTMLElement).style.display = 'none';
+                        }
+                    });
+
                     if (isOpen) {
                         optionsContainer.style.display = 'none';
                         select.setAttribute('aria-expanded', 'false');
@@ -7960,11 +8150,29 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                             outsideClickHandler = null;
                         }
                     } else {
+                        // Position dropdown using fixed coordinates
+                        const triggerRect = selectedDisplay.getBoundingClientRect();
+                        const viewportHeight = window.innerHeight;
+                        const spaceBelow = viewportHeight - triggerRect.bottom;
+                        const dropdownHeight = 200; // maxHeight of options
+
+                        optionsContainer.style.left = triggerRect.left + 'px';
+                        optionsContainer.style.minWidth = triggerRect.width + 'px';
+
+                        // If not enough space below, flip it upward
+                        if (spaceBelow < dropdownHeight && triggerRect.top > spaceBelow) {
+                            optionsContainer.style.top = 'auto';
+                            optionsContainer.style.bottom = viewportHeight - triggerRect.top + 'px';
+                        } else {
+                            optionsContainer.style.top = triggerRect.bottom + 2 + 'px';
+                            optionsContainer.style.bottom = 'auto';
+                        }
+
                         optionsContainer.style.display = 'block';
                         select.setAttribute('aria-expanded', 'true');
                         // Add outside click handler when opening
                         outsideClickHandler = (e: MouseEvent) => {
-                            if (!select.contains(e.target as Node)) {
+                            if (!select.contains(e.target as Node) && !optionsContainer.contains(e.target as Node)) {
                                 optionsContainer.style.display = 'none';
                                 select.setAttribute('aria-expanded', 'false');
                                 if (outsideClickHandler) {
@@ -7994,7 +8202,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 updateSelectedDisplay(currentSlot);
 
                 select.appendChild(selectedDisplay);
-                select.appendChild(optionsContainer);
+                // Append options to body for proper z-index stacking
+                document.body.appendChild(optionsContainer);
 
                 // Helper to get value like a select element
                 (select as any).value = currentSlot;

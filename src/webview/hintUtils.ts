@@ -8,10 +8,10 @@
 /** Debug flag: Set to true to always show hints (ignores "already shown" state) */
 export const DEBUG_ALWAYS_SHOW_HINTS = false;
 
-// Declare VS Code API for messaging
-declare const vscode: {
-    postMessage(message: any): void;
-};
+// Helper to get vscode API from window (set by wvConfigWebview.ts)
+function getVsCodeApi(): { postMessage(message: any): void } {
+    return (window as any).vscode;
+}
 
 export type HintPosition = 'top' | 'bottom' | 'left' | 'right' | 'auto';
 
@@ -460,7 +460,7 @@ class HintManagerClass {
      * Send message to extension to persist the shown flag
      */
     private _sendDismissMessage(flagKey: string): void {
-        vscode.postMessage({
+        getVsCodeApi().postMessage({
             command: 'dismissHint',
             data: { flagKey },
         });
@@ -703,7 +703,7 @@ class TourManagerClass {
 
         // If tour has a command title, register the command with the extension
         if (tour.commandTitle) {
-            vscode.postMessage({
+            getVsCodeApi().postMessage({
                 command: 'registerTourCommand',
                 data: {
                     tourId: tour.id,
@@ -825,7 +825,7 @@ class TourManagerClass {
      * Send message to extension to persist the completion flag
      */
     private _sendCompleteTourMessage(flagKey: string): void {
-        vscode.postMessage({
+        getVsCodeApi().postMessage({
             command: 'completeTour',
             data: { flagKey },
         });
