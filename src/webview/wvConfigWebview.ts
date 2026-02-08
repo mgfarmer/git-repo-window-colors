@@ -253,24 +253,20 @@ const HTML_COLOR_NAMES = [
 ];
 
 // Example branch patterns for auto-complete
-const EXAMPLE_BRANCH_PATTERNS = [
-    '^(?!.*(main|master)).*',
-    '^(bug/|bug-).*',
-    '^(feature/|feature-).*',
-    'feature/.*',
-    'bugfix/.*',
-    'main',
-    'master',
-    'develop',
-    'dev',
-    'release.*',
-    'hotfix.*',
-    'fix/.*',
-    'docs/.*',
-    'test/.*',
-    'refactor/.*',
-    'style/.*',
-    'perf/.*',
+const EXAMPLE_BRANCH_PATTERNS: { pattern: string; description: string }[] = [
+    { pattern: '^(?!.*(main|master)).*', description: 'All except main/master' },
+    { pattern: '^(bug/|bug-).*', description: 'Bug fix branches with bug IDs' },
+    { pattern: '^(feature/|feature-).*', description: 'Feature branches with feature IDs' },
+    { pattern: 'feature/.*', description: 'Feature branches (prefix)' },
+    { pattern: 'bugfix/.*', description: 'Bugfix branches (prefix)' },
+    { pattern: 'dev', description: 'Dev branch only' },
+    { pattern: 'hotfix.*', description: 'Hotfix branches' },
+    { pattern: 'fix/.*', description: 'Fix branches (prefix)' },
+    { pattern: 'docs/.*', description: 'Documentation branches' },
+    { pattern: 'test/.*', description: 'Test branches' },
+    { pattern: 'refactor/.*', description: 'Refactor branches' },
+    { pattern: 'style/.*', description: 'Style/formatting branches' },
+    { pattern: 'perf/.*', description: 'Performance branches' },
 ];
 
 // Auto-complete state
@@ -5702,13 +5698,16 @@ function filterBranchPatternAutoComplete(input: HTMLInputElement) {
 
     // Filter examples using same logic
     if (value.length === 0) {
-        matches.push(...EXAMPLE_BRANCH_PATTERNS);
+        matches.push(...EXAMPLE_BRANCH_PATTERNS.map((e) => `${e.pattern}|__DESC__|${e.description}`));
     } else {
-        const exampleStartsWith = EXAMPLE_BRANCH_PATTERNS.filter((pattern) => pattern.toLowerCase().startsWith(value));
+        const exampleStartsWith = EXAMPLE_BRANCH_PATTERNS.filter((e) => e.pattern.toLowerCase().startsWith(value));
         const exampleIncludes = EXAMPLE_BRANCH_PATTERNS.filter(
-            (pattern) => !pattern.toLowerCase().startsWith(value) && pattern.toLowerCase().includes(value),
+            (e) => !e.pattern.toLowerCase().startsWith(value) && e.pattern.toLowerCase().includes(value),
         );
-        matches.push(...exampleStartsWith, ...exampleIncludes);
+        matches.push(
+            ...exampleStartsWith.map((e) => `${e.pattern}|__DESC__|${e.description}`),
+            ...exampleIncludes.map((e) => `${e.pattern}|__DESC__|${e.description}`),
+        );
     }
 
     if (matches.length === 0 || (matches.length === 1 && matches[0] === '__EXAMPLES_SEPARATOR__')) {
@@ -5740,14 +5739,33 @@ function showBranchPatternAutoCompleteDropdown(input: HTMLInputElement, suggesti
 
         const item = document.createElement('div');
         item.className = 'color-autocomplete-item';
-        item.textContent = suggestion;
-        item.dataset.value = suggestion;
+
+        // Check if suggestion has a description (format: pattern|__DESC__|description)
+        if (suggestion.includes('|__DESC__|')) {
+            const [pattern, description] = suggestion.split('|__DESC__|');
+            const patternSpan = document.createElement('span');
+            patternSpan.textContent = pattern;
+            item.appendChild(patternSpan);
+
+            const descSpan = document.createElement('span');
+            descSpan.textContent = ` (${description})`;
+            descSpan.style.fontStyle = 'italic';
+            descSpan.style.opacity = '0.65';
+            descSpan.style.marginLeft = '4px';
+            item.appendChild(descSpan);
+
+            item.dataset.value = pattern;
+        } else {
+            item.textContent = suggestion;
+            item.dataset.value = suggestion;
+        }
+
         item.dataset.index = selectableIndex.toString();
         item.setAttribute('role', 'option');
         item.setAttribute('aria-selected', 'false');
 
         item.addEventListener('click', () => {
-            selectBranchPatternSuggestion(input, suggestion);
+            selectBranchPatternSuggestion(input, item.dataset.value!);
         });
 
         item.addEventListener('mouseenter', () => {
@@ -5766,7 +5784,7 @@ function showBranchPatternAutoCompleteDropdown(input: HTMLInputElement, suggesti
     dropdown.style.position = 'fixed';
     dropdown.style.left = rect.left + 'px';
     dropdown.style.top = rect.bottom + 'px';
-    dropdown.style.minWidth = rect.width + 'px';
+    dropdown.style.minWidth = Math.max(rect.width, 350) + 'px';
 
     autoCompleteDropdown = dropdown;
     activeAutoCompleteInput = input;
