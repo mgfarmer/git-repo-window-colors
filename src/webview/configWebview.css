@@ -2314,7 +2314,7 @@ button:focus {
 .help-panel {
     position: fixed;
     top: 0;
-    right: -600px;
+    right: 0;
     width: 600px;
     max-width: 90vw;
     height: 100%;
@@ -2325,11 +2325,12 @@ button:focus {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    transition: right 0.3s ease-in-out;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
 }
 
 .help-panel.active {
-    right: 0;
+    transform: translateX(0);
 }
 
 .help-panel-header {
@@ -2379,6 +2380,50 @@ button:focus {
     height: 100%;
     border: none;
     display: block;
+}
+
+/* Help Panel Resize Handle */
+.help-panel-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    z-index: 10;
+    background: transparent;
+    transition: background-color 0.15s ease;
+}
+
+.help-panel-resize-handle::after {
+    content: '';
+    position: absolute;
+    left: 1px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: transparent;
+    transition: background-color 0.15s ease;
+}
+
+.help-panel-resize-handle:hover::after,
+.help-panel-resize-handle.dragging::after {
+    background-color: var(--vscode-sash-hoverBorder, #007acc);
+}
+
+.help-panel.resizing {
+    transition: none !important;
+    user-select: none;
+}
+
+.help-panel-resize-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    cursor: ew-resize;
 }
 
 /* Drag and Drop Styles */

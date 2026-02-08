@@ -46,6 +46,10 @@ let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // De
 let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
 let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') !== 'false'; // Default to true
 
+// Help panel resize state
+const HELP_PANEL_MIN_WIDTH = 600;
+let helpPanelWidth = HELP_PANEL_MIN_WIDTH;
+
 // Tab Switching
 function initTabs() {
     const tabButtons = document.querySelectorAll('.tab-button');
@@ -787,6 +791,12 @@ function handleConfigurationData(data: any) {
         expandedPaths = {};
     }
 
+    // Initialize help panel width from config
+    if (data.helpPanelWidth && data.helpPanelWidth >= HELP_PANEL_MIN_WIDTH) {
+        helpPanelWidth = data.helpPanelWidth;
+        applyHelpPanelWidth();
+    }
+
     // Synchronize profileName fields for backward compatibility
     // If primaryColor/branchColor/color matches a profile but profileName is not set, set it
     if (currentConfig?.advancedProfiles && currentConfig?.repoRules) {
@@ -1085,6 +1095,8 @@ function openHelp(helpType: string) {
     const overlay = document.getElementById('helpPanelOverlay');
     const panel = document.getElementById('helpPanel');
     if (overlay && panel) {
+        // Apply current width before showing
+        panel.style.width = `${helpPanelWidth}px`;
         overlay.classList.add('active');
         panel.classList.add('active');
     }
@@ -1101,6 +1113,86 @@ function closeHelp() {
         panel.classList.remove('active');
     }
 }
+
+// Help panel resize functionality
+function applyHelpPanelWidth() {
+    const panel = document.getElementById('helpPanel');
+    if (panel) {
+        panel.style.width = `${helpPanelWidth}px`;
+    }
+}
+
+function initHelpPanelResize() {
+    const panel = document.getElementById('helpPanel');
+    const handle = document.getElementById('helpPanelResizeHandle');
+    if (!panel || !handle) return;
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+    let overlay: HTMLDivElement | null = null;
+
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = helpPanelWidth;
+
+        // Create overlay to capture mouse events during drag
+        overlay = document.createElement('div');
+        overlay.className = 'help-panel-resize-overlay';
+        document.body.appendChild(overlay);
+
+        panel.classList.add('resizing');
+        handle.classList.add('dragging');
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+
+    function onMouseMove(e: MouseEvent) {
+        if (!isDragging) return;
+
+        // Calculate new width (dragging left increases width since panel is on the right)
+        const deltaX = startX - e.clientX;
+        let newWidth = startWidth + deltaX;
+
+        // Enforce minimum and maximum widths
+        newWidth = Math.max(HELP_PANEL_MIN_WIDTH, newWidth);
+        newWidth = Math.min(window.innerWidth * 0.9, newWidth); // Max 90% of viewport
+
+        helpPanelWidth = newWidth;
+        panel!.style.width = `${newWidth}px`;
+    }
+
+    function onMouseUp() {
+        if (!isDragging) return;
+        isDragging = false;
+
+        // Remove overlay
+        if (overlay) {
+            overlay.remove();
+            overlay = null;
+        }
+
+        panel!.classList.remove('resizing');
+        handle!.classList.remove('dragging');
+
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        // Save the new width to global state
+        vscode.postMessage({
+            command: 'saveHelpPanelWidth',
+            data: { width: helpPanelWidth },
+        });
+    }
+}
+
+// Initialize help panel resize on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    initHelpPanelResize();
+});
 
 function renderConfiguration(config: any) {
     // Clear validation errors on new data

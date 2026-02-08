@@ -280,6 +280,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'registerTourCommand':
                 this._handleRegisterTourCommand(message.data.tourId!, message.data.commandTitle!);
                 break;
+            case 'saveHelpPanelWidth':
+                await this._context.globalState.update('grwc.helpPanelWidth', message.data.width);
+                break;
         }
     }
 
@@ -386,6 +389,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             starredKeys,
             hintFlags,
             tourFlags,
+            helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
             validationErrors: {
                 repoRules: repoRuleErrorsObj,
                 branchRules: branchRuleErrorsObj,
@@ -1559,6 +1563,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <!-- Help Panel (Unified) -->
             <div class="help-panel-overlay" id="helpPanelOverlay" data-action="closeHelp"></div>
             <div class="help-panel" id="helpPanel">
+                <div class="help-panel-resize-handle" id="helpPanelResizeHandle"></div>
                 <div class="help-panel-header">
                     <h2 class="help-panel-title" id="helpPanelTitle">Help</h2>
                     <button type="button" class="help-panel-close" data-action="closeHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>

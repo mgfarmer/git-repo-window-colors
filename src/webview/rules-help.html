@@ -57,7 +57,7 @@
             <strong>Important:</strong> Repository rules match against the actual <strong>git repository URL</strong> 
             (the remote origin URL), not the folder name where you cloned the repository. The folder name on your 
             local disk is irrelevant to matching. For example:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li>Repository URL: <code>https://github.com/user/awesome-project.git</code></li>
                 <li>Cloned into folder: <code>C:\temp\test123</code></li>
                 <li>Rule qualifier: <code>awesome-project</code> will match ✓</li>
@@ -242,7 +242,7 @@
         </ul>
         <div class="tip">
             <strong>Validation Tip:</strong> If you see a warning icon on a local folder rule, check that:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li>The path exists on your system</li>
                 <li>Environment variables are spelled correctly</li>
                 <li>The path uses the correct format for your operating system (forward or backslashes)</li>
@@ -328,7 +328,7 @@
         <div class="example">
             <strong>Example:</strong> You want all feature branches to be green, except for one specific branch 
             that should use the repository's default color:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li>Branch pattern: <code>feature/experimental</code> → Color: <code>none</code></li>
                 <li>Branch pattern: <code>feature/.*</code> → Color: <code>green</code></li>
             </ul>
@@ -339,7 +339,7 @@
 
         <div class="note">
             <strong>How Branch Rules Work:</strong> When you're on a branch that matches a branch rule:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li><strong>With simple colors:</strong> The color affects only the Activity Bar, while the repository rule continues to control the title bar and other elements</li>
                 <li><strong>With profiles:</strong> The branch profile takes over UI element coloring, replacing the repository rule's colors</li>
             </ul>
@@ -579,7 +579,7 @@
 
         <div class="tip">
             <strong>Color Suggestions:</strong> Consider using consistent colors across your team:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li><strong>Main/Master:</strong> Green or blue (stable, production)</li>
                 <li><strong>Develop:</strong> Yellow or orange (work in progress)</li>
                 <li><strong>Feature:</strong> Purple or cyan (new work)</li>

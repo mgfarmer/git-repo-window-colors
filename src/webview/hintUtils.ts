@@ -395,6 +395,10 @@ class HintManagerClass {
             return false;
         }
 
+        // Mark as shown immediately so hint only appears once
+        this._shownFlags[hint.flagKey] = true;
+        this._sendDismissMessage(hint.flagKey);
+
         // Hide any currently showing hint
         this._hideCurrentHint();
 

@@ -63,7 +63,8 @@ export interface WebviewMessage {
         | 'simplifyPathForPreview'
         | 'dismissHint'
         | 'completeTour'
-        | 'registerTourCommand';
+        | 'registerTourCommand'
+        | 'saveHelpPanelWidth';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -112,5 +113,7 @@ export interface WebviewMessage {
         // Tour command registration
         tourId?: string;
         commandTitle?: string;
+        // Help panel width
+        width?: number;
     };
 }
