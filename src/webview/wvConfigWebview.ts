@@ -21,6 +21,9 @@ import { showTooltip, hideTooltip, hideTooltipImmediate, attachTooltip, setupDel
 // Import hint utilities
 import { Hint, hintManager, Tour, tourManager } from './hintUtils';
 
+// Import tour configurations
+import { gettingStartedTour } from './tourSteps';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
@@ -342,24 +345,9 @@ function registerHints() {
 }
 
 // Register all tours with the tour manager
+// Register all tours with the tour manager
 function registerTours() {
-    tourManager.register(
-        new Tour({
-            id: 'gettingStarted',
-            commandTitle: 'Getting Started Tour',
-            steps: [
-                {
-                    targetSelector: '.help-button-global',
-                    html: `<strong>Help</strong><br>
-                       You can always get detailed, context-sensitive help by clicking 
-                       this icon. Each section of the configurator has its own 
-                       help page with tips and examples.`,
-                    position: 'bottom',
-                    maxWidth: 320,
-                },
-            ],
-        }),
-    );
+    tourManager.register(new Tour(gettingStartedTour));
 }
 
 // Initialize hints
@@ -2835,7 +2823,7 @@ function renderOtherSettings(settings: any) {
 
     container.innerHTML = `
         <div class="settings-sections">
-            <div class="settings-section">
+            <div class="settings-section color-options-section">
                 <h3>Color Options</h3>
                 <div class="section-help" style="margin-bottom: 10px;">
                     <strong>Note:</strong> These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration.${profileNote}
@@ -2900,7 +2888,7 @@ function renderOtherSettings(settings: any) {
                 </div>
             </div>
             
-            <div class="settings-section">
+            <div class="settings-section other-options-section">
                 <h3>Other Options</h3>
                 <div class="settings-grid">
                     <div class="setting-item"
