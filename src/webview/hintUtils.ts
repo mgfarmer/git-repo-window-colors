@@ -78,20 +78,33 @@ export class Hint {
     }
 
     /**
-     * Render the hint popup near the target element
-     * @param target Element to position hint near
+     * Render the hint popup near the target element, or centered if no target
+     * @param target Element to position hint near (null for centered)
      * @param onDismiss Callback when hint is dismissed
      * @param tourOptions Optional tour navigation options (for tour mode)
      */
-    render(target: HTMLElement, onDismiss: () => void, tourOptions?: TourRenderOptions): void {
+    render(target: HTMLElement | null, onDismiss: () => void, tourOptions?: TourRenderOptions): void {
         // Remove any existing hint element
         this.hide();
 
-        const targetRect = target.getBoundingClientRect();
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
         const padding = 12;
         const gap = 12;
+
+        // Get target rect or create a centered virtual rect
+        const targetRect = target
+            ? target.getBoundingClientRect()
+            : ({
+                  left: viewportWidth / 2,
+                  right: viewportWidth / 2,
+                  top: viewportHeight / 2,
+                  bottom: viewportHeight / 2,
+                  width: 0,
+                  height: 0,
+                  x: viewportWidth / 2,
+                  y: viewportHeight / 2,
+              } as DOMRect);
 
         // Create hint container
         const hint = document.createElement('div');
@@ -196,23 +209,39 @@ export class Hint {
 
         // Measure and position
         const hintRect = hint.getBoundingClientRect();
-        const finalPosition = this._calculateBestPosition(targetRect, hintRect, viewportWidth, viewportHeight, padding);
-        const pos = this._calculatePosition(
-            targetRect,
-            hintRect,
-            viewportWidth,
-            viewportHeight,
-            padding,
-            gap,
-            finalPosition,
-        );
+
+        let pos: { left: number; top: number };
+        let finalPosition: 'top' | 'bottom' | 'left' | 'right';
+
+        if (!target) {
+            // Centered hint - no target element
+            pos = {
+                left: (viewportWidth - hintRect.width) / 2,
+                top: (viewportHeight - hintRect.height) / 2,
+            };
+            // Hide arrow for centered hints
+            arrow.style.display = 'none';
+            finalPosition = 'bottom'; // arbitrary, not used
+        } else {
+            // Regular hint positioned relative to target
+            finalPosition = this._calculateBestPosition(targetRect, hintRect, viewportWidth, viewportHeight, padding);
+            pos = this._calculatePosition(
+                targetRect,
+                hintRect,
+                viewportWidth,
+                viewportHeight,
+                padding,
+                gap,
+                finalPosition,
+            );
+
+            // Set arrow position
+            arrow.classList.add(`grwc-hint-arrow-${finalPosition}`);
+            this._positionArrow(arrow, targetRect, hintRect, pos, finalPosition);
+        }
 
         hint.style.left = `${pos.left}px`;
         hint.style.top = `${pos.top}px`;
-
-        // Set arrow position
-        arrow.classList.add(`grwc-hint-arrow-${finalPosition}`);
-        this._positionArrow(arrow, targetRect, hintRect, pos, finalPosition);
 
         // Fade in
         hint.style.opacity = '0';
@@ -532,11 +561,11 @@ export function switchToTab(tabId: string): boolean {
 
 /** Configuration for a single tour step */
 export interface TourStepConfig {
-    /** CSS selector to find the target element */
-    targetSelector: string;
+    /** CSS selector to find the target element (optional - if not provided, hint will be centered) */
+    targetSelector?: string;
     /** HTML content for the hint popup */
     html: string;
-    /** Preferred position relative to target element */
+    /** Preferred position relative to target element (ignored if targetSelector not provided) */
     position?: HintPosition;
     /** Maximum width in pixels (default: 320) */
     maxWidth?: number;
@@ -632,20 +661,24 @@ export class Tour {
             switchToTab(stepConfig.tabId);
         }
 
-        // Find target element
-        const target = document.querySelector(stepConfig.targetSelector) as HTMLElement;
-        if (!target) {
-            console.warn(`[Tour] Target not found for selector: ${stepConfig.targetSelector}`);
-            // Skip to next step if target not found
-            if (this._currentStepIndex < this.steps.length - 1) {
-                this._currentStepIndex++;
-                this._showCurrentStep(onComplete, onSkip);
-            } else {
-                this._isActive = false;
-                onComplete();
+        // Find target element (or null for centered hints)
+        let target: HTMLElement | null = null;
+        if (stepConfig.targetSelector) {
+            target = document.querySelector(stepConfig.targetSelector) as HTMLElement;
+            if (!target) {
+                console.warn(`[Tour] Target not found for selector: ${stepConfig.targetSelector}`);
+                // Skip to next step if target not found
+                if (this._currentStepIndex < this.steps.length - 1) {
+                    this._currentStepIndex++;
+                    this._showCurrentStep(onComplete, onSkip);
+                } else {
+                    this._isActive = false;
+                    onComplete();
+                }
+                return;
             }
-            return;
         }
+        // If no targetSelector provided, target remains null (centered hint)
 
         // Create a temporary Hint for this step
         const hint = new Hint({

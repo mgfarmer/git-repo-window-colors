@@ -98,5 +98,18 @@ export const gettingStartedTour: TourConfig = {
             position: 'left',
             maxWidth: 420,
         },
+        {
+            // No targetSelector - this will be centered on the screen
+            html: `<strong>Ready to Go!</strong><br><br>
+               You now know the basics and can fully utilize this extension for your needs. 
+               All the essential features have been covered.<br><br>
+               <strong>What's Next?</strong><br>
+               You can skip the rest of this tour and start using the extension right away, 
+               or continue to learn about <strong>Profiles</strong> — an advanced feature 
+               that gives you much more precise control over which UI elements get colored 
+               and how they're styled.<br><br>
+               Profiles are optional but powerful for users who want fine-grained customization.`,
+            maxWidth: 450,
+        },
     ],
 };
