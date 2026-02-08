@@ -5764,7 +5764,8 @@ function showBranchPatternAutoCompleteDropdown(input: HTMLInputElement, suggesti
         item.setAttribute('role', 'option');
         item.setAttribute('aria-selected', 'false');
 
-        item.addEventListener('click', () => {
+        item.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent input from losing focus
             selectBranchPatternSuggestion(input, item.dataset.value!);
         });
 
