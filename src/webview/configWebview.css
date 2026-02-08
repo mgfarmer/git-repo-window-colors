@@ -2148,6 +2148,8 @@ button:focus {
 
 #report-tab {
     position: relative;
+    overflow-y: auto;
+    flex: 1;
 }
 
 #report-tab .help-button {
