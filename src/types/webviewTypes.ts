@@ -64,7 +64,9 @@ export interface WebviewMessage {
         | 'dismissHint'
         | 'completeTour'
         | 'registerTourCommand'
-        | 'saveHelpPanelWidth';
+        | 'saveHelpPanelWidth'
+        | 'dismissTourLink'
+        | 'startTour';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];

@@ -60,15 +60,18 @@ body {
     font-weight: 500;
     border: 2px solid;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
     transition:
         transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        visibility 0.3s;
 }
 
 .preview-toast.visible {
     transform: translateX(-50%) translateY(0);
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
 }
 
@@ -1583,6 +1586,41 @@ button:focus {
 
 .help-button-global:active {
     opacity: 0.5;
+}
+
+/* Tour Link */
+.tour-link-container {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: none; /* Hidden by default, shown via JS if not dismissed */
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.tour-link {
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.tour-link:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
+.tour-link-dismiss {
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.tour-link-dismiss:hover {
+    color: var(--vscode-foreground);
+    opacity: 1;
 }
 
 .tab-button {

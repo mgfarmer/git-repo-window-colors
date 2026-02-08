@@ -283,6 +283,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'saveHelpPanelWidth':
                 await this._context.globalState.update('grwc.helpPanelWidth', message.data.width);
                 break;
+            case 'dismissTourLink':
+                await this._context.globalState.update('grwc.tourLinkDismissed', true);
+                break;
+            case 'startTour':
+                await this._context.globalState.update('grwc.tourLinkDismissed', true);
+                vscode.commands.executeCommand('windowColors.startTour');
+                break;
         }
     }
 
@@ -389,6 +396,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             starredKeys,
             hintFlags,
             tourFlags,
+            tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
             helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
             validationErrors: {
                 repoRules: repoRuleErrorsObj,
@@ -529,7 +537,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
      * Flag keys are derived from hint IDs: grwc.hints.{id}
      */
     private _getHintFlags(): Record<string, boolean> {
-        const hintIds = ['paletteGenerator', 'previewSelectedRule', 'dragDropMapping', 'addFirstRule'];
+        const hintIds = [
+            'paletteGenerator',
+            'previewSelectedRule',
+            'dragDropMapping',
+            'addFirstRule',
+            'copyFromButton',
+        ];
         const flags: Record<string, boolean> = {};
         for (const id of hintIds) {
             const flagKey = `grwc.hints.${id}`;
@@ -565,11 +579,19 @@ export class ConfigWebviewProvider implements vscode.Disposable {
      * Reset all hint flags so hints will show again.
      */
     public async resetHintFlags(): Promise<void> {
-        const hintIds = ['paletteGenerator', 'previewSelectedRule', 'dragDropMapping', 'addFirstRule'];
+        const hintIds = [
+            'paletteGenerator',
+            'previewSelectedRule',
+            'dragDropMapping',
+            'addFirstRule',
+            'copyFromButton',
+        ];
         for (const id of hintIds) {
             const flagKey = `grwc.hints.${id}`;
             await this._context.globalState.update(flagKey, undefined);
         }
+        // Also reset the tour link dismissed flag
+        await this._context.globalState.update('grwc.tourLinkDismissed', undefined);
         // Notify webview to refresh hint states
         if (this._panel) {
             this._panel.webview.postMessage({ command: 'hintFlagsReset' });
@@ -1307,6 +1329,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="branch-tables-tab" id="tab-branch-tables">Branch Tables</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
+                <div class="tour-link-container" id="tourLinkContainer">
+                    <span class="tour-link" id="tourLinkStart" data-action="startTour">Take a Tour</span>
+                    <span class="tour-link-dismiss" id="tourLinkDismiss" data-action="dismissTourLink">(dismiss)</span>
+                </div>
                 <button type="button" class="help-button-global" data-action="openContextualHelp" data-tooltip="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
             </div>
             

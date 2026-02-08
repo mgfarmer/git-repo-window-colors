@@ -1097,12 +1097,16 @@ export async function activate(context: ExtensionContext) {
     // Register tour command that shows a quick pick of available tours
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.startTour', async () => {
+            // Dismiss the tour link so it won't show again
+            await context.globalState.update('grwc.tourLinkDismissed', true);
+
+            // Always ensure the configurator is open first
+            configProvider.show(context.extensionUri);
+
             const tours = configProvider.getRegisteredTours();
 
             if (tours.length === 0) {
-                // No tours registered yet - open config to trigger registration, then try again
-                configProvider.show(context.extensionUri);
-                // Wait a moment for tours to register
+                // No tours registered yet - wait a moment for tours to register
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 const toursAfterOpen = configProvider.getRegisteredTours();
                 if (toursAfterOpen.length === 0) {

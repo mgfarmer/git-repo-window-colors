@@ -750,6 +750,11 @@ window.addEventListener('message', (event) => {
         case 'hintFlagsReset':
             // Reset local hint state so hints can show again
             hintManager.resetAllFlags();
+            // Also show the tour link again
+            const tourLinkContainer = document.getElementById('tourLinkContainer');
+            if (tourLinkContainer) {
+                tourLinkContainer.style.display = 'flex';
+            }
             break;
     }
 });
@@ -808,6 +813,12 @@ function handleConfigurationData(data: any) {
     if (data.helpPanelWidth && data.helpPanelWidth >= HELP_PANEL_MIN_WIDTH) {
         helpPanelWidth = data.helpPanelWidth;
         applyHelpPanelWidth();
+    }
+
+    // Show/hide tour link based on whether it was dismissed
+    const tourLinkContainer = document.getElementById('tourLinkContainer');
+    if (tourLinkContainer) {
+        tourLinkContainer.style.display = data.tourLinkDismissed ? 'none' : 'flex';
     }
 
     // Synchronize profileName fields for backward compatibility
@@ -1604,6 +1615,29 @@ function handleDocumentClick(event: Event) {
     // Handle help panel close buttons
     if (target.closest('[data-action="closeHelp"]')) {
         closeHelp();
+        return;
+    }
+
+    // Handle tour link actions
+    if (target.getAttribute('data-action') === 'startTour') {
+        // Hide the tour link immediately
+        const tourLinkContainer = document.getElementById('tourLinkContainer');
+        if (tourLinkContainer) {
+            tourLinkContainer.style.display = 'none';
+        }
+        // Send message to start the tour (this also dismisses the link)
+        vscode.postMessage({ command: 'startTour', data: {} });
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'dismissTourLink') {
+        // Hide the tour link immediately
+        const tourLinkContainer = document.getElementById('tourLinkContainer');
+        if (tourLinkContainer) {
+            tourLinkContainer.style.display = 'none';
+        }
+        // Send message to persist the dismissal
+        vscode.postMessage({ command: 'dismissTourLink', data: {} });
         return;
     }
 
