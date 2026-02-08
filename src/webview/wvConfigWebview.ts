@@ -18,6 +18,9 @@ import { showInputDialog, showMessageDialog } from './dialogUtils';
 // Import tooltip utilities
 import { showTooltip, hideTooltip, hideTooltipImmediate, attachTooltip, setupDelegatedTooltips } from './tooltipUtils';
 
+// Import hint utilities
+import { Hint, hintManager, Tour, tourManager } from './hintUtils';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
@@ -279,6 +282,55 @@ let branchPatternFilterTimeout: any = null;
 // Input original value tracking for escape key restoration
 const originalInputValues = new Map<HTMLInputElement, string>();
 
+// Register all hints with the hint manager
+function registerHints() {
+    hintManager.register(
+        new Hint({
+            id: 'paletteGenerator',
+            html: `<strong>Palette Generator</strong><br>
+               Use the palette generator to automatically create harmonious colors 
+               based on your primary background selection. Click the wand button to 
+               explore different color theory algorithms.`,
+            position: 'bottom',
+            maxWidth: 300,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'previewSelectedRule',
+            html: `<strong>Preview Colors</strong><br>
+               Check this checkbox to preview rules that do not match the current workspace.`,
+            position: 'left',
+            maxWidth: 300,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'dragDropMapping',
+            html: `<strong>Drag &amp; Drop</strong><br>
+               You can also drag palette swatches directly onto mapping cells 
+               for faster color assignment.`,
+            position: 'top',
+            maxWidth: 280,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'addFirstRule',
+            html: `<strong>Get Started</strong><br>
+               Click here to add your first repository color rule.`,
+            position: 'bottom',
+            maxWidth: 280,
+        }),
+    );
+}
+
+// Initialize hints
+registerHints();
+
 // Request initial configuration
 vscode.postMessage({
     command: 'requestConfig',
@@ -312,31 +364,6 @@ function initializeAccessibility() {
                         setTimeout(() => document.body.removeChild(announcement), 1000);
                     }
                 }
-            }
-        }
-
-        // Keyboard shortcuts
-        if (event.ctrlKey && event.altKey) {
-            switch (event.key.toLowerCase()) {
-                case 'r':
-                    event.preventDefault();
-                    addRepoRule();
-                    break;
-                case 'b':
-                    event.preventDefault();
-                    addBranchRule();
-                    break;
-                case 't':
-                    event.preventDefault();
-                    const testButton = document.querySelector(
-                        'button[onclick*="runConfigurationTests"]',
-                    ) as HTMLButtonElement;
-                    if (testButton) testButton.click();
-                    break;
-                case 's':
-                    event.preventDefault();
-                    sendConfiguration();
-                    break;
             }
         }
 
@@ -702,6 +729,15 @@ window.addEventListener('message', (event) => {
         case 'pathSimplifiedForPreview':
             handlePathSimplifiedForPreview(message.data);
             break;
+        case 'startTour':
+            if (message.data?.tourId) {
+                tourManager.forceStartTour(message.data.tourId);
+            }
+            break;
+        case 'hintFlagsReset':
+            // Reset local hint state so hints can show again
+            hintManager.resetAllFlags();
+            break;
     }
 });
 
@@ -722,6 +758,16 @@ function handleConfigurationData(data: any) {
     // Extract starred keys if present
     if (data.starredKeys) {
         starredKeys = data.starredKeys;
+    }
+
+    // Update hint manager with hint flags from extension
+    if (data.hintFlags) {
+        hintManager.updateState(data.hintFlags);
+    }
+
+    // Update tour manager with tour flags from extension
+    if (data.tourFlags) {
+        tourManager.updateState(data.tourFlags);
     }
 
     // Store validation errors if present
@@ -1755,6 +1801,21 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     const container = document.getElementById('repoRulesContent');
     if (!container) return;
 
+    // Show hint for the Add button when there are no rules (after layout fully completes)
+    // Use double requestAnimationFrame to ensure layout is complete
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const addButton = document.querySelector('[data-action="addRepoRule"]') as HTMLElement;
+            if (addButton) {
+                // Only show hint if button is visible and has dimensions
+                const rect = addButton.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    hintManager.tryShow('addFirstRule', addButton, () => !rules || rules.length === 0);
+                }
+            }
+        });
+    });
+
     if (!rules || rules.length === 0) {
         container.innerHTML =
             '<div class="no-rules">No repository rules defined. Click "Add" to create your first rule.</div>';
@@ -1782,6 +1843,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     rules.forEach((rule, index) => {
         const row = tbody.insertRow();
         row.className = 'rule-row';
+        row.setAttribute('data-index', String(index));
 
         // Add error class if this rule has a validation error
         if (validationErrors.repoRules[index]) {
@@ -1971,7 +2033,7 @@ function createBranchTableDropdown(
     const dropdown = document.createElement('div');
     dropdown.className = 'branch-table-dropdown';
     dropdown.setAttribute('data-repo-index', String(repoRuleIndex));
-    dropdown.setAttribute('data-value', selectedTableName);
+    dropdown.setAttribute('data-value', selectedTableName || '');
     dropdown.setAttribute('tabindex', '0');
     dropdown.setAttribute('role', 'combobox');
     dropdown.setAttribute('aria-expanded', 'false');
@@ -2307,7 +2369,7 @@ function createBranchTableDropdown(
     });
 
     // Initialize selected display
-    updateSelectedDisplay(selectedTableName);
+    updateSelectedDisplay(selectedTableName || '');
 
     dropdown.appendChild(selectedDisplay);
     container.appendChild(dropdown);
@@ -3100,6 +3162,11 @@ function handlePreviewModeChange() {
 
     previewMode = checkbox.checked;
 
+    // Mark hint as shown if user manually enables preview
+    if (previewMode) {
+        hintManager.markShown('previewSelectedRule');
+    }
+
     if (previewMode) {
         // If enabling preview and a rule is selected, send preview message
         // Prioritize branch rule if selected, otherwise use repo rule
@@ -3319,6 +3386,10 @@ function selectRepoRule(index: number) {
     } else {
         hidePreviewToast();
     }
+
+    // Show preview hint when selecting a non-matching rule (if preview mode is not already enabled)
+    const previewCheckbox = document.getElementById('preview-selected-repo-rule');
+    hintManager.tryShow('previewSelectedRule', previewCheckbox, () => !previewMode && isPreviewingDifferentRule);
 
     // Render branch rules for the selected repo
     renderBranchRulesForSelectedRepo();
@@ -3750,8 +3821,8 @@ function updateCopyFromButton(showButton: boolean) {
     copyBtn.type = 'button';
     copyBtn.className = 'copy-from-button';
     copyBtn.textContent = '📋 Copy From...';
-    copyBtn.setAttribute('data-tooltip', 'Copy branch rules from global or another repository');
-    copyBtn.setAttribute('aria-label', 'Copy branch rules from another source');
+    copyBtn.setAttribute('data-tooltip', 'Copy branch rules from another branch table.');
+    copyBtn.setAttribute('aria-label', 'Copy branch rules from another branch table.');
 
     // Insert before the Add button in the container
     if (addBtn) {
@@ -3806,7 +3877,7 @@ function showCopyFromMenu(event: Event) {
 
     // Add options for other repos with local rules
     if (currentConfig?.repoRules) {
-        currentConfig.repoRules.forEach((rule, index) => {
+        currentConfig.repoRules.forEach((rule: any, index: number) => {
             if (index === selectedRepoRuleIndex) return; // Skip current repo
             if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
 
@@ -4813,7 +4884,7 @@ function isValidColorName(color: string): boolean {
 
         // If the browser computed a valid color (not the default), it's valid
         // Default computed color is usually 'rgb(0, 0, 0)' or 'rgba(0, 0, 0, 0)'
-        return computedColor && computedColor !== 'rgba(0, 0, 0, 0)' && computedColor !== 'transparent';
+        return Boolean(computedColor && computedColor !== 'rgba(0, 0, 0, 0)' && computedColor !== 'transparent');
     } catch (e) {
         return false;
     }
@@ -4963,7 +5034,7 @@ function validateRegexPattern(pattern: string, inputId: string) {
         clearRegexValidationError();
     } catch (error) {
         // If failed, show the validation error
-        showRegexValidationError(pattern, error.message, inputId);
+        showRegexValidationError(pattern, error instanceof Error ? error.message : String(error), inputId);
     }
 }
 
@@ -5565,7 +5636,7 @@ function updateAutoCompleteSelection() {
             item.setAttribute('aria-selected', 'true');
 
             // Scroll to keep selected item visible
-            scrollToSelectedItem(item as HTMLElement, autoCompleteDropdown);
+            scrollToSelectedItem(item as HTMLElement, autoCompleteDropdown!);
         } else {
             item.classList.remove('selected');
             item.setAttribute('aria-selected', 'false');
@@ -7198,6 +7269,10 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         saveProfiles();
                         // Update the combined swatch
                         updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
+
+                        // Show palette generator hint when user manually sets primary background
+                        const generatorBtn = document.getElementById('paletteGeneratorBtn');
+                        hintManager.tryShow('paletteGenerator', generatorBtn, () => bgKey === 'primaryActiveBg');
                     }
                 });
 
@@ -8000,6 +8075,22 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                     // Update warning indicator visibility
                     const newSlot = select.getAttribute('data-value') || 'none';
+
+                    // Show drag-drop hint when user selects a color from dropdown
+                    // Find the palette swatch for the selected slot
+                    const paletteSlotEl = newSlot
+                        ? document.querySelector(`.palette-slot-draggable[data-slot-name="${newSlot}"]`)
+                        : null;
+                    if (paletteSlotEl) {
+                        // Target the native color input (swatch) within the slot, not the whole container
+                        const swatchEl = paletteSlotEl.querySelector('.native-color-input') as HTMLElement;
+                        hintManager.tryShow(
+                            'dragDropMapping',
+                            swatchEl || (paletteSlotEl as HTMLElement),
+                            () => newSlot !== 'none' && newSlot !== '__fixed__',
+                        );
+                    }
+
                     if (isStarredTab) {
                         if (newSlot === 'none') {
                             warningIndicator.className = 'codicon codicon-warning';
@@ -8123,9 +8214,9 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
         mappingsContainer.appendChild(tabsContent);
 
         // Activate the selected tab
-        if (tabToActivate) {
-            tabToActivate.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
-            tabToActivate.style.fontWeight = 'bold';
+        if (tabToActivate !== null) {
+            (tabToActivate as HTMLButtonElement).style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+            (tabToActivate as HTMLButtonElement).style.fontWeight = 'bold';
         }
 
         // Update checkbox states (but don't re-add event listeners)
@@ -8375,7 +8466,7 @@ function renameProfile(oldName: string, newName: string) {
 
     // Update all references to the old profile name in repo rules
     if (currentConfig.repoRules) {
-        currentConfig.repoRules.forEach((rule) => {
+        currentConfig.repoRules.forEach((rule: any) => {
             if (rule.profileName === oldName) {
                 rule.profileName = newName;
             }
@@ -8393,7 +8484,7 @@ function renameProfile(oldName: string, newName: string) {
         for (const tableName in currentConfig.sharedBranchTables) {
             const table = currentConfig.sharedBranchTables[tableName];
             if (table && table.rules) {
-                table.rules.forEach((rule) => {
+                table.rules.forEach((rule: any) => {
                     if (rule.profileName === oldName) {
                         rule.profileName = newName;
                     }

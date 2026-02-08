@@ -70,6 +70,16 @@
                 "command": "windowColors.importConfig",
                 "title": "Import Configuration",
                 "category": "GRWC"
+            },
+            {
+                "command": "windowColors.startTour",
+                "title": "Start Tour...",
+                "category": "GRWC"
+            },
+            {
+                "command": "windowColors.resetHintFlags",
+                "title": "Show Hints Again",
+                "category": "GRWC"
             }
         ],
         "configuration": [

@@ -2466,3 +2466,174 @@ button:focus {
 .branch-table-cell .icon-button {
     margin-left: 4px;
 }
+
+/* ===== Hint Popup Framework ===== */
+
+/* Attention-grabbing pulse animation */
+@keyframes grwc-hint-pulse {
+    0%,
+    100% {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    50% {
+        box-shadow:
+            0 4px 16px rgba(0, 0, 0, 0.4),
+            0 0 20px 4px var(--vscode-focusBorder, #007acc);
+    }
+}
+
+.grwc-hint {
+    background: var(--vscode-editorWidget-background, #252526);
+    border: 1px solid var(--vscode-focusBorder, #007acc);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.grwc-hint.grwc-hint-attention {
+    animation: grwc-hint-pulse 0.8s ease-in-out 3;
+}
+
+.grwc-hint-content {
+    margin-right: 20px;
+}
+
+.grwc-hint-content strong {
+    color: var(--vscode-textLink-foreground, #3794ff);
+    font-weight: 600;
+}
+
+.grwc-hint-dismiss {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--vscode-icon-foreground, #c5c5c5);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+
+.grwc-hint-dismiss:hover {
+    opacity: 1;
+}
+
+/* Hint arrows */
+.grwc-hint-arrow {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.grwc-hint-arrow-top {
+    bottom: -8px;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateX(-8px);
+}
+
+.grwc-hint-arrow-bottom {
+    top: -8px;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateX(-8px);
+}
+
+.grwc-hint-arrow-left {
+    right: -8px;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateY(-8px);
+}
+
+.grwc-hint-arrow-right {
+    left: -8px;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-right: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateY(-8px);
+}
+
+/* ===== Tour Mode Styles ===== */
+.grwc-hint-tour {
+    min-width: 280px;
+}
+
+.grwc-hint-tour .grwc-hint-content {
+    margin-right: 0;
+    margin-bottom: 12px;
+}
+
+.grwc-hint-tour-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid var(--vscode-panel-border, #454545);
+}
+
+.grwc-hint-tour-progress {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.grwc-hint-tour-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.grwc-hint-tour-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition:
+        background-color 0.15s,
+        opacity 0.15s;
+}
+
+.grwc-hint-tour-btn-skip {
+    background: transparent;
+    border: none;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.grwc-hint-tour-btn-skip:hover {
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.grwc-hint-tour-btn-back {
+    background: var(--vscode-button-secondaryBackground, #3a3d41);
+    border: none;
+    color: var(--vscode-button-secondaryForeground, #cccccc);
+}
+
+.grwc-hint-tour-btn-back:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+.grwc-hint-tour-btn-back:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.grwc-hint-tour-btn-next {
+    background: var(--vscode-button-background, #0e639c);
+    border: none;
+    color: var(--vscode-button-foreground, #ffffff);
+}
+
+.grwc-hint-tour-btn-next:hover {
+    background: var(--vscode-button-hoverBackground, #1177bb);
+}
