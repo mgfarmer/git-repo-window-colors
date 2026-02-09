@@ -1,4 +1,4 @@
-import chroma from 'chroma-js';
+import * as chroma from 'chroma-js';
 import { window } from 'vscode';
 
 export type PaletteAlgorithm =
@@ -64,7 +64,7 @@ function getInactiveBackground(activeBackground: any): string {
     const [l, c, h] = chroma(activeBackground).lch();
     // Reduce lightness by 40% to create a dimmed effect
     const inactiveLightness = l * 0.6;
-    return chroma.lch(inactiveLightness, c, h).hex();
+    return chroma.lch(inactiveLightness, c, h).hex().toUpperCase();
 }
 
 /**
@@ -162,19 +162,19 @@ export function generatePalette(primaryBg: string, algorithm: PaletteAlgorithm =
     const inactiveBackgrounds = backgrounds.map((bg) => getInactiveBackground(bg));
 
     return {
-        primaryActiveBg: backgrounds[0].hex(),
+        primaryActiveBg: backgrounds[0].hex().toUpperCase(),
         primaryActiveFg: foregrounds[0],
         primaryInactiveBg: inactiveBackgrounds[0],
         primaryInactiveFg: foregrounds[0], // Same as active for readability
-        secondaryActiveBg: backgrounds[1].hex(),
+        secondaryActiveBg: backgrounds[1].hex().toUpperCase(),
         secondaryActiveFg: foregrounds[1],
         secondaryInactiveBg: inactiveBackgrounds[1],
         secondaryInactiveFg: foregrounds[1], // Same as active for readability
-        tertiaryActiveBg: backgrounds[2].hex(),
+        tertiaryActiveBg: backgrounds[2].hex().toUpperCase(),
         tertiaryActiveFg: foregrounds[2],
         tertiaryInactiveBg: inactiveBackgrounds[2],
         tertiaryInactiveFg: foregrounds[2], // Same as active for readability
-        quaternaryActiveBg: backgrounds[3].hex(),
+        quaternaryActiveBg: backgrounds[3].hex().toUpperCase(),
         quaternaryActiveFg: foregrounds[3],
         quaternaryInactiveBg: inactiveBackgrounds[3],
         quaternaryInactiveFg: foregrounds[3], // Same as active for readability
@@ -229,12 +229,12 @@ export function generateAllPalettePreviews(primaryBg: string): PalettePreview[] 
 
         return {
             algorithm,
-            colors: [backgrounds[0].hex(), backgrounds[1].hex(), backgrounds[2].hex(), backgrounds[3].hex()] as [
-                string,
-                string,
-                string,
-                string,
-            ],
+            colors: [
+                backgrounds[0].hex().toUpperCase(),
+                backgrounds[1].hex().toUpperCase(),
+                backgrounds[2].hex().toUpperCase(),
+                backgrounds[3].hex().toUpperCase(),
+            ] as [string, string, string, string],
         };
     });
 }
@@ -377,7 +377,7 @@ function generateTriadicPalette(base: any, isDark: boolean): any[] {
     const targetChroma = Math.min(c, 60);
 
     return [
-        base, // Primary (unchanged)
+        chroma.lch(l, c, h), // Primary (reconstructed from LCH for consistency)
         chroma.lch(targetLightness, targetChroma, (h + 120) % 360), // +120°
         chroma.lch(targetLightness, targetChroma * 0.95, (h + 240) % 360), // +240°
         chroma.lch(targetLightness, targetChroma * 0.85, (h + 60) % 360), // +60° (mid-point accent)
@@ -395,7 +395,7 @@ function generateSquarePalette(base: any, isDark: boolean): any[] {
     const targetChroma = Math.min(c, 65); // Slightly higher chroma for bold look
 
     return [
-        base, // Primary (unchanged)
+        chroma.lch(l, c, h), // Primary (reconstructed from LCH for consistency)
         chroma.lch(targetLightness, targetChroma, (h + 90) % 360), // +90°
         chroma.lch(targetLightness, targetChroma, (h + 180) % 360), // +180°
         chroma.lch(targetLightness, targetChroma, (h + 270) % 360), // +270°

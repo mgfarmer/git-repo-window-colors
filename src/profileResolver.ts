@@ -84,13 +84,14 @@ export function resolveProfile(
 
                     if (c.alpha() < 1) {
                         // Use #RRGGBBAA format for colors with alpha channel
-                        const hex = c.hex();
+                        const hex = c.hex().toUpperCase();
                         const alpha = Math.round(c.alpha() * 255)
                             .toString(16)
+                            .toUpperCase()
                             .padStart(2, '0');
                         finalColors[uiKey] = hex + alpha;
                     } else {
-                        finalColors[uiKey] = c.hex();
+                        finalColors[uiKey] = c.hex().toUpperCase();
                     }
                 } catch (e) {
                     console.warn(`[AdvancedMode] Error parsing fixed color for ${uiKey}:`, e);
@@ -105,13 +106,14 @@ export function resolveProfile(
 
                 if (c.alpha() < 1) {
                     // Use #RRGGBBAA format for colors with alpha channel
-                    const hex = c.hex();
+                    const hex = c.hex().toUpperCase();
                     const alpha = Math.round(c.alpha() * 255)
                         .toString(16)
+                        .toUpperCase()
                         .padStart(2, '0');
                     finalColors[uiKey] = hex + alpha;
                 } else {
-                    finalColors[uiKey] = c.hex();
+                    finalColors[uiKey] = c.hex().toUpperCase();
                 }
             }
         }
