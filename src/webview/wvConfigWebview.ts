@@ -1638,8 +1638,9 @@ function handleDocumentClick(event: Event) {
         if (tourLinkContainer) {
             tourLinkContainer.style.display = 'none';
         }
-        // Send message to start the tour (this also dismisses the link)
-        vscode.postMessage({ command: 'startTour', data: {} });
+        // Dismiss the tour link and start the Getting Started tour directly
+        vscode.postMessage({ command: 'dismissTourLink', data: {} });
+        tourManager.forceStartTour('getting-started');
         return;
     }
 
