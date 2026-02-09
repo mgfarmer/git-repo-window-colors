@@ -57,7 +57,7 @@
             <strong>Important:</strong> Repository rules match against the actual <strong>git repository URL</strong> 
             (the remote origin URL), not the folder name where you cloned the repository. The folder name on your 
             local disk is irrelevant to matching. For example:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li>Repository URL: <code>https://github.com/user/awesome-project.git</code></li>
                 <li>Cloned into folder: <code>C:\temp\test123</code></li>
                 <li>Rule qualifier: <code>awesome-project</code> will match ✓</li>
@@ -242,7 +242,7 @@
         </ul>
         <div class="tip">
             <strong>Validation Tip:</strong> If you see a warning icon on a local folder rule, check that:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li>The path exists on your system</li>
                 <li>Environment variables are spelled correctly</li>
                 <li>The path uses the correct format for your operating system (forward or backslashes)</li>
@@ -265,7 +265,6 @@
                     <li>This lets you test how rules will look before enabling them or compare different color options</li>
                 </ul>
             </li>
-            <li><strong>Global vs. Local branch rules:</strong> Repository rules can use global branch rules (shared across all repos) or local branch rules (specific to that repository). Use the "Use Global Branch Rules" toggle to switch between modes.</li>
         </ul>
         <div class="tip">
             <strong>Preview Tip:</strong> The preview feature is great for testing color schemes without committing to them. Enable it in Other Settings, then click through your rules to see how each one looks in real-time.
@@ -329,7 +328,7 @@
         <div class="example">
             <strong>Example:</strong> You want all feature branches to be green, except for one specific branch 
             that should use the repository's default color:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li>Branch pattern: <code>feature/experimental</code> → Color: <code>none</code></li>
                 <li>Branch pattern: <code>feature/.*</code> → Color: <code>green</code></li>
             </ul>
@@ -340,7 +339,7 @@
 
         <div class="note">
             <strong>How Branch Rules Work:</strong> When you're on a branch that matches a branch rule:
-            <ul style="margin-top: 8px; margin-bottom: 0;">
+            <ul class="nested-list">
                 <li><strong>With simple colors:</strong> The color affects only the Activity Bar, while the repository rule continues to control the title bar and other elements</li>
                 <li><strong>With profiles:</strong> The branch profile takes over UI element coloring, replacing the repository rule's colors</li>
             </ul>
@@ -351,6 +350,243 @@
             Like repository rules, branch rules are processed top to bottom, and the first match is used. 
             Reorder rules to control which pattern takes precedence.
         </p>
+
+        <h3>Branch Naming Conventions</h3>
+        <p>
+            Many teams follow standardized branch naming conventions to organize their work. Here are the most common 
+            conventions and example branch rules for each:
+        </p>
+
+        <h4>Git Flow</h4>
+        <p>
+            A popular branching model with dedicated branches for features, releases, and hotfixes:
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Branch Type</th>
+                    <th>Pattern</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Main/Master</td>
+                    <td><code>main|master</code></td>
+                    <td>Production-ready code</td>
+                </tr>
+                <tr>
+                    <td>Develop</td>
+                    <td><code>develop</code></td>
+                    <td>Integration branch for features</td>
+                </tr>
+                <tr>
+                    <td>Feature</td>
+                    <td><code>feature/.*</code></td>
+                    <td>New features in development</td>
+                </tr>
+                <tr>
+                    <td>Release</td>
+                    <td><code>release/.*</code></td>
+                    <td>Preparing for production release</td>
+                </tr>
+                <tr>
+                    <td>Hotfix</td>
+                    <td><code>hotfix/.*</code></td>
+                    <td>Urgent production fixes</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>GitHub Flow</h4>
+        <p>
+            A simpler model with a single main branch and feature branches:
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Branch Type</th>
+                    <th>Pattern</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Main</td>
+                    <td><code>main</code></td>
+                    <td>Always deployable</td>
+                </tr>
+                <tr>
+                    <td>Feature/Fix</td>
+                    <td><code>^(?!main$).*</code></td>
+                    <td>All other branches (features, fixes)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>Trunk-Based Development</h4>
+        <p>
+            Developers work in short-lived branches merged frequently to main:
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Branch Type</th>
+                    <th>Pattern</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Trunk/Main</td>
+                    <td><code>main|trunk</code></td>
+                    <td>Single source of truth</td>
+                </tr>
+                <tr>
+                    <td>Short-lived</td>
+                    <td><code>^(?!.*(main|trunk)).*</code></td>
+                    <td>Temporary work branches</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>Type-Prefixed Branches</h4>
+        <p>
+            Common prefixes used across many workflows to categorize branches by purpose:
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Prefix</th>
+                    <th>Pattern</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>feature/</td>
+                    <td><code>feature/.*</code></td>
+                    <td>New functionality</td>
+                </tr>
+                <tr>
+                    <td>bugfix/ or fix/</td>
+                    <td><code>(bugfix|fix)/.*</code></td>
+                    <td>Bug fixes</td>
+                </tr>
+                <tr>
+                    <td>hotfix/</td>
+                    <td><code>hotfix/.*</code></td>
+                    <td>Urgent production fixes</td>
+                </tr>
+                <tr>
+                    <td>release/</td>
+                    <td><code>release/.*</code></td>
+                    <td>Release preparation</td>
+                </tr>
+                <tr>
+                    <td>docs/</td>
+                    <td><code>docs/.*</code></td>
+                    <td>Documentation changes</td>
+                </tr>
+                <tr>
+                    <td>refactor/</td>
+                    <td><code>refactor/.*</code></td>
+                    <td>Code refactoring</td>
+                </tr>
+                <tr>
+                    <td>test/</td>
+                    <td><code>test/.*</code></td>
+                    <td>Adding or updating tests</td>
+                </tr>
+                <tr>
+                    <td>chore/</td>
+                    <td><code>chore/.*</code></td>
+                    <td>Maintenance tasks</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>Issue/Ticket-Based Branches</h4>
+        <p>
+            Branches named after issue tracker IDs (Jira, GitHub Issues, etc.):
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Format</th>
+                    <th>Pattern</th>
+                    <th>Example</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Jira-style</td>
+                    <td><code>[A-Z]+-[0-9]+.*</code></td>
+                    <td>PROJ-123-add-login</td>
+                </tr>
+                <tr>
+                    <td>GitHub Issues</td>
+                    <td><code>.*#[0-9]+.*|[0-9]+-.*</code></td>
+                    <td>42-fix-header or fix-#42</td>
+                </tr>
+                <tr>
+                    <td>Type + Ticket</td>
+                    <td><code>feature/[A-Z]+-[0-9]+.*</code></td>
+                    <td>feature/PROJ-456-new-api</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>Developer-Prefixed Branches</h4>
+        <p>
+            Some teams use developer initials or usernames as prefixes to identify who owns a branch:
+        </p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Format</th>
+                    <th>Pattern</th>
+                    <th>Example</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>dev/initials/</td>
+                    <td><code>dev/[a-z]+/.*</code></td>
+                    <td>dev/jqp/cool-new-feature</td>
+                </tr>
+                <tr>
+                    <td>users/name/</td>
+                    <td><code>users/[a-z]+/.*</code></td>
+                    <td>users/john/bugfix-login</td>
+                </tr>
+                <tr>
+                    <td>personal/</td>
+                    <td><code>personal/.*</code></td>
+                    <td>personal/experiment-new-api</td>
+                </tr>
+                <tr>
+                    <td>Your branches only</td>
+                    <td><code>dev/jqp/.*</code></td>
+                    <td>Match only branches for user jqp</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="tip">
+            <strong>Personal Branch Tip:</strong> Create a rule with your specific prefix (e.g., <code>dev/jqp/.*</code>) 
+            to give your own work-in-progress branches a distinct color, making them easy to identify at a glance.
+        </div>
+
+        <div class="tip">
+            <strong>Color Suggestions:</strong> Consider using consistent colors across your team:
+            <ul class="nested-list">
+                <li><strong>Main/Master:</strong> Green or blue (stable, production)</li>
+                <li><strong>Develop:</strong> Yellow or orange (work in progress)</li>
+                <li><strong>Feature:</strong> Purple or cyan (new work)</li>
+                <li><strong>Bugfix/Hotfix:</strong> Red or orange (attention needed)</li>
+                <li><strong>Release:</strong> Gold or teal (near completion)</li>
+            </ul>
+        </div>
 
         <h2>Working with Colors</h2>
 
@@ -409,26 +645,6 @@
             <li><strong>Disable instead of delete:</strong> Use the eye button to temporarily disable rules while testing</li>
             <li><strong>Keep it simple:</strong> Start with repository rules before adding branch-specific coloring</li>
         </ul>
-
-        <h2>Keyboard Shortcuts</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Shortcut</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><code>Ctrl+Alt+R</code> (or <code>Cmd+Alt+R</code>)</td>
-                    <td>Add a new repository rule</td>
-                </tr>
-                <tr>
-                    <td><code>Ctrl+Alt+B</code> (or <code>Cmd+Alt+B</code>)</td>
-                    <td>Add a new branch rule</td>
-                </tr>
-            </tbody>
-        </table>
 
         <h2>Troubleshooting</h2>
         

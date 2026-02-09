@@ -60,15 +60,18 @@ body {
     font-weight: 500;
     border: 2px solid;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
     transition:
         transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        visibility 0.3s;
 }
 
 .preview-toast.visible {
     transform: translateX(-50%) translateY(0);
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
 }
 
@@ -698,16 +701,18 @@ h2 {
     border: 1px solid var(--vscode-menu-border);
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    min-width: 200px;
-    max-width: 300px;
-    max-height: 300px;
+    min-width: 250px;
+    max-width: 350px;
+    max-height: 400px;
     overflow-y: auto;
     z-index: 1000;
     padding: 4px 0;
 }
 
 .copy-from-option {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     width: 100%;
     background: transparent;
     color: var(--vscode-menu-foreground);
@@ -724,6 +729,52 @@ h2 {
 .copy-from-option:hover {
     background: var(--vscode-menu-selectionBackground);
     color: var(--vscode-menu-selectionForeground);
+}
+
+/* Table header entries - visually distinct */
+.copy-from-table-header {
+    font-weight: 600;
+    background: var(--vscode-sideBar-background);
+    border-bottom: 1px solid var(--vscode-menu-separatorBackground);
+    margin-top: 4px;
+    padding: 8px 12px;
+}
+.copy-from-table-header:first-child {
+    margin-top: 0;
+}
+.copy-from-table-header .codicon {
+    opacity: 0.8;
+}
+.copy-from-table-header:hover {
+    background: var(--vscode-menu-selectionBackground);
+}
+
+/* Count badge in table headers */
+.copy-from-count {
+    font-weight: 400;
+    opacity: 0.7;
+    font-size: 11px;
+    margin-left: auto;
+}
+
+/* Individual rule entries - indented under tables */
+.copy-from-rule {
+    padding-left: 28px;
+    font-size: 11px;
+    opacity: 0.9;
+}
+.copy-from-rule:hover {
+    opacity: 1;
+}
+
+/* Color swatch for rules */
+.copy-from-rule-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .copy-from-no-options {
@@ -1537,6 +1588,41 @@ button:focus {
     opacity: 0.5;
 }
 
+/* Tour Link */
+.tour-link-container {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: none; /* Hidden by default, shown via JS if not dismissed */
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.tour-link {
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.tour-link:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
+.tour-link-dismiss {
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.tour-link-dismiss:hover {
+    color: var(--vscode-foreground);
+    opacity: 1;
+}
+
 .tab-button {
     background: none;
     border: none;
@@ -2100,6 +2186,8 @@ button:focus {
 
 #report-tab {
     position: relative;
+    overflow-y: auto;
+    flex: 1;
 }
 
 #report-tab .help-button {
@@ -2314,7 +2402,7 @@ button:focus {
 .help-panel {
     position: fixed;
     top: 0;
-    right: -600px;
+    right: 0;
     width: 600px;
     max-width: 90vw;
     height: 100%;
@@ -2325,11 +2413,12 @@ button:focus {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    transition: right 0.3s ease-in-out;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
 }
 
 .help-panel.active {
-    right: 0;
+    transform: translateX(0);
 }
 
 .help-panel-header {
@@ -2379,6 +2468,50 @@ button:focus {
     height: 100%;
     border: none;
     display: block;
+}
+
+/* Help Panel Resize Handle */
+.help-panel-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: ew-resize;
+    z-index: 10;
+    background: transparent;
+    transition: background-color 0.15s ease;
+}
+
+.help-panel-resize-handle::after {
+    content: '';
+    position: absolute;
+    left: 1px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: transparent;
+    transition: background-color 0.15s ease;
+}
+
+.help-panel-resize-handle:hover::after,
+.help-panel-resize-handle.dragging::after {
+    background-color: var(--vscode-sash-hoverBorder, #007acc);
+}
+
+.help-panel.resizing {
+    transition: none !important;
+    user-select: none;
+}
+
+.help-panel-resize-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    cursor: ew-resize;
 }
 
 /* Drag and Drop Styles */
@@ -2465,4 +2598,175 @@ button:focus {
 
 .branch-table-cell .icon-button {
     margin-left: 4px;
+}
+
+/* ===== Hint Popup Framework ===== */
+
+/* Attention-grabbing pulse animation */
+@keyframes grwc-hint-pulse {
+    0%,
+    100% {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    50% {
+        box-shadow:
+            0 4px 16px rgba(0, 0, 0, 0.4),
+            0 0 20px 4px var(--vscode-focusBorder, #007acc);
+    }
+}
+
+.grwc-hint {
+    background: var(--vscode-editorWidget-background, #252526);
+    border: 1px solid var(--vscode-focusBorder, #007acc);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.grwc-hint.grwc-hint-attention {
+    animation: grwc-hint-pulse 0.8s ease-in-out 3;
+}
+
+.grwc-hint-content {
+    margin-right: 20px;
+}
+
+.grwc-hint-content strong {
+    color: var(--vscode-textLink-foreground, #3794ff);
+    font-weight: 600;
+}
+
+.grwc-hint-dismiss {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: var(--vscode-icon-foreground, #c5c5c5);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+
+.grwc-hint-dismiss:hover {
+    opacity: 1;
+}
+
+/* Hint arrows */
+.grwc-hint-arrow {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
+.grwc-hint-arrow-top {
+    bottom: -8px;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateX(-8px);
+}
+
+.grwc-hint-arrow-bottom {
+    top: -8px;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateX(-8px);
+}
+
+.grwc-hint-arrow-left {
+    right: -8px;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateY(-8px);
+}
+
+.grwc-hint-arrow-right {
+    left: -8px;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-right: 8px solid var(--vscode-focusBorder, #007acc);
+    transform: translateY(-8px);
+}
+
+/* ===== Tour Mode Styles ===== */
+.grwc-hint-tour {
+    min-width: 280px;
+}
+
+.grwc-hint-tour .grwc-hint-content {
+    margin-right: 0;
+    margin-bottom: 12px;
+}
+
+.grwc-hint-tour-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 12px;
+    border-top: 1px solid var(--vscode-panel-border, #454545);
+}
+
+.grwc-hint-tour-progress {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.grwc-hint-tour-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.grwc-hint-tour-btn {
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition:
+        background-color 0.15s,
+        opacity 0.15s;
+}
+
+.grwc-hint-tour-btn-skip {
+    background: transparent;
+    border: none;
+    color: var(--vscode-descriptionForeground, #9d9d9d);
+}
+
+.grwc-hint-tour-btn-skip:hover {
+    color: var(--vscode-foreground, #cccccc);
+}
+
+.grwc-hint-tour-btn-back {
+    background: var(--vscode-button-secondaryBackground, #3a3d41);
+    border: none;
+    color: var(--vscode-button-secondaryForeground, #cccccc);
+}
+
+.grwc-hint-tour-btn-back:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground, #45494e);
+}
+
+.grwc-hint-tour-btn-back:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.grwc-hint-tour-btn-next {
+    background: var(--vscode-button-background, #0e639c);
+    border: none;
+    color: var(--vscode-button-foreground, #ffffff);
+}
+
+.grwc-hint-tour-btn-next:hover {
+    background: var(--vscode-button-hoverBackground, #1177bb);
 }

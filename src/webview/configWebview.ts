@@ -52,6 +52,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _previewRepoRuleIndex: number | null = null;
     private _previewBranchRuleContext: { index: number; tableName: string } | null = null;
     private _previewModeEnabled: boolean = false;
+    private _registeredTourCommands: Map<string, vscode.Disposable> = new Map();
+    private _tourInfo: Map<string, { commandTitle: string }> = new Map();
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
@@ -269,6 +271,25 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'simplifyPathForPreview':
                 await this._handleSimplifyPathForPreview(message.data.path!);
                 break;
+            case 'dismissHint':
+                await this._handleDismissHint(message.data.flagKey!);
+                break;
+            case 'completeTour':
+                await this._handleCompleteTour(message.data.flagKey!);
+                break;
+            case 'registerTourCommand':
+                this._handleRegisterTourCommand(message.data.tourId!, message.data.commandTitle!);
+                break;
+            case 'saveHelpPanelWidth':
+                await this._context.globalState.update('grwc.helpPanelWidth', message.data.width);
+                break;
+            case 'dismissTourLink':
+                await this._context.globalState.update('grwc.tourLinkDismissed', true);
+                break;
+            case 'startTour':
+                await this._context.globalState.update('grwc.tourLinkDismissed', true);
+                vscode.commands.executeCommand('windowColors.startTour');
+                break;
         }
     }
 
@@ -283,6 +304,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const advancedProfiles = this._getAdvancedProfiles();
         const workspaceInfo = this._getWorkspaceInfo();
         const starredKeys = this._getStarredKeys();
+        const hintFlags = this._getHintFlags();
+        const tourFlags = this._getTourFlags();
 
         // Trigger validation to populate error maps
         validateRules();
@@ -371,6 +394,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             workspaceInfo,
             colorCustomizations,
             starredKeys,
+            hintFlags,
+            tourFlags,
+            tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
+            helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
             validationErrors: {
                 repoRules: repoRuleErrorsObj,
                 branchRules: branchRuleErrorsObj,
@@ -502,6 +529,143 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _getStarredKeys(): string[] {
         return this._context.globalState.get<string[]>('grwc.starredKeys', []);
+    }
+
+    /**
+     * Get hint flags from global state.
+     * Returns an object with flag keys mapped to boolean values.
+     * Flag keys are derived from hint IDs: grwc.hints.{id}
+     */
+    private _getHintFlags(): Record<string, boolean> {
+        const hintIds = [
+            'paletteGenerator',
+            'previewSelectedRule',
+            'dragDropMapping',
+            'addFirstRule',
+            'copyFromButton',
+        ];
+        const flags: Record<string, boolean> = {};
+        for (const id of hintIds) {
+            const flagKey = `grwc.hints.${id}`;
+            flags[flagKey] = this._context.globalState.get<boolean>(flagKey, false);
+        }
+        return flags;
+    }
+
+    /**
+     * Get tour completion flags from global state.
+     * Returns an object with flag keys mapped to boolean values.
+     * Flag keys are derived from tour IDs: grwc.tours.{id}
+     */
+    private _getTourFlags(): Record<string, boolean> {
+        // Add tour IDs here as tours are registered
+        const tourIds: string[] = [];
+        const flags: Record<string, boolean> = {};
+        for (const id of tourIds) {
+            const flagKey = `grwc.tours.${id}`;
+            flags[flagKey] = this._context.globalState.get<boolean>(flagKey, false);
+        }
+        return flags;
+    }
+
+    /**
+     * Mark a hint as shown (dismissed) in global state.
+     */
+    private async _handleDismissHint(flagKey: string): Promise<void> {
+        await this._context.globalState.update(flagKey, true);
+    }
+
+    /**
+     * Reset all hint flags so hints will show again.
+     */
+    public async resetHintFlags(): Promise<void> {
+        const hintIds = [
+            'paletteGenerator',
+            'previewSelectedRule',
+            'dragDropMapping',
+            'addFirstRule',
+            'copyFromButton',
+        ];
+        for (const id of hintIds) {
+            const flagKey = `grwc.hints.${id}`;
+            await this._context.globalState.update(flagKey, undefined);
+        }
+        // Also reset the tour link dismissed flag
+        await this._context.globalState.update('grwc.tourLinkDismissed', undefined);
+        // Notify webview to refresh hint states
+        if (this._panel) {
+            this._panel.webview.postMessage({ command: 'hintFlagsReset' });
+        }
+    }
+
+    /**
+     * Mark a tour as completed in global state.
+     */
+    private async _handleCompleteTour(flagKey: string): Promise<void> {
+        await this._context.globalState.update(flagKey, true);
+    }
+
+    /**
+     * Register a VS Code command for starting a tour from the command palette.
+     */
+    private _handleRegisterTourCommand(tourId: string, commandTitle: string): void {
+        // Store tour info for quick pick
+        this._tourInfo.set(tourId, { commandTitle });
+
+        const commandId = `windowColors.tour.${tourId}`;
+
+        // Don't re-register if already registered
+        if (this._registeredTourCommands.has(tourId)) {
+            return;
+        }
+
+        const disposable = vscode.commands.registerCommand(commandId, () => {
+            // Show the webview if not visible
+            if (!this._panel) {
+                this.show(this._extensionUri);
+            } else {
+                this._panel.reveal();
+            }
+            // Send message to webview to start the tour
+            if (this._panel) {
+                this._panel.webview.postMessage({
+                    command: 'startTour',
+                    data: { tourId },
+                });
+            }
+        });
+
+        this._registeredTourCommands.set(tourId, disposable);
+        this._disposables.push(disposable);
+    }
+
+    /**
+     * Get all registered tours for quick pick display.
+     */
+    public getRegisteredTours(): Array<{ tourId: string; commandTitle: string }> {
+        return Array.from(this._tourInfo.entries()).map(([tourId, info]) => ({
+            tourId,
+            commandTitle: info.commandTitle,
+        }));
+    }
+
+    /**
+     * Start a specific tour by ID.
+     */
+    public startTour(tourId: string): void {
+        // Show the webview if not visible
+        if (!this._panel) {
+            this.show(this._extensionUri);
+        } else {
+            this._panel.reveal();
+        }
+        // Send message to webview to start the tour
+        if (this._panel) {
+            this._panel.webview.postMessage({
+                command: 'startTour',
+                data: { tourId },
+            });
+        }
     }
 
     private _getSharedBranchTables(): { [key: string]: { rules: BranchRule[] } } {
@@ -1165,6 +1329,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="branch-tables-tab" id="tab-branch-tables">Branch Tables</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="profiles-tab" id="tab-profiles">Profiles</button>
                 <button class="tab-button" role="tab" aria-selected="false" aria-controls="report-tab" id="tab-report">Color Report</button>
+                <div class="tour-link-container" id="tourLinkContainer">
+                    <span class="tour-link" id="tourLinkStart" data-action="startTour">Take a Tour</span>
+                    <span class="tour-link-dismiss" id="tourLinkDismiss" data-action="dismissTourLink">(dismiss)</span>
+                </div>
                 <button type="button" class="help-button-global" data-action="openContextualHelp" data-tooltip="Open Help" aria-label="Open Help"><span class="codicon codicon-question"></span></button>
             </div>
             
@@ -1185,9 +1353,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 <button type="button" 
                                         class="header-add-button" 
                                         data-action="addRepoRule" 
-                                        data-tooltip-html="Add a new repository rule. Rules are processed in order, with the first match being applied.<br><br><strong>Tip:</strong> Use Ctrl+Alt+R as a keyboard shortcut."
+                                        data-tooltip-html="Add a new repository rule. Rules are processed in order, with the first match being applied."
                                         data-tooltip-max-width="350"
-                                        aria-label="Add Repository Rule (Ctrl+Alt+R)">
+                                        aria-label="Add Repository Rule">
                                     + Add
                                 </button>
                             </div>
@@ -1226,9 +1394,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                     <button type="button" 
                                             class="header-add-button branch-add-button" 
                                             data-action="addBranchRule" 
-                                            data-tooltip-html="Add a new branch rule. Branch rules override repository rules for matching branch patterns.<br><br><strong>Tip:</strong> Use Ctrl+Alt+B as a keyboard shortcut."
+                                            data-tooltip-html="Add a new branch rule. Branch rules override repository rules for matching branch patterns."
                                             data-tooltip-max-width="350"
-                                            aria-label="Add Branch Rule (Ctrl+Alt+B)">
+                                            aria-label="Add Branch Rule">
                                         + Add
                                     </button>
                                 </div>
@@ -1421,6 +1589,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             <!-- Help Panel (Unified) -->
             <div class="help-panel-overlay" id="helpPanelOverlay" data-action="closeHelp"></div>
             <div class="help-panel" id="helpPanel">
+                <div class="help-panel-resize-handle" id="helpPanelResizeHandle"></div>
                 <div class="help-panel-header">
                     <h2 class="help-panel-title" id="helpPanelTitle">Help</h2>
                     <button type="button" class="help-panel-close" data-action="closeHelp" aria-label="Close help panel"><span class="codicon codicon-close"></span></button>

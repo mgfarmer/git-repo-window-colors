@@ -1,7 +1,6 @@
 /* Common Help File Styling */
 .help-content {
     padding: 20px;
-    max-width: 900px;
     font-family: var(
         --vscode-font-family,
         -apple-system,
@@ -17,6 +16,12 @@
     color: var(--vscode-editor-foreground);
     line-height: 1.6;
     counter-reset: h2;
+}
+
+/* Nested list with reduced top margin */
+.help-content .nested-list {
+    margin-top: 8px;
+    margin-bottom: 0;
 }
 
 .help-content h1 {
@@ -158,6 +163,7 @@
 
 .help-content td {
     background-color: var(--vscode-editor-background);
+    vertical-align: top;
 }
 
 /* Callout boxes */

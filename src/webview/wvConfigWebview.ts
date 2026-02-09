@@ -18,11 +18,19 @@ import { showInputDialog, showMessageDialog } from './dialogUtils';
 // Import tooltip utilities
 import { showTooltip, hideTooltip, hideTooltipImmediate, attachTooltip, setupDelegatedTooltips } from './tooltipUtils';
 
+// Import hint utilities
+import { Hint, hintManager, Tour, tourManager } from './hintUtils';
+
+// Import tour configurations
+import { gettingStartedTour, profilesTour } from './tourSteps';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
 
 const vscode = acquireVsCodeApi();
+// Store vscode on window for other modules (e.g., hintUtils.ts) to access
+(window as any).vscode = vscode;
 let currentConfig: any = null;
 let starredKeys: string[] = [];
 let validationTimeout: any = null;
@@ -42,6 +50,10 @@ let previewMode: boolean = false; // Track if preview mode is enabled
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
 let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
 let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') !== 'false'; // Default to true
+
+// Help panel resize state
+const HELP_PANEL_MIN_WIDTH = 600;
+let helpPanelWidth = HELP_PANEL_MIN_WIDTH;
 
 // Tab Switching
 function initTabs() {
@@ -250,24 +262,20 @@ const HTML_COLOR_NAMES = [
 ];
 
 // Example branch patterns for auto-complete
-const EXAMPLE_BRANCH_PATTERNS = [
-    '^(?!.*(main|master)).*',
-    '^(bug/|bug-).*',
-    '^(feature/|feature-).*',
-    'feature/.*',
-    'bugfix/.*',
-    'main',
-    'master',
-    'develop',
-    'dev',
-    'release.*',
-    'hotfix.*',
-    'fix/.*',
-    'docs/.*',
-    'test/.*',
-    'refactor/.*',
-    'style/.*',
-    'perf/.*',
+const EXAMPLE_BRANCH_PATTERNS: { pattern: string; description: string }[] = [
+    { pattern: '^(?!.*(main|master)).*', description: 'All except main/master' },
+    { pattern: '^(bug/|bug-).*', description: 'Bug fix branches with bug IDs' },
+    { pattern: '^(feature/|feature-).*', description: 'Feature branches with feature IDs' },
+    { pattern: 'feature/.*', description: 'Feature branches (prefix)' },
+    { pattern: 'bugfix/.*', description: 'Bugfix branches (prefix)' },
+    { pattern: 'dev', description: 'Dev branch only' },
+    { pattern: 'hotfix.*', description: 'Hotfix branches' },
+    { pattern: 'fix/.*', description: 'Fix branches (prefix)' },
+    { pattern: 'docs/.*', description: 'Documentation branches' },
+    { pattern: 'test/.*', description: 'Test branches' },
+    { pattern: 'refactor/.*', description: 'Refactor branches' },
+    { pattern: 'style/.*', description: 'Style/formatting branches' },
+    { pattern: 'perf/.*', description: 'Performance branches' },
 ];
 
 // Auto-complete state
@@ -278,6 +286,76 @@ let branchPatternFilterTimeout: any = null;
 
 // Input original value tracking for escape key restoration
 const originalInputValues = new Map<HTMLInputElement, string>();
+
+// Register all hints with the hint manager
+function registerHints() {
+    hintManager.register(
+        new Hint({
+            id: 'paletteGenerator',
+            html: `<strong>Palette Generator</strong><br>
+               Use the palette generator to automatically create harmonious colors 
+               based on your primary background selection. Click the wand button to 
+               explore different color theory algorithms.`,
+            position: 'bottom',
+            maxWidth: 300,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'previewSelectedRule',
+            html: `<strong>Preview Colors</strong><br>
+               Check this checkbox to preview rules that do not match the current workspace.`,
+            position: 'left',
+            maxWidth: 300,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'dragDropMapping',
+            html: `<strong>Drag &amp; Drop</strong><br>
+               You can also drag palette swatches directly onto mapping cells 
+               for faster color assignment.`,
+            position: 'top',
+            maxWidth: 280,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'addFirstRule',
+            html: `<strong>Get Started</strong><br>
+               Click here to add your first repository color rule.`,
+            position: 'bottom',
+            maxWidth: 280,
+        }),
+    );
+
+    hintManager.register(
+        new Hint({
+            id: 'copyFromButton',
+            html: `<strong>Copy Rules</strong><br>
+               Use this button to copy rules from other tables. You can copy 
+               an entire table at once or select individual rules to import.`,
+            position: 'left',
+            maxWidth: 300,
+        }),
+    );
+}
+
+// Register all tours with the tour manager
+// Register all tours with the tour manager
+function registerTours() {
+    tourManager.register(new Tour(gettingStartedTour));
+    tourManager.register(new Tour(profilesTour));
+}
+
+// Initialize hints
+registerHints();
+
+// Initialize tours
+registerTours();
 
 // Request initial configuration
 vscode.postMessage({
@@ -312,31 +390,6 @@ function initializeAccessibility() {
                         setTimeout(() => document.body.removeChild(announcement), 1000);
                     }
                 }
-            }
-        }
-
-        // Keyboard shortcuts
-        if (event.ctrlKey && event.altKey) {
-            switch (event.key.toLowerCase()) {
-                case 'r':
-                    event.preventDefault();
-                    addRepoRule();
-                    break;
-                case 'b':
-                    event.preventDefault();
-                    addBranchRule();
-                    break;
-                case 't':
-                    event.preventDefault();
-                    const testButton = document.querySelector(
-                        'button[onclick*="runConfigurationTests"]',
-                    ) as HTMLButtonElement;
-                    if (testButton) testButton.click();
-                    break;
-                case 's':
-                    event.preventDefault();
-                    sendConfiguration();
-                    break;
             }
         }
 
@@ -702,6 +755,20 @@ window.addEventListener('message', (event) => {
         case 'pathSimplifiedForPreview':
             handlePathSimplifiedForPreview(message.data);
             break;
+        case 'startTour':
+            if (message.data?.tourId) {
+                tourManager.forceStartTour(message.data.tourId);
+            }
+            break;
+        case 'hintFlagsReset':
+            // Reset local hint state so hints can show again
+            hintManager.resetAllFlags();
+            // Also show the tour link again
+            const tourLinkContainer = document.getElementById('tourLinkContainer');
+            if (tourLinkContainer) {
+                tourLinkContainer.style.display = 'flex';
+            }
+            break;
     }
 });
 
@@ -724,6 +791,16 @@ function handleConfigurationData(data: any) {
         starredKeys = data.starredKeys;
     }
 
+    // Update hint manager with hint flags from extension
+    if (data.hintFlags) {
+        hintManager.updateState(data.hintFlags);
+    }
+
+    // Update tour manager with tour flags from extension
+    if (data.tourFlags) {
+        tourManager.updateState(data.tourFlags);
+    }
+
     // Store validation errors if present
     if (data.validationErrors) {
         validationErrors = data.validationErrors;
@@ -743,6 +820,18 @@ function handleConfigurationData(data: any) {
         expandedPaths = data.expandedPaths;
     } else {
         expandedPaths = {};
+    }
+
+    // Initialize help panel width from config
+    if (data.helpPanelWidth && data.helpPanelWidth >= HELP_PANEL_MIN_WIDTH) {
+        helpPanelWidth = data.helpPanelWidth;
+        applyHelpPanelWidth();
+    }
+
+    // Show/hide tour link based on whether it was dismissed
+    const tourLinkContainer = document.getElementById('tourLinkContainer');
+    if (tourLinkContainer) {
+        tourLinkContainer.style.display = data.tourLinkDismissed ? 'none' : 'flex';
     }
 
     // Synchronize profileName fields for backward compatibility
@@ -1043,6 +1132,8 @@ function openHelp(helpType: string) {
     const overlay = document.getElementById('helpPanelOverlay');
     const panel = document.getElementById('helpPanel');
     if (overlay && panel) {
+        // Apply current width before showing
+        panel.style.width = `${helpPanelWidth}px`;
         overlay.classList.add('active');
         panel.classList.add('active');
     }
@@ -1059,6 +1150,86 @@ function closeHelp() {
         panel.classList.remove('active');
     }
 }
+
+// Help panel resize functionality
+function applyHelpPanelWidth() {
+    const panel = document.getElementById('helpPanel');
+    if (panel) {
+        panel.style.width = `${helpPanelWidth}px`;
+    }
+}
+
+function initHelpPanelResize() {
+    const panel = document.getElementById('helpPanel');
+    const handle = document.getElementById('helpPanelResizeHandle');
+    if (!panel || !handle) return;
+
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+    let overlay: HTMLDivElement | null = null;
+
+    handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = helpPanelWidth;
+
+        // Create overlay to capture mouse events during drag
+        overlay = document.createElement('div');
+        overlay.className = 'help-panel-resize-overlay';
+        document.body.appendChild(overlay);
+
+        panel.classList.add('resizing');
+        handle.classList.add('dragging');
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    });
+
+    function onMouseMove(e: MouseEvent) {
+        if (!isDragging) return;
+
+        // Calculate new width (dragging left increases width since panel is on the right)
+        const deltaX = startX - e.clientX;
+        let newWidth = startWidth + deltaX;
+
+        // Enforce minimum and maximum widths
+        newWidth = Math.max(HELP_PANEL_MIN_WIDTH, newWidth);
+        newWidth = Math.min(window.innerWidth * 0.9, newWidth); // Max 90% of viewport
+
+        helpPanelWidth = newWidth;
+        panel!.style.width = `${newWidth}px`;
+    }
+
+    function onMouseUp() {
+        if (!isDragging) return;
+        isDragging = false;
+
+        // Remove overlay
+        if (overlay) {
+            overlay.remove();
+            overlay = null;
+        }
+
+        panel!.classList.remove('resizing');
+        handle!.classList.remove('dragging');
+
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        // Save the new width to global state
+        vscode.postMessage({
+            command: 'saveHelpPanelWidth',
+            data: { width: helpPanelWidth },
+        });
+    }
+}
+
+// Initialize help panel resize on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    initHelpPanelResize();
+});
 
 function renderConfiguration(config: any) {
     // Clear validation errors on new data
@@ -1460,6 +1631,30 @@ function handleDocumentClick(event: Event) {
         return;
     }
 
+    // Handle tour link actions
+    if (target.getAttribute('data-action') === 'startTour') {
+        // Hide the tour link immediately
+        const tourLinkContainer = document.getElementById('tourLinkContainer');
+        if (tourLinkContainer) {
+            tourLinkContainer.style.display = 'none';
+        }
+        // Dismiss the tour link and start the Getting Started tour directly
+        vscode.postMessage({ command: 'dismissTourLink', data: {} });
+        tourManager.forceStartTour('getting-started');
+        return;
+    }
+
+    if (target.getAttribute('data-action') === 'dismissTourLink') {
+        // Hide the tour link immediately
+        const tourLinkContainer = document.getElementById('tourLinkContainer');
+        if (tourLinkContainer) {
+            tourLinkContainer.style.display = 'none';
+        }
+        // Send message to persist the dismissal
+        vscode.postMessage({ command: 'dismissTourLink', data: {} });
+        return;
+    }
+
     // Handle Import/Export buttons
     if (target.getAttribute('data-action') === 'exportConfig') {
         vscode.postMessage({ command: 'exportConfig', data: {} });
@@ -1755,6 +1950,21 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     const container = document.getElementById('repoRulesContent');
     if (!container) return;
 
+    // Show hint for the Add button when there are no rules (after layout fully completes)
+    // Use double requestAnimationFrame to ensure layout is complete
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const addButton = document.querySelector('[data-action="addRepoRule"]') as HTMLElement;
+            if (addButton) {
+                // Only show hint if button is visible and has dimensions
+                const rect = addButton.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    hintManager.tryShow('addFirstRule', addButton, () => !rules || rules.length === 0);
+                }
+            }
+        });
+    });
+
     if (!rules || rules.length === 0) {
         container.innerHTML =
             '<div class="no-rules">No repository rules defined. Click "Add" to create your first rule.</div>';
@@ -1782,6 +1992,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     rules.forEach((rule, index) => {
         const row = tbody.insertRow();
         row.className = 'rule-row';
+        row.setAttribute('data-index', String(index));
 
         // Add error class if this rule has a validation error
         if (validationErrors.repoRules[index]) {
@@ -1971,7 +2182,7 @@ function createBranchTableDropdown(
     const dropdown = document.createElement('div');
     dropdown.className = 'branch-table-dropdown';
     dropdown.setAttribute('data-repo-index', String(repoRuleIndex));
-    dropdown.setAttribute('data-value', selectedTableName);
+    dropdown.setAttribute('data-value', selectedTableName || '');
     dropdown.setAttribute('tabindex', '0');
     dropdown.setAttribute('role', 'combobox');
     dropdown.setAttribute('aria-expanded', 'false');
@@ -2307,7 +2518,7 @@ function createBranchTableDropdown(
     });
 
     // Initialize selected display
-    updateSelectedDisplay(selectedTableName);
+    updateSelectedDisplay(selectedTableName || '');
 
     dropdown.appendChild(selectedDisplay);
     container.appendChild(dropdown);
@@ -2614,7 +2825,7 @@ function renderOtherSettings(settings: any) {
 
     container.innerHTML = `
         <div class="settings-sections">
-            <div class="settings-section">
+            <div class="settings-section color-options-section">
                 <h3>Color Options</h3>
                 <div class="section-help" style="margin-bottom: 10px;">
                     <strong>Note:</strong> These settings only apply when using simple colors. When using Profiles, these color-related settings are controlled by the profile configuration.${profileNote}
@@ -2679,7 +2890,7 @@ function renderOtherSettings(settings: any) {
                 </div>
             </div>
             
-            <div class="settings-section">
+            <div class="settings-section other-options-section">
                 <h3>Other Options</h3>
                 <div class="settings-grid">
                     <div class="setting-item"
@@ -3100,6 +3311,11 @@ function handlePreviewModeChange() {
 
     previewMode = checkbox.checked;
 
+    // Mark hint as shown if user manually enables preview
+    if (previewMode) {
+        hintManager.markShown('previewSelectedRule');
+    }
+
     if (previewMode) {
         // If enabling preview and a rule is selected, send preview message
         // Prioritize branch rule if selected, otherwise use repo rule
@@ -3275,9 +3491,16 @@ function updateBranchRule(index: number, field: string, value: string) {
 }
 
 function selectRepoRule(index: number) {
-    if (!currentConfig?.repoRules?.[index]) return;
+    console.log(
+        `[selectRepoRule] Called with index: ${index}, current selectedRepoRuleIndex: ${selectedRepoRuleIndex}`,
+    );
+    if (!currentConfig?.repoRules?.[index]) {
+        console.log(`[selectRepoRule] No rule found at index ${index}, returning`);
+        return;
+    }
 
     selectedRepoRuleIndex = index;
+    console.log(`[selectRepoRule] Set selectedRepoRuleIndex to ${index}`);
 
     // Reset branch rule selection when switching repos so it reinitializes
     selectedBranchRuleIndex = -1;
@@ -3319,6 +3542,10 @@ function selectRepoRule(index: number) {
     } else {
         hidePreviewToast();
     }
+
+    // Show preview hint when selecting a non-matching rule (if preview mode is not already enabled)
+    const previewCheckbox = document.getElementById('preview-selected-repo-rule');
+    hintManager.tryShow('previewSelectedRule', previewCheckbox, () => !previewMode && isPreviewingDifferentRule);
 
     // Render branch rules for the selected repo
     renderBranchRulesForSelectedRepo();
@@ -3474,6 +3701,19 @@ async function showCreateTableDialog(repoRuleIndex: number) {
             rules: [],
         };
 
+        // Check if this is the second table (first user-created table)
+        // and show the Copy From hint
+        const tableCount = Object.keys(currentConfig.sharedBranchTables).length;
+        if (tableCount === 2) {
+            // Delay showing the hint until after the UI updates
+            setTimeout(() => {
+                const copyFromBtn = document.querySelector('.copy-from-button');
+                if (copyFromBtn) {
+                    hintManager.tryShow('copyFromButton', copyFromBtn as HTMLElement);
+                }
+            }, 500);
+        }
+
         // Update the repo rule to use the new table
         if (currentConfig.repoRules?.[repoRuleIndex]) {
             console.log(
@@ -3585,10 +3825,20 @@ async function deleteBranchTableFromMgmt(tableName: string) {
 }
 
 function renderBranchRulesForSelectedRepo() {
-    if (!currentConfig || selectedRepoRuleIndex === -1) return;
+    console.log(`[renderBranchRulesForSelectedRepo] Called, selectedRepoRuleIndex: ${selectedRepoRuleIndex}`);
+    if (!currentConfig || selectedRepoRuleIndex === -1) {
+        console.log(`[renderBranchRulesForSelectedRepo] Early return - no config or selectedRepoRuleIndex is -1`);
+        return;
+    }
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
-    if (!selectedRule) return;
+    if (!selectedRule) {
+        console.log(`[renderBranchRulesForSelectedRepo] No selectedRule at index ${selectedRepoRuleIndex}`);
+        return;
+    }
+    console.log(
+        `[renderBranchRulesForSelectedRepo] selectedRule.repoQualifier: ${selectedRule.repoQualifier}, branchTableName: ${selectedRule.branchTableName}`,
+    );
 
     // Check if this is a local folder rule
     const isLocalFolderRule = selectedRule.repoQualifier && selectedRule.repoQualifier.startsWith('!');
@@ -3639,9 +3889,11 @@ function renderBranchRulesForSelectedRepo() {
 
     // Get table name - default to '__none__' if not set
     const tableName = selectedRule.branchTableName || '__none__';
+    console.log(`[renderBranchRulesForSelectedRepo] tableName: ${tableName}`);
 
     // If no table selected, show empty message
     if (!tableName || tableName === '__none__') {
+        console.log(`[renderBranchRulesForSelectedRepo] No table selected, showing empty message`);
         const header = document.querySelector('#branch-rules-heading');
         if (header) {
             header.innerHTML = `<span class="codicon codicon-circle-slash"></span> No Branch Table`;
@@ -3655,6 +3907,7 @@ function renderBranchRulesForSelectedRepo() {
 
     const branchTable = currentConfig.sharedBranchTables?.[tableName];
     const branchRules = branchTable?.rules || [];
+    console.log(`[renderBranchRulesForSelectedRepo] Rendering table "${tableName}" with ${branchRules.length} rules`);
 
     // Update section header with editable table name
     const header = document.querySelector('#branch-rules-heading');
@@ -3750,8 +4003,9 @@ function updateCopyFromButton(showButton: boolean) {
     copyBtn.type = 'button';
     copyBtn.className = 'copy-from-button';
     copyBtn.textContent = '📋 Copy From...';
-    copyBtn.setAttribute('data-tooltip', 'Copy branch rules from global or another repository');
-    copyBtn.setAttribute('aria-label', 'Copy branch rules from another source');
+    copyBtn.setAttribute('data-tooltip', 'Copy branch rules from another branch table.');
+    copyBtn.setAttribute('data-tooltip-position', 'left');
+    copyBtn.setAttribute('aria-label', 'Copy branch rules from another branch table.');
 
     // Insert before the Add button in the container
     if (addBtn) {
@@ -3793,31 +4047,101 @@ function showCopyFromMenu(event: Event) {
     menu.className = 'copy-from-menu';
     menu.setAttribute('role', 'menu');
 
-    // Add Global option if there are global rules
-    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
-        const option = document.createElement('button');
-        option.type = 'button';
-        option.className = 'copy-from-option';
-        option.textContent = `Global Rules (${currentConfig.branchRules.length})`;
-        option.setAttribute('role', 'menuitem');
-        option.setAttribute('data-source-type', 'global');
-        menu.appendChild(option);
+    // Get the current table name (the one we're copying TO)
+    const currentTableName =
+        selectedRepoRuleIndex >= 0
+            ? currentConfig?.repoRules?.[selectedRepoRuleIndex]?.branchTableName || '__none__'
+            : '__none__';
+
+    // Add options for shared branch tables (excluding the current table)
+    if (currentConfig?.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            if (tableName === currentTableName) continue; // Skip current table
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (!table.rules || table.rules.length === 0) continue; // Skip empty
+
+            // Table header - copies all rules
+            const tableHeader = document.createElement('button');
+            tableHeader.type = 'button';
+            tableHeader.className = 'copy-from-option copy-from-table-header';
+            tableHeader.innerHTML = `<span class="codicon codicon-table"></span> ${tableName} <span class="copy-from-count">(all ${table.rules.length})</span>`;
+            tableHeader.setAttribute('role', 'menuitem');
+            tableHeader.setAttribute('data-source-type', 'table');
+            tableHeader.setAttribute('data-source-table', tableName);
+            menu.appendChild(tableHeader);
+
+            // Individual rules from this table
+            table.rules.forEach((rule: any, ruleIndex: number) => {
+                const ruleOption = document.createElement('button');
+                ruleOption.type = 'button';
+                ruleOption.className = 'copy-from-option copy-from-rule';
+                const patternDisplay = rule.pattern.length > 25 ? rule.pattern.substring(0, 22) + '...' : rule.pattern;
+                ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${rule.color || '#888'};"></span> ${patternDisplay}`;
+                ruleOption.setAttribute('role', 'menuitem');
+                ruleOption.setAttribute('data-source-type', 'table-rule');
+                ruleOption.setAttribute('data-source-table', tableName);
+                ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
+                ruleOption.title = rule.pattern; // Full pattern in tooltip
+                menu.appendChild(ruleOption);
+            });
+        }
     }
 
-    // Add options for other repos with local rules
+    // Add Global option if there are global rules (legacy)
+    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
+        const globalHeader = document.createElement('button');
+        globalHeader.type = 'button';
+        globalHeader.className = 'copy-from-option copy-from-table-header';
+        globalHeader.innerHTML = `<span class="codicon codicon-globe"></span> Global Rules <span class="copy-from-count">(all ${currentConfig.branchRules.length})</span>`;
+        globalHeader.setAttribute('role', 'menuitem');
+        globalHeader.setAttribute('data-source-type', 'global');
+        menu.appendChild(globalHeader);
+
+        // Individual global rules
+        currentConfig.branchRules.forEach((rule: any, ruleIndex: number) => {
+            const ruleOption = document.createElement('button');
+            ruleOption.type = 'button';
+            ruleOption.className = 'copy-from-option copy-from-rule';
+            const patternDisplay = rule.pattern.length > 25 ? rule.pattern.substring(0, 22) + '...' : rule.pattern;
+            ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${rule.color || '#888'};"></span> ${patternDisplay}`;
+            ruleOption.setAttribute('role', 'menuitem');
+            ruleOption.setAttribute('data-source-type', 'global-rule');
+            ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
+            ruleOption.title = rule.pattern;
+            menu.appendChild(ruleOption);
+        });
+    }
+
+    // Add options for other repos with local rules (legacy)
     if (currentConfig?.repoRules) {
-        currentConfig.repoRules.forEach((rule, index) => {
+        currentConfig.repoRules.forEach((rule: any, index: number) => {
             if (index === selectedRepoRuleIndex) return; // Skip current repo
             if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
 
-            const option = document.createElement('button');
-            option.type = 'button';
-            option.className = 'copy-from-option';
-            option.textContent = `${rule.repoQualifier} (${rule.branchRules.length})`;
-            option.setAttribute('role', 'menuitem');
-            option.setAttribute('data-source-type', 'repo');
-            option.setAttribute('data-source-index', String(index));
-            menu.appendChild(option);
+            const repoHeader = document.createElement('button');
+            repoHeader.type = 'button';
+            repoHeader.className = 'copy-from-option copy-from-table-header';
+            repoHeader.innerHTML = `<span class="codicon codicon-repo"></span> ${rule.repoQualifier} <span class="copy-from-count">(all ${rule.branchRules.length})</span>`;
+            repoHeader.setAttribute('role', 'menuitem');
+            repoHeader.setAttribute('data-source-type', 'repo');
+            repoHeader.setAttribute('data-source-index', String(index));
+            menu.appendChild(repoHeader);
+
+            // Individual repo rules
+            rule.branchRules.forEach((branchRule: any, ruleIndex: number) => {
+                const ruleOption = document.createElement('button');
+                ruleOption.type = 'button';
+                ruleOption.className = 'copy-from-option copy-from-rule';
+                const patternDisplay =
+                    branchRule.pattern.length > 25 ? branchRule.pattern.substring(0, 22) + '...' : branchRule.pattern;
+                ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${branchRule.color || '#888'};"></span> ${patternDisplay}`;
+                ruleOption.setAttribute('role', 'menuitem');
+                ruleOption.setAttribute('data-source-type', 'repo-rule');
+                ruleOption.setAttribute('data-source-index', String(index));
+                ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
+                ruleOption.title = branchRule.pattern;
+                menu.appendChild(ruleOption);
+            });
         });
     }
 
@@ -3850,19 +4174,33 @@ function showCopyFromMenu(event: Event) {
 }
 
 function handleCopyFromSelection(event: Event) {
-    const target = event.target as HTMLElement;
-    if (!target.classList.contains('copy-from-option')) return;
+    // Find the button element (might click on inner span)
+    let target = event.target as HTMLElement;
+    while (target && !target.classList.contains('copy-from-option')) {
+        target = target.parentElement as HTMLElement;
+    }
+    if (!target || !target.classList.contains('copy-from-option')) return;
 
     event.preventDefault();
     event.stopPropagation();
 
     const sourceType = target.getAttribute('data-source-type');
     const sourceIndex = target.getAttribute('data-source-index');
+    const sourceTable = target.getAttribute('data-source-table');
+    const sourceRuleIndex = target.getAttribute('data-source-rule-index');
 
-    if (sourceType === 'global') {
+    if (sourceType === 'table' && sourceTable) {
+        copyBranchRulesFrom('table', -1, sourceTable);
+    } else if (sourceType === 'table-rule' && sourceTable && sourceRuleIndex !== null) {
+        copyBranchRulesFrom('table-rule', parseInt(sourceRuleIndex, 10), sourceTable);
+    } else if (sourceType === 'global') {
         copyBranchRulesFrom('global', -1);
+    } else if (sourceType === 'global-rule' && sourceRuleIndex !== null) {
+        copyBranchRulesFrom('global-rule', parseInt(sourceRuleIndex, 10));
     } else if (sourceType === 'repo' && sourceIndex !== null) {
         copyBranchRulesFrom('repo', parseInt(sourceIndex, 10));
+    } else if (sourceType === 'repo-rule' && sourceIndex !== null && sourceRuleIndex !== null) {
+        copyBranchRulesFrom('repo-rule', parseInt(sourceIndex, 10), undefined, parseInt(sourceRuleIndex, 10));
     }
 
     // Remove menu
@@ -3870,7 +4208,12 @@ function handleCopyFromSelection(event: Event) {
     if (menu) menu.remove();
 }
 
-function copyBranchRulesFrom(sourceType: 'global' | 'repo', sourceIndex: number) {
+function copyBranchRulesFrom(
+    sourceType: 'global' | 'repo' | 'table' | 'table-rule' | 'global-rule' | 'repo-rule',
+    sourceIndex: number,
+    sourceTableName?: string,
+    sourceRuleIndex?: number,
+) {
     if (!currentConfig || selectedRepoRuleIndex === -1) return;
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
@@ -3878,31 +4221,74 @@ function copyBranchRulesFrom(sourceType: 'global' | 'repo', sourceIndex: number)
 
     // Get source rules
     let sourceRules: any[] = [];
-    if (sourceType === 'global') {
+    if (sourceType === 'table' && sourceTableName) {
+        const sourceTable = currentConfig.sharedBranchTables?.[sourceTableName];
+        if (sourceTable) {
+            sourceRules = sourceTable.rules || [];
+        }
+    } else if (sourceType === 'table-rule' && sourceTableName) {
+        // Copy a single rule from a table
+        const sourceTable = currentConfig.sharedBranchTables?.[sourceTableName];
+        if (sourceTable?.rules?.[sourceIndex]) {
+            sourceRules = [sourceTable.rules[sourceIndex]];
+        }
+    } else if (sourceType === 'global') {
         sourceRules = currentConfig.branchRules || [];
+    } else if (sourceType === 'global-rule') {
+        // Copy a single global rule
+        if (currentConfig.branchRules?.[sourceIndex]) {
+            sourceRules = [currentConfig.branchRules[sourceIndex]];
+        }
     } else if (sourceType === 'repo') {
         const sourceRepo = currentConfig.repoRules?.[sourceIndex];
         if (sourceRepo) {
             sourceRules = sourceRepo.branchRules || [];
         }
+    } else if (sourceType === 'repo-rule' && sourceRuleIndex !== undefined) {
+        // Copy a single rule from a repo
+        const sourceRepo = currentConfig.repoRules?.[sourceIndex];
+        if (sourceRepo?.branchRules?.[sourceRuleIndex]) {
+            sourceRules = [sourceRepo.branchRules[sourceRuleIndex]];
+        }
     }
 
     if (sourceRules.length === 0) return;
 
-    // Initialize local branchRules if needed
-    if (!selectedRule.branchRules) {
-        selectedRule.branchRules = [];
-    }
+    // Determine the target: shared branch table or local rules
+    const targetTableName = selectedRule.branchTableName;
 
-    // Deep clone and append rules (not replace!)
-    sourceRules.forEach((rule) => {
-        const clonedRule = {
-            pattern: rule.pattern,
-            color: rule.color,
-            enabled: rule.enabled !== false, // Default to true
-        };
-        selectedRule.branchRules!.push(clonedRule);
-    });
+    if (targetTableName && targetTableName !== '__none__' && currentConfig.sharedBranchTables?.[targetTableName]) {
+        // Copy to shared branch table
+        const targetTable = currentConfig.sharedBranchTables[targetTableName];
+        if (!targetTable.rules) {
+            targetTable.rules = [];
+        }
+
+        // Deep clone and append rules
+        sourceRules.forEach((rule) => {
+            const clonedRule = {
+                pattern: rule.pattern,
+                color: rule.color,
+                enabled: rule.enabled !== false, // Default to true
+            };
+            targetTable.rules.push(clonedRule);
+        });
+    } else {
+        // Fallback: copy to local branchRules (legacy behavior)
+        if (!selectedRule.branchRules) {
+            selectedRule.branchRules = [];
+        }
+
+        // Deep clone and append rules (not replace!)
+        sourceRules.forEach((rule) => {
+            const clonedRule = {
+                pattern: rule.pattern,
+                color: rule.color,
+                enabled: rule.enabled !== false, // Default to true
+            };
+            selectedRule.branchRules!.push(clonedRule);
+        });
+    }
 
     // Re-render
     renderBranchRulesForSelectedRepo();
@@ -4813,7 +5199,7 @@ function isValidColorName(color: string): boolean {
 
         // If the browser computed a valid color (not the default), it's valid
         // Default computed color is usually 'rgb(0, 0, 0)' or 'rgba(0, 0, 0, 0)'
-        return computedColor && computedColor !== 'rgba(0, 0, 0, 0)' && computedColor !== 'transparent';
+        return Boolean(computedColor && computedColor !== 'rgba(0, 0, 0, 0)' && computedColor !== 'transparent');
     } catch (e) {
         return false;
     }
@@ -4963,7 +5349,7 @@ function validateRegexPattern(pattern: string, inputId: string) {
         clearRegexValidationError();
     } catch (error) {
         // If failed, show the validation error
-        showRegexValidationError(pattern, error.message, inputId);
+        showRegexValidationError(pattern, error instanceof Error ? error.message : String(error), inputId);
     }
 }
 
@@ -5565,7 +5951,7 @@ function updateAutoCompleteSelection() {
             item.setAttribute('aria-selected', 'true');
 
             // Scroll to keep selected item visible
-            scrollToSelectedItem(item as HTMLElement, autoCompleteDropdown);
+            scrollToSelectedItem(item as HTMLElement, autoCompleteDropdown!);
         } else {
             item.classList.remove('selected');
             item.setAttribute('aria-selected', 'false');
@@ -5631,13 +6017,16 @@ function filterBranchPatternAutoComplete(input: HTMLInputElement) {
 
     // Filter examples using same logic
     if (value.length === 0) {
-        matches.push(...EXAMPLE_BRANCH_PATTERNS);
+        matches.push(...EXAMPLE_BRANCH_PATTERNS.map((e) => `${e.pattern}|__DESC__|${e.description}`));
     } else {
-        const exampleStartsWith = EXAMPLE_BRANCH_PATTERNS.filter((pattern) => pattern.toLowerCase().startsWith(value));
+        const exampleStartsWith = EXAMPLE_BRANCH_PATTERNS.filter((e) => e.pattern.toLowerCase().startsWith(value));
         const exampleIncludes = EXAMPLE_BRANCH_PATTERNS.filter(
-            (pattern) => !pattern.toLowerCase().startsWith(value) && pattern.toLowerCase().includes(value),
+            (e) => !e.pattern.toLowerCase().startsWith(value) && e.pattern.toLowerCase().includes(value),
         );
-        matches.push(...exampleStartsWith, ...exampleIncludes);
+        matches.push(
+            ...exampleStartsWith.map((e) => `${e.pattern}|__DESC__|${e.description}`),
+            ...exampleIncludes.map((e) => `${e.pattern}|__DESC__|${e.description}`),
+        );
     }
 
     if (matches.length === 0 || (matches.length === 1 && matches[0] === '__EXAMPLES_SEPARATOR__')) {
@@ -5669,14 +6058,34 @@ function showBranchPatternAutoCompleteDropdown(input: HTMLInputElement, suggesti
 
         const item = document.createElement('div');
         item.className = 'color-autocomplete-item';
-        item.textContent = suggestion;
-        item.dataset.value = suggestion;
+
+        // Check if suggestion has a description (format: pattern|__DESC__|description)
+        if (suggestion.includes('|__DESC__|')) {
+            const [pattern, description] = suggestion.split('|__DESC__|');
+            const patternSpan = document.createElement('span');
+            patternSpan.textContent = pattern;
+            item.appendChild(patternSpan);
+
+            const descSpan = document.createElement('span');
+            descSpan.textContent = ` (${description})`;
+            descSpan.style.fontStyle = 'italic';
+            descSpan.style.opacity = '0.65';
+            descSpan.style.marginLeft = '4px';
+            item.appendChild(descSpan);
+
+            item.dataset.value = pattern;
+        } else {
+            item.textContent = suggestion;
+            item.dataset.value = suggestion;
+        }
+
         item.dataset.index = selectableIndex.toString();
         item.setAttribute('role', 'option');
         item.setAttribute('aria-selected', 'false');
 
-        item.addEventListener('click', () => {
-            selectBranchPatternSuggestion(input, suggestion);
+        item.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent input from losing focus
+            selectBranchPatternSuggestion(input, item.dataset.value!);
         });
 
         item.addEventListener('mouseenter', () => {
@@ -5695,7 +6104,7 @@ function showBranchPatternAutoCompleteDropdown(input: HTMLInputElement, suggesti
     dropdown.style.position = 'fixed';
     dropdown.style.left = rect.left + 'px';
     dropdown.style.top = rect.bottom + 'px';
-    dropdown.style.minWidth = rect.width + 'px';
+    dropdown.style.minWidth = Math.max(rect.width, 350) + 'px';
 
     autoCompleteDropdown = dropdown;
     activeAutoCompleteInput = input;
@@ -7094,6 +7503,9 @@ function setupPaletteToast() {
 }
 
 function renderProfileEditor(name: string, profile: AdvancedProfile) {
+    // Clean up any orphaned mapping dropdown options from previous render
+    document.querySelectorAll('.dropdown-options.mapping-dropdown-options').forEach((el) => el.remove());
+
     // Name Input
     const nameInput = document.getElementById('profileNameInput') as HTMLInputElement;
     if (nameInput) {
@@ -7198,6 +7610,10 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         saveProfiles();
                         // Update the combined swatch
                         updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
+
+                        // Show palette generator hint when user manually sets primary background
+                        const generatorBtn = document.getElementById('paletteGeneratorBtn');
+                        hintManager.tryShow('paletteGenerator', generatorBtn, () => bgKey === 'primaryActiveBg');
                     }
                 });
 
@@ -7288,6 +7704,15 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             // Tab Button
             const tabBtn = document.createElement('button');
             tabBtn.className = 'mapping-tab-btn';
+
+            // Add ID for special tabs (Colored, Starred) for tour targeting
+            if (sectionName === 'Colored') {
+                tabBtn.id = 'mapping-tab-colored';
+            } else if (sectionName === 'Starred') {
+                tabBtn.id = 'mapping-tab-starred';
+            } else if (sectionName === 'Tabs & Breadcrumbs') {
+                tabBtn.id = 'mapping-tab-tabs-breadcrumbs';
+            }
 
             // Tab text
             const tabText = document.createElement('span');
@@ -7479,7 +7904,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 label.textContent = THEME_KEY_LABELS[key] || key;
                 label.style.fontSize = '12px';
                 label.style.color = 'var(--vscode-foreground)';
-                label.style.minWidth = '200px';
+                label.style.minWidth = '220px';
                 label.style.flexShrink = '0';
 
                 // Get current mapping value (handle both string and object formats)
@@ -7563,6 +7988,10 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         e.dataTransfer.getData('application/x-palette-slot') || e.dataTransfer.getData('text/plain');
                     if (!slotName) return;
 
+                    // User successfully performed drag & drop, so dismiss the hint
+                    // (they obviously know about this feature now)
+                    hintManager.markShown('dragDropMapping');
+
                     // Set the dropdown value
                     select.setAttribute('data-value', slotName);
                     (select as any).value = slotName;
@@ -7594,19 +8023,16 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 arrow.style.pointerEvents = 'none';
                 selectedDisplay.appendChild(arrow);
 
-                // Dropdown options container
+                // Dropdown options container (appended to body for proper z-index stacking)
                 const optionsContainer = document.createElement('div');
-                optionsContainer.className = 'dropdown-options';
+                optionsContainer.className = 'dropdown-options mapping-dropdown-options';
                 optionsContainer.style.display = 'none';
-                optionsContainer.style.position = 'absolute';
-                optionsContainer.style.top = '100%';
-                optionsContainer.style.left = '0';
-                optionsContainer.style.right = '0';
+                optionsContainer.style.position = 'fixed';
                 optionsContainer.style.background = 'var(--vscode-dropdown-background)';
                 optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
                 optionsContainer.style.maxHeight = '200px';
                 optionsContainer.style.overflowY = 'auto';
-                optionsContainer.style.zIndex = '1000';
+                optionsContainer.style.zIndex = '10000';
                 optionsContainer.style.marginTop = '2px';
 
                 // Build options
@@ -7765,6 +8191,13 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     e.stopPropagation();
                     const isOpen = optionsContainer.style.display === 'block';
 
+                    // Close all other mapping dropdowns first
+                    document.querySelectorAll('.dropdown-options.mapping-dropdown-options').forEach((other) => {
+                        if (other !== optionsContainer) {
+                            (other as HTMLElement).style.display = 'none';
+                        }
+                    });
+
                     if (isOpen) {
                         optionsContainer.style.display = 'none';
                         select.setAttribute('aria-expanded', 'false');
@@ -7774,11 +8207,29 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                             outsideClickHandler = null;
                         }
                     } else {
+                        // Position dropdown using fixed coordinates
+                        const triggerRect = selectedDisplay.getBoundingClientRect();
+                        const viewportHeight = window.innerHeight;
+                        const spaceBelow = viewportHeight - triggerRect.bottom;
+                        const dropdownHeight = 200; // maxHeight of options
+
+                        optionsContainer.style.left = triggerRect.left + 'px';
+                        optionsContainer.style.minWidth = triggerRect.width + 'px';
+
+                        // If not enough space below, flip it upward
+                        if (spaceBelow < dropdownHeight && triggerRect.top > spaceBelow) {
+                            optionsContainer.style.top = 'auto';
+                            optionsContainer.style.bottom = viewportHeight - triggerRect.top + 'px';
+                        } else {
+                            optionsContainer.style.top = triggerRect.bottom + 2 + 'px';
+                            optionsContainer.style.bottom = 'auto';
+                        }
+
                         optionsContainer.style.display = 'block';
                         select.setAttribute('aria-expanded', 'true');
                         // Add outside click handler when opening
                         outsideClickHandler = (e: MouseEvent) => {
-                            if (!select.contains(e.target as Node)) {
+                            if (!select.contains(e.target as Node) && !optionsContainer.contains(e.target as Node)) {
                                 optionsContainer.style.display = 'none';
                                 select.setAttribute('aria-expanded', 'false');
                                 if (outsideClickHandler) {
@@ -7808,7 +8259,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 updateSelectedDisplay(currentSlot);
 
                 select.appendChild(selectedDisplay);
-                select.appendChild(optionsContainer);
+                // Append options to body for proper z-index stacking
+                document.body.appendChild(optionsContainer);
 
                 // Helper to get value like a select element
                 (select as any).value = currentSlot;
@@ -8000,6 +8452,22 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                     // Update warning indicator visibility
                     const newSlot = select.getAttribute('data-value') || 'none';
+
+                    // Show drag-drop hint when user selects a color from dropdown
+                    // Find the palette swatch for the selected slot
+                    const paletteSlotEl = newSlot
+                        ? document.querySelector(`.palette-slot-draggable[data-slot-name="${newSlot}"]`)
+                        : null;
+                    if (paletteSlotEl) {
+                        // Target the native color input (swatch) within the slot, not the whole container
+                        const swatchEl = paletteSlotEl.querySelector('.native-color-input') as HTMLElement;
+                        hintManager.tryShow(
+                            'dragDropMapping',
+                            swatchEl || (paletteSlotEl as HTMLElement),
+                            () => newSlot !== 'none' && newSlot !== '__fixed__',
+                        );
+                    }
+
                     if (isStarredTab) {
                         if (newSlot === 'none') {
                             warningIndicator.className = 'codicon codicon-warning';
@@ -8123,9 +8591,9 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
         mappingsContainer.appendChild(tabsContent);
 
         // Activate the selected tab
-        if (tabToActivate) {
-            tabToActivate.style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
-            tabToActivate.style.fontWeight = 'bold';
+        if (tabToActivate !== null) {
+            (tabToActivate as HTMLButtonElement).style.borderBottomColor = 'var(--vscode-panelTitle-activeBorder)';
+            (tabToActivate as HTMLButtonElement).style.fontWeight = 'bold';
         }
 
         // Update checkbox states (but don't re-add event listeners)
@@ -8375,7 +8843,7 @@ function renameProfile(oldName: string, newName: string) {
 
     // Update all references to the old profile name in repo rules
     if (currentConfig.repoRules) {
-        currentConfig.repoRules.forEach((rule) => {
+        currentConfig.repoRules.forEach((rule: any) => {
             if (rule.profileName === oldName) {
                 rule.profileName = newName;
             }
@@ -8393,7 +8861,7 @@ function renameProfile(oldName: string, newName: string) {
         for (const tableName in currentConfig.sharedBranchTables) {
             const table = currentConfig.sharedBranchTables[tableName];
             if (table && table.rules) {
-                table.rules.forEach((rule) => {
+                table.rules.forEach((rule: any) => {
                     if (rule.profileName === oldName) {
                         rule.profileName = newName;
                     }

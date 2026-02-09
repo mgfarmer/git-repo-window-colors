@@ -1086,6 +1086,55 @@ export async function activate(context: ExtensionContext) {
         }),
     );
 
+    // Register command to reset all hint flags (for debugging/testing)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.resetHintFlags', async () => {
+            await configProvider.resetHintFlags();
+            vscode.window.showInformationMessage('All hint flags have been reset. Hints will show again.');
+        }),
+    );
+
+    // Register tour command that shows a quick pick of available tours
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.startTour', async () => {
+            // Dismiss the tour link so it won't show again
+            await context.globalState.update('grwc.tourLinkDismissed', true);
+
+            // Always ensure the configurator is open first
+            configProvider.show(context.extensionUri);
+
+            let tours = configProvider.getRegisteredTours();
+
+            if (tours.length === 0) {
+                // No tours registered yet - wait a moment for tours to register
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                tours = configProvider.getRegisteredTours();
+                if (tours.length === 0) {
+                    vscode.window.showInformationMessage('No tours available.');
+                    return;
+                }
+            }
+
+            // If only one tour, start it directly
+            if (tours.length === 1) {
+                configProvider.startTour(tours[0].tourId);
+                return;
+            }
+
+            // Show quick pick with available tours
+            const items = tours.map((t) => ({
+                label: t.commandTitle,
+                tourId: t.tourId,
+            }));
+            const selected = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Select a tour to start',
+            });
+            if (selected) {
+                configProvider.startTour(selected.tourId);
+            }
+        }),
+    );
+
     // Register internal command for webview to trigger color updates
     // Silently ignore if no workspace - the webview shows its own toast
     context.subscriptions.push(

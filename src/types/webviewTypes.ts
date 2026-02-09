@@ -60,7 +60,13 @@ export interface WebviewMessage {
         | 'deleteBranchTable'
         | 'renameBranchTable'
         | 'simplifyPath'
-        | 'simplifyPathForPreview';
+        | 'simplifyPathForPreview'
+        | 'dismissHint'
+        | 'completeTour'
+        | 'registerTourCommand'
+        | 'saveHelpPanelWidth'
+        | 'dismissTourLink'
+        | 'startTour';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -104,5 +110,12 @@ export interface WebviewMessage {
         clearBranchPreview?: boolean;
         // Local folder path simplification
         path?: string;
+        // Hint management
+        flagKey?: string;
+        // Tour command registration
+        tourId?: string;
+        commandTitle?: string;
+        // Help panel width
+        width?: number;
     };
 }
