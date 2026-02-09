@@ -53,6 +53,8 @@ export interface TourRenderOptions {
     onSkip: () => void;
     isFirstStep: boolean;
     isLastStep: boolean;
+    onContinue?: () => void;
+    nextTourTitle?: string;
 }
 
 /**
@@ -140,7 +142,7 @@ export class Hint {
             // Skip button
             const skipBtn = document.createElement('button');
             skipBtn.className = 'grwc-hint-tour-btn grwc-hint-tour-btn-skip';
-            skipBtn.textContent = 'Skip Tour';
+            skipBtn.textContent = 'End Tour';
             skipBtn.onclick = (e) => {
                 e.stopPropagation();
                 tourOptions.onSkip();
@@ -156,14 +158,22 @@ export class Hint {
                 tourOptions.onBack();
             };
 
-            // Next/Finish button
+            // Next/Finish button (or Continue when there's a next tour)
             const nextBtn = document.createElement('button');
             nextBtn.className = 'grwc-hint-tour-btn grwc-hint-tour-btn-next';
-            nextBtn.textContent = tourOptions.isLastStep ? 'Finish' : 'Next';
-            nextBtn.onclick = (e) => {
-                e.stopPropagation();
-                tourOptions.onNext();
-            };
+            if (tourOptions.isLastStep && tourOptions.onContinue && tourOptions.nextTourTitle) {
+                nextBtn.textContent = `Continue to ${tourOptions.nextTourTitle}`;
+                nextBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    tourOptions.onContinue!();
+                };
+            } else {
+                nextBtn.textContent = tourOptions.isLastStep ? 'Finish' : 'Next';
+                nextBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    tourOptions.onNext();
+                };
+            }
 
             buttons.appendChild(skipBtn);
             buttons.appendChild(backBtn);
@@ -581,6 +591,8 @@ export interface TourConfig {
     steps: TourStepConfig[];
     /** Optional: Title for the command palette entry (e.g., "Start Getting Started Tour"). If provided, a command will be registered. */
     commandTitle?: string;
+    /** Optional: ID of the next tour to start after this one completes */
+    nextTourId?: string;
 }
 
 /**
@@ -591,16 +603,20 @@ export class Tour {
     readonly flagKey: string;
     readonly steps: TourStepConfig[];
     readonly commandTitle?: string;
+    readonly nextTourId?: string;
 
     private _currentStepIndex: number = 0;
     private _currentHint: Hint | null = null;
     private _isActive: boolean = false;
+    private _nextTourTitle: string | undefined;
+    private _onContinue: (() => void) | undefined;
 
     constructor(config: TourConfig) {
         this.id = config.id;
         this.flagKey = getTourFlagKey(config.id);
         this.steps = config.steps;
         this.commandTitle = config.commandTitle;
+        this.nextTourId = config.nextTourId;
     }
 
     /**
@@ -620,7 +636,7 @@ export class Tour {
     /**
      * Start the tour from the beginning
      */
-    start(onComplete: () => void, onSkip: () => void): void {
+    start(onComplete: () => void, onSkip: () => void, nextTourTitle?: string, onContinue?: () => void): void {
         if (this.steps.length === 0) {
             onComplete();
             return;
@@ -628,6 +644,8 @@ export class Tour {
 
         this._isActive = true;
         this._currentStepIndex = 0;
+        this._nextTourTitle = nextTourTitle;
+        this._onContinue = onContinue;
         this._showCurrentStep(onComplete, onSkip);
     }
 
@@ -714,6 +732,8 @@ export class Tour {
                 this.stop();
                 onSkip();
             },
+            onContinue: this._onContinue,
+            nextTourTitle: this._nextTourTitle,
         };
 
         hint.render(target, () => {}, tourOptions);
@@ -781,9 +801,24 @@ class TourManagerClass {
         // Stop any currently active tour
         this._stopActiveTour();
 
+        // Get next tour info if there's a chained tour
+        let nextTourTitle: string | undefined;
+        let onContinue: (() => void) | undefined;
+        if (tour.nextTourId) {
+            const nextTour = this._tours.get(tour.nextTourId);
+            if (nextTour && nextTour.commandTitle) {
+                nextTourTitle = nextTour.commandTitle;
+                onContinue = () => {
+                    this.forceStartTour(tour.nextTourId!);
+                };
+            }
+        }
+
         tour.start(
-            () => this._completeTour(id),
-            () => this._completeTour(id), // Skip also marks as complete
+            () => this._completeTour(id, tour.nextTourId),
+            () => this._completeTour(id), // Skip also marks as complete (no chaining)
+            nextTourTitle,
+            onContinue,
         );
 
         return true;
@@ -804,9 +839,24 @@ class TourManagerClass {
         // Stop any currently active tour
         this._stopActiveTour();
 
+        // Get next tour info if there's a chained tour
+        let nextTourTitle: string | undefined;
+        let onContinue: (() => void) | undefined;
+        if (tour.nextTourId) {
+            const nextTour = this._tours.get(tour.nextTourId);
+            if (nextTour && nextTour.commandTitle) {
+                nextTourTitle = nextTour.commandTitle;
+                onContinue = () => {
+                    this.forceStartTour(tour.nextTourId!);
+                };
+            }
+        }
+
         tour.start(
-            () => this._completeTour(id),
-            () => this._completeTour(id), // Skip also marks as complete
+            () => this._completeTour(id, tour.nextTourId),
+            () => this._completeTour(id), // Skip also marks as complete (no chaining)
+            nextTourTitle,
+            onContinue,
         );
 
         return true;
@@ -842,15 +892,23 @@ class TourManagerClass {
     }
 
     /**
-     * Mark tour as complete and persist
+     * Mark tour as complete and persist. Optionally start next tour.
      */
-    private _completeTour(id: string): void {
+    private _completeTour(id: string, nextTourId?: string): void {
         const tour = this._tours.get(id);
         if (!tour) return;
 
         if (!this._completedFlags[tour.flagKey]) {
             this._completedFlags[tour.flagKey] = true;
             this._sendCompleteTourMessage(tour.flagKey);
+        }
+
+        // If there's a next tour, start it
+        if (nextTourId) {
+            // Use setTimeout to allow the current tour to fully clean up
+            setTimeout(() => {
+                this.forceStartTour(nextTourId);
+            }, 100);
         }
     }
 

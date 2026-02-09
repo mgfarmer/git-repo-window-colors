@@ -22,7 +22,7 @@ import { showTooltip, hideTooltip, hideTooltipImmediate, attachTooltip, setupDel
 import { Hint, hintManager, Tour, tourManager } from './hintUtils';
 
 // Import tour configurations
-import { gettingStartedTour } from './tourSteps';
+import { gettingStartedTour, profilesTour } from './tourSteps';
 
 // Global variables
 declare const acquireVsCodeApi: any;
@@ -348,6 +348,7 @@ function registerHints() {
 // Register all tours with the tour manager
 function registerTours() {
     tourManager.register(new Tour(gettingStartedTour));
+    tourManager.register(new Tour(profilesTour));
 }
 
 // Initialize hints
@@ -7702,6 +7703,15 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
             // Tab Button
             const tabBtn = document.createElement('button');
             tabBtn.className = 'mapping-tab-btn';
+
+            // Add ID for special tabs (Colored, Starred) for tour targeting
+            if (sectionName === 'Colored') {
+                tabBtn.id = 'mapping-tab-colored';
+            } else if (sectionName === 'Starred') {
+                tabBtn.id = 'mapping-tab-starred';
+            } else if (sectionName === 'Tabs & Breadcrumbs') {
+                tabBtn.id = 'mapping-tab-tabs-breadcrumbs';
+            }
 
             // Tab text
             const tabText = document.createElement('span');
