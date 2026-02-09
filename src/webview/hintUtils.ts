@@ -567,6 +567,30 @@ export function switchToTab(tabId: string): boolean {
     return true;
 }
 
+/**
+ * Expand collapsible panels on the Rules tab for tour visibility.
+ * This ensures tour steps can properly target elements inside these panels.
+ */
+function expandRulesTabPanels(): void {
+    // Expand branch panel if collapsed
+    const branchPanel = document.querySelector('.branch-panel');
+    const rightColumn = document.querySelector('.right-column');
+    if (branchPanel && branchPanel.classList.contains('collapsed')) {
+        branchPanel.classList.remove('collapsed');
+        if (rightColumn) {
+            rightColumn.classList.remove('collapsed');
+        }
+        localStorage.setItem('branchPanelCollapsed', 'false');
+    }
+
+    // Expand settings panel if collapsed
+    const settingsPanel = document.querySelector('.bottom-panel');
+    if (settingsPanel && settingsPanel.classList.contains('collapsed')) {
+        settingsPanel.classList.remove('collapsed');
+        localStorage.setItem('settingsPanelCollapsed', 'false');
+    }
+}
+
 // ===== Tour Framework =====
 
 /** Configuration for a single tour step */
@@ -675,68 +699,84 @@ export class Tour {
         }
 
         // Switch to the correct tab if specified
+        let needsExpansionDelay = false;
         if (stepConfig.tabId) {
             switchToTab(stepConfig.tabId);
-        }
-
-        // Find target element (or null for centered hints)
-        let target: HTMLElement | null = null;
-        if (stepConfig.targetSelector) {
-            target = document.querySelector(stepConfig.targetSelector) as HTMLElement;
-            if (!target) {
-                console.warn(`[Tour] Target not found for selector: ${stepConfig.targetSelector}`);
-                // Skip to next step if target not found
-                if (this._currentStepIndex < this.steps.length - 1) {
-                    this._currentStepIndex++;
-                    this._showCurrentStep(onComplete, onSkip);
-                } else {
-                    this._isActive = false;
-                    onComplete();
-                }
-                return;
+            // Auto-expand collapsible panels on Rules tab for tour visibility
+            if (stepConfig.tabId === 'rules-tab') {
+                expandRulesTabPanels();
+                needsExpansionDelay = true;
             }
         }
-        // If no targetSelector provided, target remains null (centered hint)
 
-        // Create a temporary Hint for this step
-        const hint = new Hint({
-            id: `${this.id}-step-${this._currentStepIndex}`,
-            html: stepConfig.html,
-            position: stepConfig.position,
-            maxWidth: stepConfig.maxWidth,
-        });
+        // Wait for panel expansion animation to complete (300ms transition + 50ms buffer)
+        const continueShowing = () => {
+            // Find target element (or null for centered hints)
+            let target: HTMLElement | null = null;
+            if (stepConfig.targetSelector) {
+                target = document.querySelector(stepConfig.targetSelector) as HTMLElement;
+                if (!target) {
+                    console.warn(`[Tour] Target not found for selector: ${stepConfig.targetSelector}`);
+                    // Skip to next step if target not found
+                    if (this._currentStepIndex < this.steps.length - 1) {
+                        this._currentStepIndex++;
+                        this._showCurrentStep(onComplete, onSkip);
+                    } else {
+                        this._isActive = false;
+                        onComplete();
+                    }
+                    return;
+                }
+            }
+            // If no targetSelector provided, target remains null (centered hint)
 
-        this._currentHint = hint;
+            // Create a temporary Hint for this step
+            const hint = new Hint({
+                id: `${this.id}-step-${this._currentStepIndex}`,
+                html: stepConfig.html,
+                position: stepConfig.position,
+                maxWidth: stepConfig.maxWidth,
+            });
 
-        const tourOptions: TourRenderOptions = {
-            stepNumber: this._currentStepIndex + 1,
-            totalSteps: this.steps.length,
-            isFirstStep: this._currentStepIndex === 0,
-            isLastStep: this._currentStepIndex === this.steps.length - 1,
-            onNext: () => {
-                if (this._currentStepIndex < this.steps.length - 1) {
-                    this._currentStepIndex++;
-                    this._showCurrentStep(onComplete, onSkip);
-                } else {
+            this._currentHint = hint;
+
+            const tourOptions: TourRenderOptions = {
+                stepNumber: this._currentStepIndex + 1,
+                totalSteps: this.steps.length,
+                isFirstStep: this._currentStepIndex === 0,
+                isLastStep: this._currentStepIndex === this.steps.length - 1,
+                onNext: () => {
+                    if (this._currentStepIndex < this.steps.length - 1) {
+                        this._currentStepIndex++;
+                        this._showCurrentStep(onComplete, onSkip);
+                    } else {
+                        this.stop();
+                        onComplete();
+                    }
+                },
+                onBack: () => {
+                    if (this._currentStepIndex > 0) {
+                        this._currentStepIndex--;
+                        this._showCurrentStep(onComplete, onSkip);
+                    }
+                },
+                onSkip: () => {
                     this.stop();
-                    onComplete();
-                }
-            },
-            onBack: () => {
-                if (this._currentStepIndex > 0) {
-                    this._currentStepIndex--;
-                    this._showCurrentStep(onComplete, onSkip);
-                }
-            },
-            onSkip: () => {
-                this.stop();
-                onSkip();
-            },
-            onContinue: this._onContinue,
-            nextTourTitle: this._nextTourTitle,
+                    onSkip();
+                },
+                onContinue: this._onContinue,
+                nextTourTitle: this._nextTourTitle,
+            };
+
+            hint.render(target, () => {}, tourOptions);
         };
 
-        hint.render(target, () => {}, tourOptions);
+        // If we just expanded panels, wait for CSS transition to complete
+        if (needsExpansionDelay) {
+            setTimeout(continueShowing, 350);
+        } else {
+            continueShowing();
+        }
     }
 }
 
