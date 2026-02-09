@@ -7,11 +7,30 @@ import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 import { resolveProfile } from './profileResolver';
 import { AdvancedProfile } from './types/advancedModeTypes';
 import { ConfigWebviewProvider } from './webview/configWebview';
-import { minimatch } from 'minimatch';
-import { expandEnvVars, simplifyPath, validateLocalFolderPath, matchesLocalFolderPattern } from './pathUtils';
+import { matchesLocalFolderPattern } from './pathUtils';
 import { extractProfileName as extractProfileNameCore } from './colorResolvers';
 import { extractRepoNameFromUrl as extractRepoNameFromUrlCore } from './repoUrlParser';
 import { createRepoProfile, createBranchProfile, ProfileFactorySettings, ProfileFactoryLogger } from './profileFactory';
+import {
+    parseRepoRules,
+    parseBranchRules,
+    ConfigProvider as RuleConfigProvider,
+    RuleParserLogger,
+    ValidationContext,
+    RepoConfig,
+} from './ruleParser';
+import { findMatchingRepoRule, WorkspaceContext } from './ruleMatching';
+import { applyColors, removeAllManagedColors, SettingsApplicatorLogger } from './settingsApplicator';
+import {
+    isGitExtensionAvailable,
+    getWorkspaceRepository,
+    getCurrentBranch,
+    getRemoteUrl,
+    GitExtension,
+    GitRepository,
+    WorkspaceInfo,
+    GitOperationsLogger,
+} from './gitOperations';
 
 let currentBranch: undefined | string = undefined;
 
@@ -60,20 +79,7 @@ export function __resetModuleStateForTesting(): void {
     // are set during activation and should be mocked by tests as needed
 }
 
-type RepoConfig = {
-    repoQualifier: string;
-    primaryColor: string;
-    profileName?: string;
-    enabled?: boolean;
-    branchTableName?: string; // Name of the shared branch table to use
-    // Legacy properties - will be migrated
-    branchRules?: Array<{ pattern: string; color: string; enabled?: boolean }>;
-    // Transient properties set during matching and profile resolution
-    branchProfileName?: string; // Profile name from branch rule matching
-    profile?: AdvancedProfile; // Resolved profile (real or temporary from simple mode)
-    branchProfile?: AdvancedProfile; // Resolved branch profile (real or temporary)
-    isSimpleMode?: boolean; // True if repo rule used simple color (not profile)
-};
+// RepoConfig type is now exported from ruleParser.ts
 
 // ========== Local Folder Path Utilities ==========
 // Path utilities are now in pathUtils.ts and imported above
@@ -199,82 +205,14 @@ function createBranchTempProfile(branchColor: Color): AdvancedProfile {
     return profile;
 }
 
-const managedColors = [
-    // Title Bar
-    'titleBar.activeBackground',
-    'titleBar.activeForeground',
-    'titleBar.inactiveBackground',
-    'titleBar.inactiveForeground',
-    'titleBar.border',
-    // Activity Bar
-    'activityBar.background',
-    'activityBar.foreground',
-    'activityBar.inactiveForeground',
-    'activityBar.border',
-    // Status Bar
-    'statusBar.background',
-    'statusBar.foreground',
-    'statusBar.border',
-    // Tabs & Breadcrumbs
-    'tab.activeBackground',
-    'tab.activeForeground',
-    'tab.inactiveBackground',
-    'tab.inactiveForeground',
-    'tab.hoverBackground',
-    'tab.unfocusedHoverBackground',
-    'tab.activeBorder',
-    'editorGroupHeader.tabsBackground',
-    'breadcrumb.background',
-    'breadcrumb.foreground',
-    // Command Center
-    'commandCenter.background',
-    'commandCenter.foreground',
-    'commandCenter.activeBackground',
-    'commandCenter.activeForeground',
-    // Terminal
-    'terminal.background',
-    'terminal.foreground',
-    // Lists & Panels
-    'panel.background',
-    'panel.border',
-    'panelTitle.activeForeground',
-    'panelTitle.inactiveForeground',
-    'panelTitle.activeBorder',
-    'list.activeSelectionBackground',
-    'list.activeSelectionForeground',
-    'list.inactiveSelectionBackground',
-    'list.inactiveSelectionForeground',
-    'list.focusOutline',
-    'list.hoverBackground',
-    'list.hoverForeground',
-    'badge.background',
-    'badge.foreground',
-    'panelTitleBadge.background',
-    'panelTitleBadge.foreground',
-    'input.background',
-    'input.foreground',
-    'input.border',
-    'input.placeholderForeground',
-    'focusBorder',
-    // Side Bar
-    'sideBar.background',
-    'sideBar.foreground',
-    'sideBar.border',
-    'sideBarTitle.background',
-];
-
-// Function to test if the vscode git model exsists
+// Function to test if the vscode git model exists
+// This is a wrapper around the extracted gitOperations module
 function isGitModelAvailable(): boolean {
-    const extension = vscode.extensions.getExtension('vscode.git');
-    if (!extension) {
-        console.warn('Git extension not available');
-        return false;
-    }
-    if (!extension.isActive) {
-        console.warn('Git extension not active');
-        return false;
-    }
-    return true;
+    const extension = vscode.extensions.getExtension('vscode.git') as GitExtension | undefined;
+    const logger: GitOperationsLogger = {
+        warn: (message: string) => console.warn(message),
+    };
+    return isGitExtensionAvailable(extension, logger);
 }
 
 function repoConfigAsString(repoConfig: RepoConfig): string {
@@ -1064,8 +1002,8 @@ export async function activate(context: ExtensionContext) {
 async function init() {
     gitRepository = getWorkspaceRepo();
     if (gitRepository) {
-        if (gitRepository.state.remotes.length > 0) {
-            gitRepoRemoteFetchUrl = gitRepository.state.remotes[0]['fetchUrl'];
+        gitRepoRemoteFetchUrl = getRemoteUrl(gitRepository);
+        if (gitRepoRemoteFetchUrl) {
             outputChannel.appendLine('Git repository: ' + gitRepoRemoteFetchUrl);
             currentBranch = getCurrentGitBranch();
             if (currentBranch === undefined) {
@@ -1097,29 +1035,31 @@ async function init() {
                 try {
                     outputChannel.appendLine('Checking for remotes...');
                     gitRepository = getWorkspaceRepo();
-                    if (gitRepository && gitRepository.state.remotes.length > 0) {
-                        // Remote is now available, clear the interval and proceed
-                        clearInterval(remoteCheckInterval);
+                    if (gitRepository) {
+                        gitRepoRemoteFetchUrl = getRemoteUrl(gitRepository);
+                        if (gitRepoRemoteFetchUrl) {
+                            // Remote is now available, clear the interval and proceed
+                            clearInterval(remoteCheckInterval);
 
-                        gitRepoRemoteFetchUrl = gitRepository.state.remotes[0]['fetchUrl'];
-                        outputChannel.appendLine('Git repository: ' + gitRepoRemoteFetchUrl);
-                        currentBranch = getCurrentGitBranch();
-                        if (currentBranch === undefined) {
-                            outputChannel.appendLine('Could not determine current branch.');
-                            return;
+                            outputChannel.appendLine('Git repository: ' + gitRepoRemoteFetchUrl);
+                            currentBranch = getCurrentGitBranch();
+                            if (currentBranch === undefined) {
+                                outputChannel.appendLine('Could not determine current branch.');
+                                return;
+                            }
+                            outputChannel.appendLine('Current branch: ' + currentBranch);
+
+                            // Update workspace info for the configuration webview
+                            if (configProvider) {
+                                configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
+                            }
+
+                            doit('initial activation');
+                            updateStatusBarItem(); // Update status bar after initialization
+
+                            // Check if we should ask to colorize this repo if no rules match
+                            await checkAndAskToColorizeRepo();
                         }
-                        outputChannel.appendLine('Current branch: ' + currentBranch);
-
-                        // Update workspace info for the configuration webview
-                        if (configProvider) {
-                            configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
-                        }
-
-                        doit('initial activation');
-                        updateStatusBarItem(); // Update status bar after initialization
-
-                        // Check if we should ask to colorize this repo if no rules match
-                        await checkAndAskToColorizeRepo();
                     }
                 } catch (error) {
                     outputChannel.appendLine('Error checking for git remotes: ' + error);
@@ -1194,226 +1134,56 @@ function extractRepoNameFromUrl(url: string): string {
     return extractRepoNameFromUrlCore(url);
 }
 
+/**
+ * Gets repository configuration list from settings.
+ * This is a wrapper around the extracted ruleParser module.
+ */
 function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undefined {
-    const repoConfigObj = getObjectSetting('repoConfigurationList');
-    if (repoConfigObj === undefined || Object.keys(repoConfigObj).length === 0) {
-        outputChannel.appendLine('No settings found. Weird!  You should add some...');
-        return undefined;
-    }
+    const configProvider: RuleConfigProvider = {
+        getRepoConfigurationList: () => getObjectSetting('repoConfigurationList'),
+        getBranchConfigurationList: () => getObjectSetting('branchConfigurationList'),
+        getAdvancedProfiles: () =>
+            (workspace.getConfiguration('windowColors').get('advancedProfiles', {}) as { [key: string]: any }) || {},
+    };
 
-    const json = JSON.parse(JSON.stringify(repoConfigObj));
+    const validationContext: ValidationContext = {
+        isActive: vscode.window.state.active,
+    };
 
-    const result = new Array<RepoConfig>();
-    const isActive = vscode.window.state.active;
+    const logger: RuleParserLogger = {
+        log: (message: string) => outputChannel.appendLine(message),
+    };
 
-    // Clear previous repo rule errors
-    repoRuleErrors.clear();
+    const result = parseRepoRules(configProvider, validate, validationContext, logger);
 
-    // Get advanced profiles (get once before loop)
-    const advancedProfiles =
-        (workspace.getConfiguration('windowColors').get('advancedProfiles', {}) as { [key: string]: any }) || {};
+    // Update module-level error map
+    repoRuleErrors = result.errors;
 
-    for (const item in json) {
-        const setting = json[item];
-
-        // PRIMARY: Handle JSON object format (new format)
-        if (typeof setting === 'object' && setting !== null) {
-            const repoConfig: RepoConfig = {
-                repoQualifier: setting.repoQualifier || '',
-                primaryColor: setting.primaryColor || '',
-                profileName: setting.profileName,
-                enabled: setting.enabled !== undefined ? setting.enabled : true,
-                branchTableName: setting.branchTableName,
-                branchRules: setting.branchRules,
-            };
-
-            // Validate if needed
-            if (validate && isActive) {
-                let errorMsg = '';
-                if (!repoConfig.repoQualifier || !repoConfig.primaryColor) {
-                    errorMsg = 'Repository rule missing required fields (repoQualifier or primaryColor)';
-                    repoRuleErrors.set(result.length, errorMsg);
-                    outputChannel.appendLine(errorMsg);
-                    // Add to result anyway so it can be displayed in UI with error indication
-                    result.push(repoConfig);
-                    continue;
-                }
-
-                // Check if this is a local folder rule (starts with !)
-                const isLocalFolder = repoConfig.repoQualifier.startsWith('!');
-                if (isLocalFolder && repoConfig.branchTableName && repoConfig.branchTableName !== '__none__') {
-                    errorMsg = `Local folder rules do not support branch tables (${repoConfig.repoQualifier})`;
-                    repoRuleErrors.set(result.length, errorMsg);
-                    outputChannel.appendLine(errorMsg);
-                    // Add to result anyway so it can be displayed in UI with error indication
-                    result.push(repoConfig);
-                    continue;
-                }
-
-                // Validate colors if not profile names and not special 'none' value
-                const primaryIsProfile = advancedProfiles[repoConfig.primaryColor];
-                const isSpecialNone = repoConfig.primaryColor === 'none';
-                if (!primaryIsProfile && !isSpecialNone) {
-                    try {
-                        Color(repoConfig.primaryColor);
-                    } catch (error) {
-                        errorMsg = `Invalid primary color: ${repoConfig.primaryColor}`;
-                        repoRuleErrors.set(result.length, errorMsg);
-                        outputChannel.appendLine(errorMsg);
-                        // Add to result anyway so it can be displayed in UI with error indication
-                        result.push(repoConfig);
-                        continue;
-                    }
-                }
-            }
-
-            result.push(repoConfig);
-            continue;
-        }
-
-        // FALLBACK: Handle legacy string format
-        // if (typeof setting === 'string') {
-        //     // Try parsing as JSON string first (for backward compatibility)
-        //     if (setting.trim().startsWith('{')) {
-        //         try {
-        //             const obj = JSON.parse(setting);
-        //             const repoConfig: RepoConfig = {
-        //                 repoQualifier: obj.repoQualifier || '',
-        //                 primaryColor: obj.primaryColor || '',
-        //                 profileName: obj.profileName,
-        //                 enabled: obj.enabled !== undefined ? obj.enabled : true,
-        //                 branchRules: obj.branchRules,
-        //                 branchTableName: obj.branchTableName,
-        //             };
-        //             result.push(repoConfig);
-        //             continue;
-        //         } catch (err) {
-        //             // If JSON parsing fails, log error and skip
-        //             outputChannel.appendLine(`Failed to parse JSON rule: ${setting}`);
-        //         }
-        //     }
-        // }
-    }
-
-    return result;
+    return result.rules.length > 0 ? result.rules : undefined;
 }
 
+/**
+ * Gets branch configuration rules from settings.
+ * This is a wrapper around the extracted ruleParser module.
+ */
 function getBranchData(validate: boolean = false): Map<string, string> {
-    const branchConfigObj = getObjectSetting('branchConfigurationList');
-    const json = JSON.parse(JSON.stringify(branchConfigObj));
+    const configProvider: RuleConfigProvider = {
+        getRepoConfigurationList: () => getObjectSetting('repoConfigurationList'),
+        getBranchConfigurationList: () => getObjectSetting('branchConfigurationList'),
+        getAdvancedProfiles: () =>
+            workspace.getConfiguration('windowColors').get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {}),
+    };
 
-    const result = new Map<string, string>();
+    const logger: RuleParserLogger = {
+        log: (message: string) => outputChannel.appendLine(message),
+    };
 
-    // Clear previous branch rule errors
-    branchRuleErrors.clear();
+    const result = parseBranchRules(configProvider, validate, logger);
 
-    // Track current index for error mapping
-    let currentIndex = 0;
+    // Update module-level error map
+    branchRuleErrors = result.errors;
 
-    // Get advanced profiles once before the loop
-    const advancedProfiles = workspace
-        .getConfiguration('windowColors')
-        .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
-
-    for (const item in json) {
-        const setting = json[item];
-
-        // PRIMARY: Handle JSON object format (new format)
-        if (typeof setting === 'object' && setting !== null) {
-            // Skip disabled rules
-            if (setting.enabled === false) {
-                currentIndex++;
-                continue;
-            }
-
-            // Validate and add enabled rules to the map
-            if (setting.pattern && setting.color) {
-                // Validate if needed
-                if (validate) {
-                    const profileName = extractProfileName(setting.color, advancedProfiles);
-                    const isSpecialNone = setting.color === 'none';
-                    if (!profileName && !isSpecialNone) {
-                        try {
-                            Color(setting.color);
-                        } catch (error) {
-                            const msg = `Invalid color in branch rule (${setting.pattern}): ${setting.color}`;
-                            branchRuleErrors.set(currentIndex, msg);
-                            outputChannel.appendLine(msg);
-                            currentIndex++;
-                            continue;
-                        }
-                    }
-                }
-
-                result.set(setting.pattern, setting.color);
-            }
-            currentIndex++;
-            continue;
-        }
-
-        //     // FALLBACK: Handle legacy string format
-        //     if (typeof setting === 'string') {
-        //         // Try parsing as JSON string first (for backward compatibility)
-        //         if (setting.trim().startsWith('{')) {
-        //             try {
-        //                 const obj = JSON.parse(setting);
-        //                 // Skip disabled rules
-        //                 if (obj.enabled === false) {
-        //                     continue;
-        //                 }
-        //                 // Add enabled rules to the map
-        //                 if (obj.pattern && obj.color) {
-        //                     result.set(obj.pattern, obj.color);
-        //                 }
-        //                 continue;
-        //             } catch (err) {
-        //                 // If JSON parsing fails, fall through to legacy parsing
-        //                 outputChannel.appendLine(`Failed to parse JSON branch rule: ${setting}`);
-        //             }
-        //         }
-
-        //         // Legacy string format parsing: pattern:color
-        //         const parts = setting.split(':');
-        //         if (validate && parts.length < 2) {
-        //             // Invalid entry
-        //             const msg = 'Setting `' + setting + "': missing a color specifier";
-        //             branchRuleErrors.set(currentIndex, msg);
-        //             outputChannel.appendLine(msg);
-        //             currentIndex++;
-        //             continue;
-        //         }
-
-        //         const branchName = parts[0].trim();
-        //         const branchColor = parts[1].trim();
-
-        //         // Test all the colors to ensure they are parseable
-        //         let colorMessage = '';
-
-        //         const profileName = extractProfileName(branchColor, advancedProfiles);
-
-        //         // Only validate as a color if it's not a profile name
-        //         if (!profileName) {
-        //             try {
-        //                 Color(branchColor);
-        //             } catch (error) {
-        //                 colorMessage = '`' + branchColor + '` is not a known color';
-        //             }
-        //         }
-
-        //         if (validate && colorMessage != '') {
-        //             const msg = 'Setting `' + setting + '`: ' + colorMessage;
-        //             branchRuleErrors.set(currentIndex, msg);
-        //             outputChannel.appendLine(msg);
-        //         }
-
-        //         result.set(branchName, branchColor);
-        //         currentIndex++;
-        //     } else {
-        //         currentIndex++;
-        //     }
-    }
-
-    return result;
+    return result.rules;
 }
 
 function getBooleanSetting(setting: string): boolean | undefined {
@@ -1428,51 +1198,33 @@ function getObjectSetting(setting: string): object | undefined {
     return workspace.getConfiguration('windowColors').get<object>(setting);
 }
 
+/**
+ * Finds the first matching repository rule for the current context.
+ * This is a wrapper around the extracted ruleMatching module.
+ */
 async function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined): Promise<RepoConfig | undefined> {
-    if (repoConfigList === undefined) {
-        return undefined;
-    }
-
     // Get current workspace folder path for local folder matching
     let workspaceFolderPath = '';
     if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
         workspaceFolderPath = workspace.workspaceFolders[0].uri.fsPath;
     }
 
-    let repoConfig: RepoConfig | undefined = undefined;
-    let item: RepoConfig;
-    for (item of repoConfigList) {
-        // Skip disabled rules
-        if (item.enabled === false) continue;
+    const context: WorkspaceContext = {
+        repoUrl: gitRepoRemoteFetchUrl,
+        workspaceFolder: workspaceFolderPath,
+        currentBranch: currentBranch,
+    };
 
-        // Check if this is a local folder pattern (starts with !)
-        if (item.repoQualifier.startsWith('!')) {
-            if (workspaceFolderPath && matchesLocalFolderPattern(workspaceFolderPath, item.repoQualifier)) {
-                repoConfig = item;
-                break;
-            }
-        } else {
-            // Standard git repo matching
-            if (gitRepoRemoteFetchUrl && gitRepoRemoteFetchUrl.includes(item.repoQualifier)) {
-                repoConfig = item;
-                break;
-            }
-        }
-    }
-
-    return repoConfig;
+    return findMatchingRepoRule(repoConfigList, context);
 }
 
 function undoColors() {
     outputChannel.appendLine('Removing managed color for this workspace.');
-    const settings = JSON.parse(JSON.stringify(workspace.getConfiguration('workbench').get('colorCustomizations')));
-    // Filter settings by removing managedColors
-    for (const key in settings) {
-        if (managedColors.includes(key)) {
-            delete settings[key];
-        }
-    }
-    workspace.getConfiguration('workbench').update('colorCustomizations', settings, false);
+    const currentSettings = workspace.getConfiguration('workbench').get('colorCustomizations') as
+        | Record<string, string>
+        | undefined;
+    const cleanedSettings = removeAllManagedColors(currentSettings);
+    workspace.getConfiguration('workbench').update('colorCustomizations', cleanedSettings, false);
 }
 
 // ========== Branch Table Management Functions ==========
@@ -2026,45 +1778,13 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         }
     }
 
-    // Remove all managed colors from existing customizations to start clean
-    const cleanedCC = { ...cc };
-    for (const key of managedColors) {
-        delete cleanedCC[key];
-    }
+    // Apply colors using settingsApplicator module
+    const logger: SettingsApplicatorLogger = {
+        appendLine: (message: string) => outputChannel.appendLine(message),
+    };
 
-    // Add newColors to the cleaned customizations
-    // Only add defined color values (skip undefined to avoid setting them explicitly)
-    const finalColors = { ...cleanedCC };
-    for (const [key, value] of Object.entries(newColors)) {
-        if (value !== undefined) {
-            finalColors[key] = value;
-        }
-    }
-
-    // Ensure any managed colors that should be "None" (not in newColors or undefined) are removed
-    // This guarantees that profile settings with "None" don't leave stale colors in settings.json
-    for (const key of managedColors) {
-        if (newColors[key] === undefined && finalColors[key] !== undefined) {
-            delete finalColors[key];
-            outputChannel.appendLine(`  Removed stale color: ${key}`);
-        }
-    }
-
-    outputChannel.appendLine(
-        `  Setting ${Object.keys(newColors).filter((k) => newColors[k] !== undefined).length} color customizations`,
-    );
-
-    // Log activity bar colors specifically for debugging
-    const activityBarKeys = Object.keys(finalColors).filter((k) => k.startsWith('activityBar.'));
-    if (activityBarKeys.length > 0) {
-        outputChannel.appendLine(
-            '  Activity bar colors: ' + activityBarKeys.map((k) => `${k}=${finalColors[k]}`).join(', '),
-        );
-    } else {
-        outputChannel.appendLine('  WARNING: No activity bar colors being set');
-    }
-
-    workspace.getConfiguration('workbench').update('colorCustomizations', finalColors, false);
+    const result = applyColors(cc, newColors, logger);
+    workspace.getConfiguration('workbench').update('colorCustomizations', result.finalColors, false);
 
     outputChannel.appendLine('\nLoving this extension? https://www.buymeacoffee.com/KevinMills');
     outputChannel.appendLine(
@@ -2078,46 +1798,24 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     updateStatusBarItem(); // Update status bar after applying colors
 }
 
-function getWorkspaceRepo() {
-    let workspaceRoot: vscode.Uri | undefined = undefined;
-    const editor = vscode.window.activeTextEditor;
-    if (editor && editor.document.uri) {
-        const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-        if (folder) {
-            workspaceRoot = folder.uri;
-        }
-    }
-    // Fallback to the first workspace folder
-    if (!workspaceRoot && workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
-        workspaceRoot = workspace.workspaceFolders[0].uri;
-    }
-    if (!workspaceRoot) {
-        return '';
-    }
-
-    // Find the repository that matches the workspaceRoot
-    return gitApi.getRepository(workspaceRoot);
+// Get the git repository for the current workspace
+// This is a wrapper around the extracted gitOperations module
+function getWorkspaceRepo(): GitRepository | null {
+    const workspaceInfo: WorkspaceInfo = {
+        activeEditorUri: vscode.window.activeTextEditor?.document.uri,
+        workspaceFolders: workspace.workspaceFolders ? [...workspace.workspaceFolders] : undefined,
+        getWorkspaceFolder: (uri) => vscode.workspace.getWorkspaceFolder(uri),
+    };
+    return getWorkspaceRepository(gitApi, workspaceInfo);
 }
 
+// Get the current git branch name
+// This is a wrapper around the extracted gitOperations module
 function getCurrentGitBranch(): string | undefined {
-    // If gitRepository is undefined (local folder workspace), return undefined
-    if (!gitRepository) {
-        return undefined;
-    }
-
-    const head = gitRepository.state.HEAD;
-    if (!head) {
-        console.warn('No HEAD found for repository.');
-        return undefined;
-    }
-
-    if (!head.name) {
-        // Detached HEAD state
-        console.warn('Repository is in a detached HEAD state.');
-        return undefined;
-    }
-
-    return head.name;
+    const logger: GitOperationsLogger = {
+        warn: (message: string) => console.warn(message),
+    };
+    return getCurrentBranch(gitRepository, logger);
 }
 
 let intervalId: NodeJS.Timeout | undefined = undefined;
