@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { generatePalette, PALETTE_ALGORITHMS } from '../../paletteGenerator';
-import * as Color from 'color';
-import * as chroma from 'chroma-js';
+import Color from 'color';
+import chroma from 'chroma-js';
 
 describe('PaletteGenerator', () => {
     describe('generatePalette', () => {

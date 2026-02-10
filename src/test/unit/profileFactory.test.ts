@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import * as Color from 'color';
+import Color from 'color';
 import { createRepoProfile, createBranchProfile, ProfileFactorySettings } from '../../profileFactory';
 
 describe('profileFactory', () => {

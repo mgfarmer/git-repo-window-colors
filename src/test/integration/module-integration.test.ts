@@ -7,7 +7,7 @@
  */
 
 import { expect } from 'chai';
-import * as Color from 'color';
+import Color from 'color';
 import { parseRepoRules, ConfigProvider, ValidationContext } from '../../ruleParser';
 import { findMatchingRepoRule, findMatchingBranchRule, WorkspaceContext } from '../../ruleMatching';
 import { createRepoProfile, createBranchProfile, ProfileFactorySettings } from '../../profileFactory';

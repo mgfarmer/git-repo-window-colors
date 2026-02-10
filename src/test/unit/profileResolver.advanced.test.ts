@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { resolveProfile } from '../../profileResolver';
 import { AdvancedProfile } from '../../types/advancedModeTypes';
-import * as Color from 'color';
+import Color from 'color';
 
 describe('ProfileResolver - Advanced Features', () => {
     // Helper to create minimal valid palette

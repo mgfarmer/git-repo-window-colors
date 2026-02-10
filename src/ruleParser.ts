@@ -1,4 +1,4 @@
-import * as Color from 'color';
+import Color from 'color';
 import { AdvancedProfile } from './types/advancedModeTypes';
 import { extractProfileName } from './colorResolvers';
 

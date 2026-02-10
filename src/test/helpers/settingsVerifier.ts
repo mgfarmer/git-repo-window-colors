@@ -4,7 +4,7 @@
  */
 
 import { expect } from 'chai';
-import * as Color from 'color';
+import Color from 'color';
 
 /**
  * List of all managed color keys (from extension.ts)
