@@ -21,6 +21,7 @@ import {
 } from './ruleParser';
 import { findMatchingRepoRule, WorkspaceContext } from './ruleMatching';
 import { applyColors, removeAllManagedColors, SettingsApplicatorLogger } from './settingsApplicator';
+import { getStatusBarState, StatusBarConfig } from './statusBarManager';
 import {
     isGitExtensionAvailable,
     getWorkspaceRepository,
@@ -244,119 +245,50 @@ function createStatusBarItem(context: ExtensionContext): void {
     context.subscriptions.push(statusBarItem);
 }
 
-function shouldShowStatusBarItem(): boolean {
-    const showOnlyWhenNoMatch = getBooleanSetting('showStatusIconWhenNoRuleMatches') ?? true;
-    const repoConfigList = getRepoConfigList(false);
-
-    // Check if we have a git repo
-    if (gitRepoRemoteFetchUrl && gitRepoRemoteFetchUrl !== '') {
-        if (!showOnlyWhenNoMatch) {
-            // Always show when it's a git repo
-            return true;
-        }
-
-        // Show only when no rule matches
-        if (!repoConfigList) {
-            return true; // No rules configured, so show
-        }
-
-        // Check if any rule matches current repo
-        for (const rule of repoConfigList) {
-            // Skip disabled rules
-            if (rule.enabled === false) continue;
-
-            if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
-                return false; // Rule matches, so don't show
-            }
-        }
-
-        return true; // No rule matches, so show
-    }
-
-    // No git repo - check for local folder rules
-    if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
-        const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
-
-        if (!showOnlyWhenNoMatch) {
-            // Always show when we have a workspace folder
-            return true;
-        }
-
-        if (!repoConfigList) {
-            return true; // No rules configured, so show
-        }
-
-        // Check if any local folder rule matches
-        for (const rule of repoConfigList) {
-            // Skip disabled rules
-            if (rule.enabled === false) continue;
-
-            // Check for local folder pattern (starts with !)
-            if (rule.repoQualifier.startsWith('!')) {
-                if (matchesLocalFolderPattern(workspaceFolder, rule.repoQualifier)) {
-                    return false; // Rule matches, so don't show
-                }
-            }
-        }
-
-        return true; // No rule matches, so show
-    }
-
-    // No git repo and no workspace folder
-    return false;
-}
-
 function updateStatusBarItem(): void {
     if (!statusBarItem) return;
 
-    if (shouldShowStatusBarItem()) {
-        const hasMatchingRule = getCurrentMatchingRule() !== undefined;
-        if (hasMatchingRule) {
-            statusBarItem.tooltip = 'Git Repo Window Colors - Repository has color rules configured';
-        } else {
-            statusBarItem.tooltip = 'Git Repo Window Colors - Click to add color rules for this repository';
-        }
+    // Get current workspace context
+    const context: WorkspaceContext | undefined = getWorkspaceContextForStatusBar();
+
+    // Get rules
+    const rules = getRepoConfigList(false);
+
+    // Get configuration
+    const showOnlyWhenNoMatch = getBooleanSetting('showStatusIconWhenNoRuleMatches') ?? true;
+    const config: StatusBarConfig = {
+        showOnlyWhenNoMatch,
+    };
+
+    // Get status bar state from extracted module
+    const state = getStatusBarState(rules, context, config);
+
+    // Apply state to VS Code status bar item
+    statusBarItem.tooltip = state.tooltip;
+    if (state.visible) {
         statusBarItem.show();
     } else {
         statusBarItem.hide();
     }
 }
 
-function getCurrentMatchingRule(): RepoConfig | undefined {
-    const repoConfigList = getRepoConfigList(false);
-    if (!repoConfigList) return undefined;
+/**
+ * Helper to get workspace context for status bar calculations.
+ * This bridges the gap between VS Code APIs and the pure statusBarManager module.
+ */
+function getWorkspaceContextForStatusBar(): WorkspaceContext | undefined {
+    const repoUrl = gitRepoRemoteFetchUrl || '';
+    const workspaceFolder = workspace.workspaceFolders?.[0]?.uri.fsPath || '';
 
-    // Check git repo rules first
-    if (gitRepoRemoteFetchUrl && gitRepoRemoteFetchUrl !== '') {
-        for (const rule of repoConfigList) {
-            // Skip disabled rules
-            if (rule.enabled === false) continue;
-
-            if (gitRepoRemoteFetchUrl.includes(rule.repoQualifier)) {
-                return rule;
-            }
-        }
+    // Return undefined if no context available
+    if (!repoUrl && !workspaceFolder) {
         return undefined;
     }
 
-    // No git repo - check for local folder rules
-    if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
-        const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
-
-        for (const rule of repoConfigList) {
-            // Skip disabled rules
-            if (rule.enabled === false) continue;
-
-            // Check for local folder pattern (starts with !)
-            if (rule.repoQualifier.startsWith('!')) {
-                if (matchesLocalFolderPattern(workspaceFolder, rule.repoQualifier)) {
-                    return rule;
-                }
-            }
-        }
-    }
-
-    return undefined;
+    return {
+        repoUrl,
+        workspaceFolder,
+    };
 }
 
 /**
