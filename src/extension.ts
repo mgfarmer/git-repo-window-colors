@@ -5,7 +5,9 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 import { resolveProfile } from './profileResolver';
-import { AdvancedProfile } from './types/advancedModeTypes';
+import { AdvancedProfile, ThemeKind, ThemedColor } from './types/advancedModeTypes';
+import { resolveThemedColor, createThemedColor } from './colorDerivation';
+import { BranchRule } from './types/webviewTypes';
 import { ConfigWebviewProvider } from './webview/configWebview';
 import { matchesLocalFolderPattern } from './pathUtils';
 import { extractProfileName as extractProfileNameCore } from './colorResolvers';
@@ -126,6 +128,22 @@ export { expandEnvVars, simplifyPath, validateLocalFolderPath } from './pathUtil
  */
 function extractProfileName(colorString: string, advancedProfiles: { [key: string]: AdvancedProfile }): string | null {
     return extractProfileNameCore(colorString, advancedProfiles);
+}
+
+/**
+ * Converts VS Code's ColorThemeKind to our ThemeKind type
+ */
+function getThemeKind(colorThemeKind: ColorThemeKind): ThemeKind {
+    switch (colorThemeKind) {
+        case ColorThemeKind.Light:
+            return 'light';
+        case ColorThemeKind.Dark:
+            return 'dark';
+        case ColorThemeKind.HighContrast:
+            return 'highContrast';
+        default:
+            return 'dark';
+    }
 }
 
 /**
@@ -415,13 +433,19 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
                         }
 
                         const repoQualifier = parts[0].trim();
-                        const primaryColor = parts[1].trim();
+                        const primaryColorString = parts[1].trim();
 
                         // Check if primaryColor is an advanced profile name
                         let profileName: string | undefined = undefined;
-                        if (advancedProfiles[primaryColor]) {
-                            profileName = primaryColor;
+                        if (advancedProfiles[primaryColorString]) {
+                            profileName = primaryColorString;
                         }
+
+                        // Create ThemedColor with auto-derivation for migrated colors
+                        const primaryColor = createThemedColor(
+                            primaryColorString,
+                            getThemeKind(window.activeColorTheme.kind),
+                        );
 
                         const migratedRule: any = {
                             repoQualifier,
@@ -437,7 +461,7 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
                         migratedRepoList.push(migratedRule);
                         repoRulesMigrated++;
                         outputChannel.appendLine(
-                            `Migrated repo rule: "${item}" -> RepoConfigRule with Default Rules table`,
+                            `Migrated repo rule: "${item}" -> RepoConfigRule with ThemedColor (auto-derived from ${primaryColorString})`,
                         );
                     } catch (err) {
                         outputChannel.appendLine(`Error migrating repo rule: ${item} - ${err}`);
@@ -468,7 +492,10 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
                         }
 
                         const pattern = parts[0].trim();
-                        const color = parts[1].trim();
+                        const colorString = parts[1].trim();
+
+                        // Create ThemedColor with auto-derivation for migrated colors
+                        const color = createThemedColor(colorString, getThemeKind(window.activeColorTheme.kind));
 
                         const migratedRule = {
                             pattern,
@@ -478,7 +505,9 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
 
                         migratedBranchList.push(migratedRule);
                         branchRulesMigrated++;
-                        outputChannel.appendLine(`Migrated branch rule: "${item}" -> BranchConfigRule`);
+                        outputChannel.appendLine(
+                            `Migrated branch rule: "${item}" -> BranchConfigRule with ThemedColor (auto-derived from ${colorString})`,
+                        );
                     } catch (err) {
                         outputChannel.appendLine(`Error migrating branch rule: ${item} - ${err}`);
                         // Skip invalid entries
@@ -647,6 +676,8 @@ export async function activate(context: ExtensionContext) {
     // Register openConfig command early so it works even without a workspace
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.openConfig', () => {
+            // Refresh workspace info to ensure it's up-to-date when opening configurator
+            updateWorkspaceInfo();
             configProvider.show(context.extensionUri);
         }),
     );
@@ -955,6 +986,36 @@ export async function activate(context: ExtensionContext) {
                 updateStatusBarItem(); // Update status bar when git becomes available
             }
         });
+    }
+}
+
+/**
+ * Updates workspace info in the config provider with current git repository state.
+ * This should be called when initializing and when opening the configurator to ensure
+ * the workspace info is up-to-date.
+ */
+function updateWorkspaceInfo(): void {
+    if (!configProvider) return;
+
+    const repo = getWorkspaceRepo();
+    if (repo) {
+        const remoteUrl = getRemoteUrl(repo);
+        if (remoteUrl) {
+            const branch = getCurrentGitBranch();
+            if (branch) {
+                configProvider.setWorkspaceInfo(remoteUrl, branch, true);
+                outputChannel.appendLine(`Updated workspace info: ${remoteUrl} (${branch})`);
+            }
+        } else {
+            outputChannel.appendLine('Git repository has no remote URL yet');
+        }
+    } else {
+        // Not a git repo - set workspace folder path
+        if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
+            const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
+            configProvider.setWorkspaceInfo(workspaceFolder, '', false);
+            outputChannel.appendLine(`Updated workspace info: local folder ${workspaceFolder}`);
+        }
     }
 }
 
@@ -1457,25 +1518,24 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             // Fall through to check primaryColor
         }
 
-        // If no valid profile was set, check primaryColor
-        if (!matchedRepoConfig.profile && matchedRepoConfig.primaryColor) {
-            const profileName = extractProfileName(matchedRepoConfig.primaryColor, advancedProfiles);
-            if (profileName && advancedProfiles[profileName]) {
-                // It's a profile reference in primaryColor
-                outputChannel.appendLine('  Using profile from primaryColor: ' + profileName);
-                matchedRepoConfig.profile = advancedProfiles[profileName];
-                matchedRepoConfig.isSimpleMode = false;
-            } else {
-                // It's a simple color - create temporary repo profile
-                try {
-                    repoColor = Color(matchedRepoConfig.primaryColor);
-                    outputChannel.appendLine('  Using simple color: ' + repoColor.hex());
-
-                    matchedRepoConfig.profile = createRepoTempProfile(repoColor);
-                    matchedRepoConfig.isSimpleMode = true;
-                } catch (e) {
-                    outputChannel.appendLine('  Error parsing color: ' + e);
+        // If no valid profile was set, use primaryColor as a themed color
+        if (!matchedRepoConfig.profile && matchedRepoConfig.primaryColor && matchedRepoConfig.primaryColor !== 'none') {
+            // It's a themed color - create temporary repo profile
+            try {
+                const theme = window.activeColorTheme.kind;
+                const themeKind = getThemeKind(theme);
+                const themedColor = matchedRepoConfig.primaryColor as unknown as ThemedColor;
+                const colorValue = resolveThemedColor(themedColor, themeKind);
+                if (!colorValue) {
+                    throw new Error('No color value resolved for theme');
                 }
+                repoColor = Color(colorValue);
+                outputChannel.appendLine('  Using simple color: ' + repoColor.hex());
+
+                matchedRepoConfig.profile = createRepoTempProfile(repoColor);
+                matchedRepoConfig.isSimpleMode = true;
+            } catch (e) {
+                outputChannel.appendLine('  Error parsing color: ' + e);
             }
         }
     } else if (!usePreviewMode) {
@@ -1502,7 +1562,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             outputChannel.appendLine(`  [PREVIEW MODE] Using branch table: "${tableName}"`);
 
             const branchTable = sharedBranchTables[tableName];
-            let selectedRule: { pattern: string; color: string; enabled?: boolean } | undefined;
+            let selectedRule: BranchRule | undefined;
 
             if (branchTable && branchTable.rules && branchTable.rules[selectedBranchContext.index]) {
                 selectedRule = branchTable.rules[selectedBranchContext.index];
@@ -1515,31 +1575,38 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                 const advancedProfiles = workspace
                     .getConfiguration('windowColors')
                     .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
-                const profileName = extractProfileName(selectedRule.color, advancedProfiles);
 
-                if (profileName && advancedProfiles[profileName]) {
+                // Check if rule has a profile name
+                if (selectedRule.profileName && advancedProfiles[selectedRule.profileName]) {
                     // It's a profile - store it
-                    outputChannel.appendLine('  [PREVIEW MODE] Using Branch Profile: ' + profileName);
+                    outputChannel.appendLine('  [PREVIEW MODE] Using Branch Profile: ' + selectedRule.profileName);
                     if (!matchedRepoConfig) {
                         matchedRepoConfig = {
                             repoQualifier: '',
-                            primaryColor: '',
+                            primaryColor: 'none',
                         };
                     }
-                    matchedRepoConfig.branchProfile = advancedProfiles[profileName];
+                    matchedRepoConfig.branchProfile = advancedProfiles[selectedRule.profileName];
                 } else if (selectedRule.color === 'none') {
                     // Special 'none' value - skip branch coloring
                     outputChannel.appendLine('  [PREVIEW MODE] Branch rule specifies "none" - skipping branch color');
                     // Don't set branchProfile or branchColor
                 } else {
-                    // It's a simple color - create temporary branch profile
-                    branchColor = Color(selectedRule.color);
+                    // It's a themed color - create temporary branch profile
+                    const theme = window.activeColorTheme.kind;
+                    const themeKind = getThemeKind(theme);
+                    const themedColor = selectedRule.color as ThemedColor;
+                    const colorValue = resolveThemedColor(themedColor, themeKind);
+                    if (!colorValue) {
+                        throw new Error('No color value resolved for theme');
+                    }
+                    branchColor = Color(colorValue);
                     outputChannel.appendLine('  [PREVIEW MODE] Using simple branch color: ' + branchColor.hex());
 
                     if (!matchedRepoConfig) {
                         matchedRepoConfig = {
                             repoQualifier: '',
-                            primaryColor: '',
+                            primaryColor: 'none',
                         };
                     }
                     matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
@@ -1597,7 +1664,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                             if (!matchedRepoConfig) {
                                 matchedRepoConfig = {
                                     repoQualifier: '',
-                                    primaryColor: '',
+                                    primaryColor: 'none',
                                 };
                             }
                             matchedRepoConfig.branchProfile = advancedProfiles[profileName];
@@ -1609,7 +1676,13 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                             // Don't set branchProfile or branchColor, but still count as a match
                         } else {
                             // It's a simple color - create temporary branch profile
-                            branchColor = Color(rule.color);
+                            const theme = window.activeColorTheme.kind;
+                            const themeKind = getThemeKind(theme);
+                            const colorValue = resolveThemedColor(rule.color, themeKind);
+                            if (!colorValue) {
+                                throw new Error('No color value resolved for theme');
+                            }
+                            branchColor = Color(colorValue);
                             outputChannel.appendLine(
                                 `  Branch rule matched in "${tableName}": "${rule.pattern}" with simple color: ${branchColor.hex()}`,
                             );
@@ -1617,7 +1690,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                             if (!matchedRepoConfig) {
                                 matchedRepoConfig = {
                                     repoQualifier: '',
-                                    primaryColor: '',
+                                    primaryColor: 'none',
                                 };
                             }
                             matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
@@ -1667,6 +1740,10 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
 
     let newColors: any = {};
 
+    // Get current theme for color resolution
+    const theme = window.activeColorTheme.kind;
+    const themeKind = getThemeKind(theme);
+
     // Unified profile resolution: apply repo profile, then merge branch profile overrides
     if (matchedRepoConfig.profile) {
         if (matchedRepoConfig.isSimpleMode) {
@@ -1687,6 +1764,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             matchedRepoConfig.profile,
             repoColor || Color('#000000'),
             branchColor || Color('#000000'),
+            themeKind,
         );
         outputChannel.appendLine(`  Applied ${Object.keys(newColors).length} color mappings from repo profile`);
     }
@@ -1708,6 +1786,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             matchedRepoConfig.branchProfile,
             repoColor || Color('#000000'),
             branchColor || Color('#000000'),
+            themeKind,
         );
 
         // Merge: branch profile colors override repo profile colors, but only for defined values

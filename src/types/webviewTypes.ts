@@ -1,4 +1,4 @@
-import { AdvancedProfileMap } from './advancedModeTypes';
+import { AdvancedProfileMap, ThemedColor } from './advancedModeTypes';
 
 export interface BranchTable {
     fixed: boolean;
@@ -11,7 +11,7 @@ export interface SharedBranchTables {
 
 export interface RepoRule {
     repoQualifier: string;
-    primaryColor: string;
+    primaryColor: ThemedColor | 'none';
     profileName?: string;
     enabled?: boolean;
     branchTableName?: string;
@@ -21,7 +21,7 @@ export interface RepoRule {
 
 export interface BranchRule {
     pattern: string;
-    color: string;
+    color: ThemedColor | 'none';
     profileName?: string;
     enabled?: boolean;
 }
@@ -41,6 +41,7 @@ export interface OtherSettings {
 export interface WebviewMessage {
     command:
         | 'updateConfig'
+        | 'updateThemedColor'
         | 'requestConfig'
         | 'openColorPicker'
         | 'addRepoRule'

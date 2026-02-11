@@ -105,8 +105,57 @@
                                             "description": "Repository identifier (matched against git remote URL)"
                                         },
                                         "primaryColor": {
-                                            "type": "string",
-                                            "description": "Primary color for title bar and activity bar (CSS color or profile name)"
+                                            "type": "object",
+                                            "description": "Theme-aware color configuration",
+                                            "properties": {
+                                                "dark": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                },
+                                                "light": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                },
+                                                "highContrast": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "dark",
+                                                "light",
+                                                "highContrast"
+                                            ]
                                         },
                                         "profileName": {
                                             "type": "string",
@@ -161,8 +210,57 @@
                                             "description": "Regex pattern to match branch name"
                                         },
                                         "color": {
-                                            "type": "string",
-                                            "description": "Branch color (CSS color or profile name)"
+                                            "type": "object",
+                                            "description": "Theme-aware color configuration",
+                                            "properties": {
+                                                "dark": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                },
+                                                "light": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                },
+                                                "highContrast": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "dark",
+                                                "light",
+                                                "highContrast"
+                                            ]
                                         },
                                         "enabled": {
                                             "type": "boolean",

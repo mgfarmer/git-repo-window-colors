@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { AdvancedProfile } from '../types/advancedModeTypes';
+import { AdvancedProfile, ThemeKind, ThemedColor } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
 import { generatePalette, generateAllPalettePreviews, PaletteAlgorithm } from '../paletteGenerator';
+import { createThemedColor, updateThemedColor } from '../colorDerivation';
 import {
     getRepoRuleErrors,
     getBranchRuleErrors,
@@ -63,9 +64,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this._configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration('windowColors')) {
                 this._sendConfigurationToWebview();
+            } else if (event.affectsConfiguration('workbench.colorTheme')) {
+                // Notify webview of theme change
+                this._sendThemeToWebview();
             }
         });
         this._disposables.push(this._configurationListener);
+
+        // Listen for theme changes
+        const themeListener = vscode.window.onDidChangeActiveColorTheme(() => {
+            this._sendThemeToWebview();
+        });
+        this._disposables.push(themeListener);
     }
 
     public setWorkspaceInfo(repositoryUrl: string, currentBranch: string, isGitRepo: boolean = true): void {
@@ -180,6 +190,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'updateConfig':
                 await this._updateConfiguration(message.data);
+                break;
+            case 'updateThemedColor':
+                await this._handleThemedColorUpdate(message.data);
                 break;
             case 'openColorPicker':
                 this._openColorPicker(message.data.colorPickerData!);
@@ -396,6 +409,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             starredKeys,
             hintFlags,
             tourFlags,
+            themeKind: this._getThemeKind(),
             tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
             helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
             validationErrors: {
@@ -430,7 +444,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Migrate old configs: if primaryColor matches a profile but profileName is not set, set it
         for (const rule of rules) {
-            if (rule.primaryColor && !rule.profileName && advancedProfiles[rule.primaryColor]) {
+            if (
+                typeof rule.primaryColor === 'string' &&
+                rule.primaryColor &&
+                !rule.profileName &&
+                advancedProfiles[rule.primaryColor]
+            ) {
                 rule.profileName = rule.primaryColor;
             }
         }
@@ -494,10 +513,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Parse color section: primary-color
             const primaryColor = colorSection.trim();
+            const themeKind = this._getThemeKind();
 
             return {
                 repoQualifier: repoQualifier.trim(),
-                primaryColor: primaryColor,
+                primaryColor: createThemedColor(primaryColor, themeKind),
                 enabled: true,
             };
         } catch (error) {
@@ -974,6 +994,100 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    /**
+     * Converts VS Code ColorThemeKind to our ThemeKind
+     */
+    private _getThemeKind(): ThemeKind {
+        const kind = vscode.window.activeColorTheme.kind;
+        switch (kind) {
+            case vscode.ColorThemeKind.Light:
+                return 'light';
+            case vscode.ColorThemeKind.Dark:
+                return 'dark';
+            case vscode.ColorThemeKind.HighContrast:
+                return 'highContrast';
+            default:
+                return 'dark';
+        }
+    }
+
+    /**
+     * Sends current theme kind to webview
+     */
+    private _sendThemeToWebview(): void {
+        if (!this._panel) {
+            return;
+        }
+
+        this._panel.webview.postMessage({
+            command: 'themeChanged',
+            data: { themeKind: this._getThemeKind() },
+        });
+    }
+
+    /**
+     * Handles themed color update from webview
+     * The webview sends a new color value for the current theme, and we derive colors for other themes
+     */
+    private async _handleThemedColorUpdate(data: any): Promise<void> {
+        const { type, index, color, tableName } = data;
+        const themeKind = this._getThemeKind();
+
+        try {
+            const config = vscode.workspace.getConfiguration('windowColors');
+
+            if (type === 'repo') {
+                // Update repo rule
+                const repoRules = config.get<any[]>('repoConfigurationList', []);
+                if (index >= 0 && index < repoRules.length) {
+                    const rule = repoRules[index];
+
+                    // If current value is a string or undefined, create new ThemedColor
+                    // If it's already a ThemedColor, update it
+                    let themedColor: ThemedColor;
+                    if (typeof rule.primaryColor === 'string' || !rule.primaryColor) {
+                        themedColor = createThemedColor(color, themeKind);
+                    } else {
+                        themedColor = updateThemedColor(rule.primaryColor, color, themeKind);
+                    }
+
+                    rule.primaryColor = themedColor;
+                    await config.update('repoConfigurationList', repoRules, true);
+                }
+            } else if (type === 'branch') {
+                // Update branch rule in shared table
+                const sharedTables = config.get<any>('sharedBranchTables', {});
+                if (tableName && sharedTables[tableName]) {
+                    const rules = sharedTables[tableName].rules;
+                    if (index >= 0 && index < rules.length) {
+                        const rule = rules[index];
+
+                        // If current value is a string or undefined, create new ThemedColor
+                        // If it's already a ThemedColor, update it
+                        let themedColor: ThemedColor;
+                        if (typeof rule.color === 'string' || !rule.color) {
+                            themedColor = createThemedColor(color, themeKind);
+                        } else {
+                            themedColor = updateThemedColor(rule.color, color, themeKind);
+                        }
+
+                        rule.color = themedColor;
+                        await config.update('sharedBranchTables', sharedTables, true);
+                    }
+                }
+            }
+
+            // Wait for configuration to propagate
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            // Refresh the webview
+            this._sendConfigurationToWebview();
+        } catch (error) {
+            console.error('Failed to update themed color:', error);
+            vscode.window.showErrorMessage('Failed to update themed color: ' + (error as Error).message);
+        }
+    }
+
     private _formatRepoRule(rule: RepoRule | any): any {
         // Always return JSON object format
         const result: any = {
@@ -1156,37 +1270,68 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             }
 
             // Update the profile's palette with the generated colors
-            profile.palette.primaryActiveBg = { source: 'fixed', value: generatedPalette.primaryActiveBg, opacity: 1 };
-            profile.palette.primaryActiveFg = { source: 'fixed', value: generatedPalette.primaryActiveFg, opacity: 1 };
-            profile.palette.primaryInactiveBg = {
+            const themeKind = this._getThemeKind();
+            profile.palette.primaryActiveBg = {
                 source: 'fixed',
-                value: generatedPalette.primaryInactiveBg,
+                value: createThemedColor(generatedPalette.primaryActiveBg, themeKind),
                 opacity: 1,
             };
-            profile.palette.primaryInactiveFg = { source: 'fixed', value: generatedPalette.primaryInactiveFg };
+            profile.palette.primaryActiveFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.primaryActiveFg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.primaryInactiveBg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.primaryInactiveBg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.primaryInactiveFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.primaryInactiveFg, themeKind),
+            };
 
             profile.palette.secondaryActiveBg = {
                 source: 'fixed',
-                value: generatedPalette.secondaryActiveBg,
+                value: createThemedColor(generatedPalette.secondaryActiveBg, themeKind),
                 opacity: 1,
             };
             profile.palette.secondaryActiveFg = {
                 source: 'fixed',
-                value: generatedPalette.secondaryActiveFg,
+                value: createThemedColor(generatedPalette.secondaryActiveFg, themeKind),
                 opacity: 1,
             };
             profile.palette.secondaryInactiveBg = {
                 source: 'fixed',
-                value: generatedPalette.secondaryInactiveBg,
+                value: createThemedColor(generatedPalette.secondaryInactiveBg, themeKind),
                 opacity: 1,
             };
-            profile.palette.secondaryInactiveFg = { source: 'fixed', value: generatedPalette.secondaryInactiveFg };
+            profile.palette.secondaryInactiveFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.secondaryInactiveFg, themeKind),
+            };
 
-            profile.palette.tertiaryBg = { source: 'fixed', value: generatedPalette.tertiaryActiveBg, opacity: 1 };
-            profile.palette.tertiaryFg = { source: 'fixed', value: generatedPalette.tertiaryActiveFg, opacity: 1 };
+            profile.palette.tertiaryBg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.tertiaryActiveBg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.tertiaryFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.tertiaryActiveFg, themeKind),
+                opacity: 1,
+            };
 
-            profile.palette.quaternaryBg = { source: 'fixed', value: generatedPalette.quaternaryActiveBg, opacity: 1 };
-            profile.palette.quaternaryFg = { source: 'fixed', value: generatedPalette.quaternaryActiveFg, opacity: 1 };
+            profile.palette.quaternaryBg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.quaternaryActiveBg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.quaternaryFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.quaternaryActiveFg, themeKind),
+                opacity: 1,
+            };
 
             // Save the updated profiles
             profiles[profileName] = profile;

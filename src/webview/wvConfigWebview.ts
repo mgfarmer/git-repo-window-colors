@@ -61,6 +61,7 @@ const vscode = acquireVsCodeApi();
 // Store vscode on window for other modules (e.g., hintUtils.ts) to access
 (window as any).vscode = vscode;
 let currentConfig: any = null;
+let currentThemeKind: 'dark' | 'light' | 'highContrast' = 'dark'; // Track current VS Code theme
 let starredKeys: string[] = [];
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
@@ -496,6 +497,66 @@ function isThemeDark(): boolean {
     return true; // Default to dark mode assumption
 }
 
+/**
+ * Helper function to check if a value is a ThemedColor object
+ */
+function isThemedColor(value: any): boolean {
+    return value && typeof value === 'object' && 'dark' in value && 'light' in value && 'highContrast' in value;
+}
+
+/**
+ * Extracts the appropriate color string from a ThemedColor object
+ * @param colorValue - ThemedColor object
+ * @returns The color string for the current theme
+ */
+function extractColorForTheme(colorValue: any): string {
+    if (isThemedColor(colorValue)) {
+        const themeValue = colorValue[currentThemeKind];
+        if (themeValue && themeValue.value) {
+            return themeValue.value;
+        }
+
+        // Fallback: return first defined color
+        for (const theme of ['dark', 'light', 'highContrast']) {
+            if (colorValue[theme] && colorValue[theme].value) {
+                return colorValue[theme].value;
+            }
+        }
+    }
+
+    return ''; // Return empty string if no color found
+}
+
+/**
+ * Creates a ThemedColor object from a single color string
+ * Derives colors for other themes using lightness inversion
+ * This is a simplified version for the webview context
+ */
+function createThemedColorInWebview(color: string): any {
+    // For webview: just create a simple ThemedColor with auto=false for current theme
+    // and let the backend handle full derivation when saved
+    return {
+        dark: currentThemeKind === 'dark' ? { value: color, auto: false } : { value: undefined, auto: true },
+        light: currentThemeKind === 'light' ? { value: color, auto: false } : { value: undefined, auto: true },
+        highContrast:
+            currentThemeKind === 'highContrast' ? { value: color, auto: false } : { value: undefined, auto: true },
+    };
+}
+
+/**
+ * Handles theme change notifications from the extension
+ */
+function handleThemeChanged(data: any) {
+    if (data && data.themeKind) {
+        currentThemeKind = data.themeKind;
+        //  Refresh the UI to show colors for the new theme by re-rendering config
+        // This will extract colors from ThemedColor objects for the new theme
+        if (currentConfig) {
+            handleConfigurationData(currentConfig);
+        }
+    }
+}
+
 // Count how many profiles are in use and check if any are used
 function getProfileUsageInfo(): {
     inUse: boolean;
@@ -706,6 +767,9 @@ window.addEventListener('message', (event) => {
         case 'configData':
             handleConfigurationData(message.data);
             break;
+        case 'themeChanged':
+            handleThemeChanged(message.data);
+            break;
         case 'colorPickerResult':
             handleColorPickerResult(message.data);
             break;
@@ -782,6 +846,11 @@ function handleConfigurationData(data: any) {
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
+
+    // Extract theme kind if present
+    if (data.themeKind) {
+        currentThemeKind = data.themeKind;
+    }
 
     // Extract starred keys if present
     if (data.starredKeys) {
@@ -2559,7 +2628,7 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
                    data-action="updateRepoRule(${index}, 'repoQualifier', this.value)">
         </td>
         <td class="color-cell">
-            ${createColorInputHTML(rule.primaryColor || '', 'repo', index, 'primaryColor')}
+            ${createColorInputHTML(extractColorForTheme(rule.primaryColor) || '', 'repo', index, 'primaryColor')}
         </td>
         <td class="branch-table-cell" id="branch-table-cell-${index}">
             <!-- Custom dropdown will be inserted here -->
@@ -2686,7 +2755,7 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
                    data-action="updateBranchRule(${index}, 'pattern', this.value)">
         </td>
         <td class="color-cell">
-            ${createColorInputHTML(rule.color || '', 'branch', index, 'color')}
+            ${createColorInputHTML(extractColorForTheme(rule.color) || '', 'branch', index, 'color')}
         </td>
     `;
 }
@@ -4350,6 +4419,50 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
         selectedRepoRuleIndex,
     );
 
+    // For color fields (primaryColor or color), send themed color update to extension
+    if ((field === 'primaryColor' || field === 'color') && value && !currentConfig.advancedProfiles?.[value]) {
+        //Send themed color update message
+        const messageData: any = {
+            type: ruleType,
+            index: index,
+            color: value,
+        };
+
+        // For branch rules in shared tables, include table name
+        if (ruleType === 'branch' && selectedRepoRuleIndex >= 0) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            if (selectedRule?.branchTableName) {
+                messageData.tableName = selectedRule.branchTableName;
+            }
+        }
+
+        vscode.postMessage({
+            command: 'updateThemedColor',
+            data: messageData,
+        });
+
+        // Update local config with string value for immediate UI feedback
+        if (ruleType === 'repo') {
+            const rules = currentConfig.repoRules;
+            if (rules?.[index]) {
+                rules[index][field] = value;
+            }
+        } else if (ruleType === 'branch') {
+            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
+                const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+                const tableName = selectedRule.branchTableName;
+                if (tableName && currentConfig.sharedBranchTables?.[tableName]?.rules?.[index]) {
+                    currentConfig.sharedBranchTables[tableName].rules[index][field] = value;
+                }
+            }
+        }
+
+        // Update color swatch
+        updateColorSwatch(ruleType, index, field, value);
+        return;
+    }
+
+    // For non-color fields or profile references, use existing logic
     if (ruleType === 'repo') {
         const rules = currentConfig.repoRules;
         if (!rules?.[index]) return;
@@ -4363,44 +4476,20 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
             delete rules[index].profileName;
         }
     } else if (ruleType === 'branch') {
-        // Determine if we're updating global or local branch rules
+        // Branch rules are now in shared tables
         if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = !selectedRule.branchRules;
+            const tableName = selectedRule.branchTableName;
 
-            if (useGlobal) {
-                // Update global branch rules
-                if (!currentConfig?.branchRules?.[index]) return;
-                currentConfig.branchRules[index][field] = value;
+            if (tableName && currentConfig.sharedBranchTables?.[tableName]?.rules?.[index]) {
+                currentConfig.sharedBranchTables[tableName].rules[index][field] = value;
 
                 // If updating color with a profile name, also set the profileName field
                 if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
-                    currentConfig.branchRules[index].profileName = value;
+                    currentConfig.sharedBranchTables[tableName].rules[index].profileName = value;
                 } else if (field === 'color') {
-                    delete currentConfig.branchRules[index].profileName;
+                    delete currentConfig.sharedBranchTables[tableName].rules[index].profileName;
                 }
-            } else {
-                // Update local branch rules
-                if (!selectedRule.branchRules?.[index]) return;
-                selectedRule.branchRules[index][field] = value;
-
-                // If updating color with a profile name, also set the profileName field
-                if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
-                    selectedRule.branchRules[index].profileName = value;
-                } else if (field === 'color') {
-                    delete selectedRule.branchRules[index].profileName;
-                }
-            }
-        } else {
-            // Fallback to global
-            if (!currentConfig?.branchRules?.[index]) return;
-            currentConfig.branchRules[index][field] = value;
-
-            // If updating color with a profile name, also set the profileName field
-            if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
-                currentConfig.branchRules[index].profileName = value;
-            } else if (field === 'color') {
-                delete currentConfig.branchRules[index].profileName;
             }
         }
     }
@@ -6226,18 +6315,18 @@ const THEME_KEY_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_PALETTE: Palette = {
-    primaryActiveBg: { source: 'fixed', value: '#4A90E2' },
-    primaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-    primaryInactiveBg: { source: 'fixed', value: '#2E5C8A' },
-    primaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-    secondaryActiveBg: { source: 'fixed', value: '#5FA3E8' },
-    secondaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-    secondaryInactiveBg: { source: 'fixed', value: '#4278B0' },
-    secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-    tertiaryBg: { source: 'fixed', value: '#1E1E1E' },
-    tertiaryFg: { source: 'fixed', value: '#CCCCCC' },
-    quaternaryBg: { source: 'fixed', value: '#2D2D30' },
-    quaternaryFg: { source: 'fixed', value: '#D4D4D4' },
+    primaryActiveBg: { source: 'fixed', value: createThemedColorInWebview('#4A90E2') },
+    primaryActiveFg: { source: 'fixed', value: createThemedColorInWebview('#FFFFFF') },
+    primaryInactiveBg: { source: 'fixed', value: createThemedColorInWebview('#2E5C8A') },
+    primaryInactiveFg: { source: 'fixed', value: createThemedColorInWebview('#CCCCCC') },
+    secondaryActiveBg: { source: 'fixed', value: createThemedColorInWebview('#5FA3E8') },
+    secondaryActiveFg: { source: 'fixed', value: createThemedColorInWebview('#FFFFFF') },
+    secondaryInactiveBg: { source: 'fixed', value: createThemedColorInWebview('#4278B0') },
+    secondaryInactiveFg: { source: 'fixed', value: createThemedColorInWebview('#CCCCCC') },
+    tertiaryBg: { source: 'fixed', value: createThemedColorInWebview('#1E1E1E') },
+    tertiaryFg: { source: 'fixed', value: createThemedColorInWebview('#CCCCCC') },
+    quaternaryBg: { source: 'fixed', value: createThemedColorInWebview('#2D2D30') },
+    quaternaryFg: { source: 'fixed', value: createThemedColorInWebview('#D4D4D4') },
 };
 
 const DEFAULT_MAPPINGS: SectionMappings = {
@@ -6489,10 +6578,10 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             let fgColor = '#FFFFFF'; // Default
 
             if (profile?.palette?.primaryActiveBg?.value) {
-                bgColor = convertColorToHex(profile.palette.primaryActiveBg.value);
+                bgColor = convertColorToHex(extractColorForTheme(profile.palette.primaryActiveBg.value));
             }
             if (profile?.palette?.primaryActiveFg?.value) {
-                fgColor = convertColorToHex(profile.palette.primaryActiveFg.value);
+                fgColor = convertColorToHex(extractColorForTheme(profile.palette.primaryActiveFg.value));
             }
 
             swatch.style.backgroundColor = bgColor;
@@ -7015,7 +7104,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Create combined swatch showing Bg + Fg together
                 const swatch = document.createElement('div');
                 swatch.className = 'palette-pair-swatch';
-                updatePairSwatch(swatch, bgDef.value || '#000000', fgDef.value || '#FFFFFF');
+                updatePairSwatch(
+                    swatch,
+                    extractColorForTheme(bgDef.value) || '#000000',
+                    extractColorForTheme(fgDef.value) || '#FFFFFF',
+                );
 
                 // Create wrapper for Bg+Fg pair
                 const pairWrapper = document.createElement('div');
@@ -7027,7 +7120,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         currentConfig.advancedProfiles[selectedProfileName].palette[bgKey] = newDef;
                         saveProfiles();
                         // Update the combined swatch
-                        updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
+                        updatePairSwatch(
+                            swatch,
+                            extractColorForTheme(newDef.value) || '#000000',
+                            extractColorForTheme(fgDef.value) || '#FFFFFF',
+                        );
 
                         // Show palette generator hint when user manually sets primary background
                         const generatorBtn = document.getElementById('paletteGeneratorBtn');
@@ -7041,7 +7138,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         currentConfig.advancedProfiles[selectedProfileName].palette[fgKey] = newDef;
                         saveProfiles();
                         // Update the combined swatch
-                        updatePairSwatch(swatch, bgDef.value || '#000000', newDef.value || '#FFFFFF');
+                        updatePairSwatch(
+                            swatch,
+                            extractColorForTheme(bgDef.value) || '#000000',
+                            extractColorForTheme(newDef.value) || '#FFFFFF',
+                        );
                     }
                 });
 
@@ -7476,7 +7577,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 filteredPaletteOptions.forEach((opt) => {
                     const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
                     const slotDef = profile.palette[opt];
-                    const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
+                    const color =
+                        slotDef && slotDef.value ? convertColorToHex(extractColorForTheme(slotDef.value)) : undefined;
                     options.push({ value: opt, label, color });
                 });
 
@@ -8107,7 +8209,10 @@ function createPaletteSlotElement(
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('text/plain', key);
         e.dataTransfer.setData('application/x-palette-slot', key);
-        e.dataTransfer.setData('application/x-palette-color', convertColorToHex(def.value || '#000000'));
+        e.dataTransfer.setData(
+            'application/x-palette-color',
+            convertColorToHex(extractColorForTheme(def.value) || '#000000'),
+        );
 
         // Create drag preview
         const dragPreview = document.createElement('div');
@@ -8125,7 +8230,7 @@ function createPaletteSlotElement(
         const colorBox = document.createElement('div');
         colorBox.style.width = '20px';
         colorBox.style.height = '20px';
-        colorBox.style.backgroundColor = convertColorToHex(def.value || '#000000');
+        colorBox.style.backgroundColor = convertColorToHex(extractColorForTheme(def.value) || '#000000');
         colorBox.style.border = '1px solid var(--vscode-panel-border)';
         colorBox.style.borderRadius = '2px';
 
@@ -8164,10 +8269,10 @@ function createPaletteSlotElement(
     const colorPicker = document.createElement('input');
     colorPicker.type = 'color';
     colorPicker.className = 'native-color-input';
-    colorPicker.value = convertColorToHex(def.value || '#000000');
+    colorPicker.value = convertColorToHex(extractColorForTheme(def.value) || '#000000');
     colorPicker.title = 'Click to use a color picker, shift-click to choose a random color';
     colorPicker.onchange = () => {
-        def.value = colorPicker.value;
+        def.value = createThemedColorInWebview(colorPicker.value);
         def.source = 'fixed';
         textInput.value = colorPicker.value;
         onChange(def);
@@ -8177,7 +8282,7 @@ function createPaletteSlotElement(
     const textInput = document.createElement('input');
     textInput.type = 'text';
     textInput.className = 'color-input text-input';
-    textInput.value = def.value || '#000000';
+    textInput.value = extractColorForTheme(def.value) || '#000000';
     textInput.placeholder = 'e.g., blue, #4A90E2'; // No profile example here - palette slots are color definitions
     textInput.style.maxWidth = '90px';
     textInput.setAttribute('data-palette-slot', 'true'); // Mark as palette slot input
@@ -8190,7 +8295,7 @@ function createPaletteSlotElement(
     };
 
     textInput.onchange = () => {
-        def.value = textInput.value;
+        def.value = createThemedColorInWebview(textInput.value);
         def.source = 'fixed';
         onChange(def);
     };

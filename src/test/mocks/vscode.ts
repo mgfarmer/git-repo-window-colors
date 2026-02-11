@@ -277,6 +277,10 @@ export const window = {
     get activeColorTheme() {
         return { kind: mockColorThemeKind };
     },
+    onDidChangeActiveColorTheme: (callback: any) => {
+        // Return a disposable that does nothing
+        return { dispose: () => {} };
+    },
     createOutputChannel: (name: string): MockOutputChannel => {
         const channel = new MockOutputChannel();
         outputChannels.set(name, channel);
