@@ -164,6 +164,41 @@ class MockEventEmitter<T> {
 
 const configChangeEmitter = new MockEventEmitter<any>();
 
+// ========== Output Channel ==========
+class MockOutputChannel {
+    private _output: string[] = [];
+
+    appendLine(value: string): void {
+        this._output.push(value);
+    }
+
+    append(value: string): void {
+        if (this._output.length === 0) {
+            this._output.push(value);
+        } else {
+            this._output[this._output.length - 1] += value;
+        }
+    }
+
+    clear(): void {
+        this._output = [];
+    }
+
+    show(): void {}
+    hide(): void {}
+    dispose(): void {}
+
+    // Test helper to get output
+    getOutput(): string[] {
+        return [...this._output];
+    }
+
+    // Test helper to get full output as string
+    getOutputText(): string {
+        return this._output.join('\\n');
+    }
+}
+
 // ========== Workspace Folders ==========
 let mockWorkspaceFolders: any[] = [
     {
@@ -202,6 +237,7 @@ export function __resetAllMocks() {
     __resetMockGitState();
     __resetMockColorTheme();
     __resetMockWorkspaceFolders();
+    __resetMockOutputChannels();
 }
 
 // ========== Exported VS Code APIs ==========
@@ -212,31 +248,82 @@ export enum ColorThemeKind {
     HighContrast = 3,
 }
 
+export enum StatusBarAlignment {
+    Left = 1,
+    Right = 2,
+}
+
+// Thenable type alias for compatibility
+export type Thenable<T> = Promise<T>;
+
+// Store output channels for test access
+const outputChannels: Map<string, MockOutputChannel> = new Map();
+
+/**
+ * Get a mock output channel for testing (test helper)
+ */
+export function __getMockOutputChannel(name: string): MockOutputChannel | undefined {
+    return outputChannels.get(name);
+}
+
+/**
+ * Reset output channels (for test cleanup)
+ */
+export function __resetMockOutputChannels() {
+    outputChannels.clear();
+}
+
 export const window = {
     get activeColorTheme() {
         return { kind: mockColorThemeKind };
     },
-    createOutputChannel: (name: string) => ({
-        appendLine: () => {},
-        append: () => {},
-        clear: () => {},
-        show: () => {},
-        hide: () => {},
+    createOutputChannel: (name: string): MockOutputChannel => {
+        const channel = new MockOutputChannel();
+        outputChannels.set(name, channel);
+        return channel;
+    },
+    showInformationMessage: (...args: any[]): any => Promise.resolve(undefined),
+    showErrorMessage: (...args: any[]): any => Promise.resolve(undefined),
+    showWarningMessage: (...args: any[]): any => Promise.resolve(undefined),
+    showQuickPick: (...args: any[]): any => Promise.resolve(undefined),
+    showSaveDialog: (...args: any[]): any => Promise.resolve(undefined),
+    showOpenDialog: (...args: any[]): any => Promise.resolve(undefined),
+    showInputBox: (...args: any[]): any => Promise.resolve(undefined),
+    createWebviewPanel: (...args: any[]): any => ({
+        webview: {
+            html: '',
+            cspSource: "'self'",
+            asWebviewUri: (uri: any) => uri,
+            postMessage: () => Promise.resolve(true),
+            onDidReceiveMessage: (callback: any) => {
+                // Store and can call later
+                return { dispose: () => {} };
+            },
+        },
+        reveal: (...args: any[]) => {},
         dispose: () => {},
+        onDidDispose: (callback: any) => {
+            // Store and can call later
+            return { dispose: () => {} };
+        },
+        visible: true,
     }),
-    showInformationMessage: () => Promise.resolve(undefined),
-    showErrorMessage: () => Promise.resolve(undefined),
-    showWarningMessage: () => Promise.resolve(undefined),
-    showQuickPick: () => Promise.resolve(undefined),
-    createStatusBarItem: () => ({
+    createStatusBarItem: (...args: any[]) => ({
         text: '',
         tooltip: '',
+        command: '',
+        alignment: undefined,
+        priority: undefined,
         show: () => {},
         hide: () => {},
         dispose: () => {},
     }),
+    get activeTextEditor(): any {
+        return undefined; // Can be mocked if needed
+    },
     state: {
         focused: true,
+        active: true,
     },
 };
 
@@ -245,7 +332,12 @@ export const workspace = {
     get workspaceFolders() {
         return mockWorkspaceFolders;
     },
+    getWorkspaceFolder: (uri: any) => mockWorkspaceFolders[0],
     onDidChangeConfiguration: configChangeEmitter.event,
+    fs: {
+        readFile: (uri: any) => Promise.resolve(new Uint8Array()),
+        writeFile: (uri: any, content: any) => Promise.resolve(),
+    },
 };
 
 export const ConfigurationTarget = {
@@ -255,14 +347,25 @@ export const ConfigurationTarget = {
 };
 
 export const commands = {
-    registerCommand: () => ({ dispose: () => {} }),
-    executeCommand: () => Promise.resolve(),
+    registerCommand: (...args: any[]) => ({ dispose: () => {} }),
+    executeCommand: (...args: any[]): any => Promise.resolve(true),
 };
 
 export const extensions = {
-    getExtension: (extensionId: string) => {
+    getExtension: (extensionId: string): any => {
         if (extensionId === 'vscode.git') {
             return mockGitExtension;
+        }
+        if (extensionId === 'kmills.git-repo-window-colors') {
+            return {
+                isActive: true,
+                packageJSON: {
+                    contributes: {
+                        configuration: [],
+                    },
+                },
+                exports: {},
+            };
         }
         return undefined;
     },
@@ -271,16 +374,28 @@ export const extensions = {
 export const Uri = {
     file: (path: string) => ({ fsPath: path, toString: () => `file://${path}` }),
     parse: (uri: string) => ({ fsPath: uri, toString: () => uri }),
+    joinPath: (...args: any[]) => ({ fsPath: '/mock/path', toString: () => '/mock/path' }),
 };
+
+export type Uri = ReturnType<typeof Uri.file>;
 
 export const languages = {};
 
 // Export types that extension code might use
 export interface ExtensionContext {
     subscriptions: any[];
-    workspaceState: any;
-    globalState: any;
+    workspaceState: {
+        get<T>(key: string): T | undefined;
+        get<T>(key: string, defaultValue: T): T;
+        update(key: string, value: any): Promise<void>;
+    };
+    globalState: {
+        get<T>(key: string): T | undefined;
+        get<T>(key: string, defaultValue: T): T;
+        update(key: string, value: any): Promise<void>;
+    };
     extensionPath: string;
+    extensionUri: any;
     storagePath?: string;
     globalStoragePath: string;
     logPath: string;
@@ -298,7 +413,36 @@ export interface OutputChannel {
 export interface StatusBarItem {
     text: string;
     tooltip?: string;
+    command?: string;
+    alignment?: StatusBarAlignment;
+    priority?: number;
     show(): void;
     hide(): void;
     dispose(): void;
+}
+
+export interface Disposable {
+    dispose(): void;
+}
+
+export interface Webview {
+    html: string;
+    cspSource: string;
+    asWebviewUri(uri: any): any;
+    postMessage(message: any): Promise<boolean>;
+    onDidReceiveMessage: any;
+}
+
+export interface WebviewPanel {
+    webview: Webview;
+    reveal(...args: any[]): void;
+    dispose(): void;
+    onDidDispose: any;
+    visible: boolean;
+}
+
+export enum ViewColumn {
+    One = 1,
+    Two = 2,
+    Three = 3,
 }

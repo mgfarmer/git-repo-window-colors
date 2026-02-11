@@ -125,7 +125,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // If we already have a panel, show it
         if (this._panel) {
-            this._panel.reveal(column);
+            this._panel.reveal && this._panel.reveal(column);
             return;
         }
 
@@ -148,17 +148,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         );
 
         // Set the HTML content
-        this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
+        this._panel!.webview.html = this._getHtmlForWebview(this._panel!.webview);
 
         // Handle messages from the webview
-        this._panel.webview.onDidReceiveMessage(
+        this._panel!.webview.onDidReceiveMessage(
             async (message: WebviewMessage) => await this._handleMessage(message),
             undefined,
             this._disposables,
         );
 
         // Handle when the panel is disposed
-        this._panel.onDidDispose(() => this._onPanelDisposed(), null, this._disposables);
+        this._panel!.onDidDispose(() => this._onPanelDisposed(), null, this._disposables);
 
         // Send initial configuration to webview
         this._sendConfigurationToWebview();
@@ -913,7 +913,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const config = vscode.workspace.getConfiguration('windowColors');
-            const updatePromises: Thenable<void>[] = [];
+            const updatePromises: vscode.Thenable<void>[] = [];
 
             // Update repository rules
             if (data.repoRules) {
@@ -1254,7 +1254,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 value: currentColor,
                 placeHolder: 'e.g., blue, #FF0000, rgb(255,0,0)',
             })
-            .then((color) => {
+            .then((color: string | undefined) => {
                 if (color !== undefined) {
                     // Send the new color back to webview
                     if (this._panel) {

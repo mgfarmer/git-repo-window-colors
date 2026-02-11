@@ -2056,9 +2056,9 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     container.innerHTML = '';
     container.appendChild(table);
 
-    // Initialize selection if needed
+    // Initialize selection if needed - only select if there's a matching rule
     if (selectedRepoRuleIndex === -1 && rules.length > 0) {
-        // Prefer matched workspace rule, then first enabled rule, then first rule
+        // Only select if there's a matched workspace rule
         if (
             matchingIndex !== undefined &&
             matchingIndex !== null &&
@@ -2066,11 +2066,9 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
             matchingIndex < rules.length
         ) {
             selectedRepoRuleIndex = matchingIndex;
-        } else {
-            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
-            selectedRepoRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
+            renderBranchRulesForSelectedRepo();
         }
-        renderBranchRulesForSelectedRepo();
+        // Don't auto-select the first rule when there's no match
 
         // If preview mode is enabled, trigger preview for the initially selected rule
         if (previewMode && selectedRepoRuleIndex >= 0) {
@@ -2644,7 +2642,7 @@ function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?:
     // Initialize selection if needed (only for the first render or when switching repos)
     // Check if we need to initialize selectedBranchRuleIndex
     if (selectedBranchRuleIndex === -1 && rules.length > 0) {
-        // Prefer matched branch rule, then first enabled rule, then first rule
+        // Only select if there's a matched branch rule
         if (
             matchingIndex !== undefined &&
             matchingIndex !== null &&
@@ -2652,15 +2650,13 @@ function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?:
             matchingIndex < rules.length
         ) {
             selectedBranchRuleIndex = matchingIndex;
-        } else {
-            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
-            selectedBranchRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
-        }
 
-        // Trigger re-render to show the selection
-        if (currentConfig && selectedRepoRuleIndex >= 0) {
-            renderBranchRulesForSelectedRepo();
+            // Trigger re-render to show the selection
+            if (currentConfig && selectedRepoRuleIndex >= 0) {
+                renderBranchRulesForSelectedRepo();
+            }
         }
+        // Don't auto-select the first rule when there's no match
     }
 }
 
@@ -3496,6 +3492,29 @@ function selectRepoRule(index: number) {
         return;
     }
 
+    // Toggle: if clicking the already-selected rule, deselect it
+    if (selectedRepoRuleIndex === index) {
+        console.log(`[selectRepoRule] Deselecting rule at index ${index}`);
+        selectedRepoRuleIndex = -1;
+        selectedBranchRuleIndex = -1;
+
+        // Clear preview when deselecting
+        if (previewMode) {
+            vscode.postMessage({
+                command: 'clearPreview',
+                data: {
+                    previewEnabled: true,
+                },
+            });
+        }
+
+        // Re-render to show deselected state
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+        renderBranchRulesForSelectedRepo();
+        hidePreviewToast();
+        return;
+    }
+
     selectedRepoRuleIndex = index;
     console.log(`[selectRepoRule] Set selectedRepoRuleIndex to ${index}`);
 
@@ -3575,6 +3594,29 @@ function selectBranchRule(index: number) {
     const branchRules = currentConfig?.sharedBranchTables?.[tableName]?.rules || [];
 
     if (!branchRules?.[index]) return;
+
+    // Toggle: if clicking the already-selected rule, deselect it
+    if (selectedBranchRuleIndex === index) {
+        console.log(`[selectBranchRule] Deselecting rule at index ${index}`);
+        selectedBranchRuleIndex = -1;
+
+        // Clear branch preview when deselecting
+        if (previewMode) {
+            // Revert to just repo rule preview
+            vscode.postMessage({
+                command: 'previewRepoRule',
+                data: {
+                    index: selectedRepoRuleIndex,
+                    previewEnabled: true,
+                    clearBranchPreview: true,
+                },
+            });
+        }
+
+        // Re-render to show deselected state
+        renderBranchRulesForSelectedRepo();
+        return;
+    }
 
     selectedBranchRuleIndex = index;
 

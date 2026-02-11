@@ -80,6 +80,33 @@ export function __resetModuleStateForTesting(): void {
     // are set during activation and should be mocked by tests as needed
 }
 
+/**
+ * TEST ONLY: Initialize module state for testing
+ * Sets up the minimal state needed for doit() to function
+ */
+export function __initializeModuleForTesting(
+    mockOutputChannel: vscode.OutputChannel,
+    mockGitRepository: any,
+    mockConfigProvider?: ConfigWebviewProvider,
+): void {
+    outputChannel = mockOutputChannel;
+    gitRepository = mockGitRepository;
+    gitRepoRemoteFetchUrl = mockGitRepository?.state?.remotes?.[0]?.fetchUrl || '';
+    currentBranch = mockGitRepository?.state?.HEAD?.name || undefined;
+    configProvider = mockConfigProvider as any;
+    gitApi = {
+        getRepository: () => mockGitRepository,
+    };
+}
+
+/**
+ * TEST ONLY: Export doit function for integration testing
+ * This allows tests to directly invoke the main coloring logic
+ */
+export async function __doitForTesting(reason: string, usePreviewMode: boolean = false): Promise<void> {
+    return doit(reason, usePreviewMode);
+}
+
 // RepoConfig type is now exported from ruleParser.ts
 
 // ========== Local Folder Path Utilities ==========
@@ -1310,7 +1337,9 @@ function findBestTableForNewRepoRule(selectedRepoRuleIndex: number | undefined):
 // ========== End Branch Table Management Functions ==========
 
 async function doit(reason: string, usePreviewMode: boolean = false) {
-    stopBranchPoll();
+    if (intervalId) {
+        stopBranchPoll();
+    }
     outputChannel.appendLine('\nColorizer triggered by ' + reason);
     outputChannel.appendLine('  Preview mode enabled: ' + usePreviewMode);
 
@@ -1520,14 +1549,17 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         }
     } else {
         // Use matching branch rules - lookup from shared branch tables
-        const sharedBranchTables = workspace
-            .getConfiguration('windowColors')
-            .get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
-
-        // Skip branch rule checking if branchTableName is '__none__'
-        if (matchedRepoConfig && matchedRepoConfig.branchTableName === '__none__') {
+        // Only check branch rules if we have a matched repo rule
+        if (!matchedRepoConfig) {
+            outputChannel.appendLine('  No repo rule matched - skipping branch rules');
+        } else if (matchedRepoConfig.branchTableName === '__none__') {
             outputChannel.appendLine('  No branch table specified for this repository - skipping branch rules');
         } else {
+            // Get shared branch tables
+            const sharedBranchTables = workspace
+                .getConfiguration('windowColors')
+                .get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
+
             // Determine which table to use
             let tableName = 'Default Rules'; // Default
             if (matchedRepoConfig && matchedRepoConfig.branchTableName) {
@@ -1911,7 +1943,7 @@ async function importConfiguration(): Promise<void> {
         }
 
         // Apply the configuration
-        const configUpdates: Array<Thenable<void>> = [];
+        const configUpdates: vscode.Thenable<void>[] = [];
 
         if (action === 'Import and Replace') {
             // Replace all configuration
