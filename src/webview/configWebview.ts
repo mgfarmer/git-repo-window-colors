@@ -913,7 +913,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const config = vscode.workspace.getConfiguration('windowColors');
-            const updatePromises: vscode.Thenable<void>[] = [];
+            const updatePromises: Promise<void>[] = [];
 
             // Update repository rules
             if (data.repoRules) {
@@ -921,7 +921,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     const formatted = this._formatRepoRule(rule);
                     return formatted;
                 });
-                updatePromises.push(config.update('repoConfigurationList', repoRulesArray, true));
+                updatePromises.push(Promise.resolve(config.update('repoConfigurationList', repoRulesArray, true)));
             }
 
             // Update branch rules
@@ -934,24 +934,28 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         enabled: rule.enabled !== undefined ? rule.enabled : true,
                     };
                 });
-                updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
+                updatePromises.push(Promise.resolve(config.update('branchConfigurationList', branchRulesArray, true)));
             }
 
             // Update shared branch tables
             if (data.sharedBranchTables) {
-                updatePromises.push(config.update('sharedBranchTables', data.sharedBranchTables, true));
+                updatePromises.push(
+                    Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
+                );
             }
 
             // Update advanced profiles
             if (data.advancedProfiles) {
-                updatePromises.push(config.update('advancedProfiles', data.advancedProfiles, true));
+                updatePromises.push(Promise.resolve(config.update('advancedProfiles', data.advancedProfiles, true)));
             }
 
             // Update other settings
             if (data.otherSettings) {
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
-                    updatePromises.push(config.update(key, settings[key as keyof OtherSettings], true));
+                    updatePromises.push(
+                        Promise.resolve(config.update(key, settings[key as keyof OtherSettings], true)),
+                    );
                 });
             }
 

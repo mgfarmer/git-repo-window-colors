@@ -23,6 +23,7 @@
         "node_modules",
         ".vscode-test",
         "tmp",
+        "src/test",
         "src/webview/wvConfigWebview.ts"
     ]
 }

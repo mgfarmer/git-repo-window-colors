@@ -4459,6 +4459,37 @@ function handleColorInputClick(event: MouseEvent) {
         return;
     }
 
+    // Check for regular click on repo rule color input to navigate to profile
+    if (!event.shiftKey && target.classList.contains('native-color-input')) {
+        const dataAction = target.getAttribute('data-action');
+        if (dataAction) {
+            const match = dataAction.match(/updateColorRule\('(\w+)', (\d+), '(\w+)',/);
+            if (match) {
+                const [, ruleType, index] = match;
+                if (ruleType === 'repo') {
+                    const rules = currentConfig?.repoRules;
+                    const rule = rules?.[parseInt(index)];
+                    if (rule) {
+                        // Check if this rule uses a profile
+                        const colorValue = rule.profileName || rule.primaryColor;
+                        const advancedProfiles = currentConfig?.advancedProfiles || {};
+
+                        // If the color value is a profile name, navigate to Profiles tab
+                        if (colorValue && advancedProfiles[colorValue]) {
+                            event.preventDefault();
+                            const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+                            if (profilesTab) {
+                                profilesTab.click();
+                            }
+                            selectProfile(colorValue);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (event.shiftKey) {
         event.preventDefault();
 
@@ -5171,6 +5202,27 @@ function sendConfiguration() {
 }
 
 function openColorPicker(ruleType: string, index: number, field: string) {
+    // Check if this is a profile-based repo rule
+    if (ruleType === 'repo' && field === 'primaryColor') {
+        const rules = currentConfig?.repoRules;
+        const rule = rules?.[index];
+        if (rule) {
+            // Check if this rule uses a profile
+            const colorValue = rule.profileName || rule.primaryColor;
+            const advancedProfiles = currentConfig?.advancedProfiles || {};
+
+            // If the color value is a profile name, navigate to Profiles tab
+            if (colorValue && advancedProfiles[colorValue]) {
+                const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+                if (profilesTab) {
+                    profilesTab.click();
+                }
+                selectProfile(colorValue);
+                return;
+            }
+        }
+    }
+
     vscode.postMessage({
         command: 'openColorPicker',
         data: {
@@ -5410,7 +5462,10 @@ function showPreviewToast() {
         if (resetBtn) {
             resetBtn.style.display = 'none';
         }
-        toast.title = 'Color preview requires an open workspace. Open a folder or workspace to preview colors.';
+        toast.setAttribute(
+            'data-tooltip',
+            'Color preview requires an open workspace. Open a folder or workspace to preview colors.',
+        );
         toast.classList.add('visible');
         return;
     }
@@ -5444,20 +5499,24 @@ function showPreviewToast() {
                 resetBtn.textContent = 'add';
                 resetBtn.setAttribute('data-action', 'addRepoRuleFromPreview');
                 resetBtn.style.display = '';
-                toast.title =
-                    'No repository rules match the current workspace. Press [add] to create a rule for this repository.';
+                toast.setAttribute(
+                    'data-tooltip',
+                    'This workspace has no matching rule. Use the [add] button to add a rule for this workspace.',
+                );
             } else {
                 // Hide button for non-git workspaces
                 resetBtn.style.display = 'none';
-                toast.title = 'Preview mode: The current workspace is not a git repository.';
+                toast.setAttribute('data-tooltip', 'Preview mode: The current workspace is not a git repository.');
             }
         } else {
             // Show "reset" button for normal preview mode
             resetBtn.textContent = 'reset';
             resetBtn.setAttribute('data-action', 'resetToMatchingRules');
             resetBtn.style.display = '';
-            toast.title =
-                'You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.';
+            toast.setAttribute(
+                'data-tooltip',
+                'You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.',
+            );
         }
     }
 

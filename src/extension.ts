@@ -1943,25 +1943,29 @@ async function importConfiguration(): Promise<void> {
         }
 
         // Apply the configuration
-        const configUpdates: vscode.Thenable<void>[] = [];
+        const configUpdates: Promise<void>[] = [];
 
         if (action === 'Import and Replace') {
             // Replace all configuration
             if (importData.repoConfigurationList !== undefined) {
                 configUpdates.push(
-                    config.update(
-                        'repoConfigurationList',
-                        importData.repoConfigurationList,
-                        vscode.ConfigurationTarget.Global,
+                    Promise.resolve(
+                        config.update(
+                            'repoConfigurationList',
+                            importData.repoConfigurationList,
+                            vscode.ConfigurationTarget.Global,
+                        ),
                     ),
                 );
             }
             if (importData.branchConfigurationList !== undefined) {
                 configUpdates.push(
-                    config.update(
-                        'branchConfigurationList',
-                        importData.branchConfigurationList,
-                        vscode.ConfigurationTarget.Global,
+                    Promise.resolve(
+                        config.update(
+                            'branchConfigurationList',
+                            importData.branchConfigurationList,
+                            vscode.ConfigurationTarget.Global,
+                        ),
                     ),
                 );
             }
@@ -2000,77 +2004,103 @@ async function importConfiguration(): Promise<void> {
             }
 
             configUpdates.push(
-                config.update('repoConfigurationList', mergedRepoList, vscode.ConfigurationTarget.Global),
+                Promise.resolve(
+                    config.update('repoConfigurationList', mergedRepoList, vscode.ConfigurationTarget.Global),
+                ),
             );
             configUpdates.push(
-                config.update('branchConfigurationList', mergedBranchList, vscode.ConfigurationTarget.Global),
+                Promise.resolve(
+                    config.update('branchConfigurationList', mergedBranchList, vscode.ConfigurationTarget.Global),
+                ),
             );
         }
 
         // Apply other settings (always replace, not merge)
         if (importData.removeManagedColors !== undefined) {
             configUpdates.push(
-                config.update('removeManagedColors', importData.removeManagedColors, vscode.ConfigurationTarget.Global),
+                Promise.resolve(
+                    config.update(
+                        'removeManagedColors',
+                        importData.removeManagedColors,
+                        vscode.ConfigurationTarget.Global,
+                    ),
+                ),
             );
         }
         if (importData.colorInactiveTitlebar !== undefined) {
             configUpdates.push(
-                config.update(
-                    'colorInactiveTitlebar',
-                    importData.colorInactiveTitlebar,
-                    vscode.ConfigurationTarget.Global,
+                Promise.resolve(
+                    config.update(
+                        'colorInactiveTitlebar',
+                        importData.colorInactiveTitlebar,
+                        vscode.ConfigurationTarget.Global,
+                    ),
                 ),
             );
         }
         if (importData.colorEditorTabs !== undefined) {
             configUpdates.push(
-                config.update('colorEditorTabs', importData.colorEditorTabs, vscode.ConfigurationTarget.Global),
+                Promise.resolve(
+                    config.update('colorEditorTabs', importData.colorEditorTabs, vscode.ConfigurationTarget.Global),
+                ),
             );
         }
         if (importData.colorStatusBar !== undefined) {
             configUpdates.push(
-                config.update('colorStatusBar', importData.colorStatusBar, vscode.ConfigurationTarget.Global),
+                Promise.resolve(
+                    config.update('colorStatusBar', importData.colorStatusBar, vscode.ConfigurationTarget.Global),
+                ),
             );
         }
         if (importData.activityBarColorKnob !== undefined) {
             configUpdates.push(
-                config.update(
-                    'activityBarColorKnob',
-                    importData.activityBarColorKnob,
-                    vscode.ConfigurationTarget.Global,
+                Promise.resolve(
+                    config.update(
+                        'activityBarColorKnob',
+                        importData.activityBarColorKnob,
+                        vscode.ConfigurationTarget.Global,
+                    ),
                 ),
             );
         }
         if (importData.applyBranchColorToTabsAndStatusBar !== undefined) {
             configUpdates.push(
-                config.update(
-                    'applyBranchColorToTabsAndStatusBar',
-                    importData.applyBranchColorToTabsAndStatusBar,
-                    vscode.ConfigurationTarget.Global,
+                Promise.resolve(
+                    config.update(
+                        'applyBranchColorToTabsAndStatusBar',
+                        importData.applyBranchColorToTabsAndStatusBar,
+                        vscode.ConfigurationTarget.Global,
+                    ),
                 ),
             );
         }
         if (importData.showStatusIconWhenNoRuleMatches !== undefined) {
             configUpdates.push(
-                config.update(
-                    'showStatusIconWhenNoRuleMatches',
-                    importData.showStatusIconWhenNoRuleMatches,
-                    vscode.ConfigurationTarget.Global,
+                Promise.resolve(
+                    config.update(
+                        'showStatusIconWhenNoRuleMatches',
+                        importData.showStatusIconWhenNoRuleMatches,
+                        vscode.ConfigurationTarget.Global,
+                    ),
                 ),
             );
         }
         if (importData.askToColorizeRepoWhenOpened !== undefined) {
             configUpdates.push(
-                config.update(
-                    'askToColorizeRepoWhenOpened',
-                    importData.askToColorizeRepoWhenOpened,
-                    vscode.ConfigurationTarget.Global,
+                Promise.resolve(
+                    config.update(
+                        'askToColorizeRepoWhenOpened',
+                        importData.askToColorizeRepoWhenOpened,
+                        vscode.ConfigurationTarget.Global,
+                    ),
                 ),
             );
         }
         if (importData.advancedProfiles !== undefined) {
             configUpdates.push(
-                config.update('advancedProfiles', importData.advancedProfiles, vscode.ConfigurationTarget.Global),
+                Promise.resolve(
+                    config.update('advancedProfiles', importData.advancedProfiles, vscode.ConfigurationTarget.Global),
+                ),
             );
         }
 
