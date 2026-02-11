@@ -24,6 +24,35 @@ import { Hint, hintManager, Tour, tourManager } from './hintUtils';
 // Import tour configurations
 import { gettingStartedTour, profilesTour } from './tourSteps';
 
+// Import color utility functions
+import { hexToHsl, hslToHex, hexToRgba, rgbToHex, generatePreviewColors, getContrastingTextColor } from './colorUtils';
+
+// Import palette logic utilities
+import { countActiveMappings, countTotalActiveMappings, resolveColorFromSlot } from './paletteLogic';
+
+// Import element classification utilities
+import {
+    PALETTE_SLOT_ORDER,
+    FG_BG_PAIRS,
+    ACTIVE_INACTIVE_PAIRS,
+    isBackgroundElement,
+    isForegroundElement,
+    isActiveElement,
+    isInactiveElement,
+    isNeutralElement,
+    findCorrespondingFgBg,
+    getCorrespondingPaletteSlot,
+    findCorrespondingActiveInactive,
+    getCorrespondingActiveInactiveSlot,
+    isSlotCompatibleWithKey,
+    isSlotCongruousFgBg,
+    isSlotCongruousActiveInactive,
+    getFilteredPaletteOptions,
+} from './elementClassifiers';
+
+// Import parsing utilities
+import { extractRepoNameFromUrl, escapeHtml } from './parseUtils';
+
 // Global variables
 declare const acquireVsCodeApi: any;
 declare const DEVELOPMENT_MODE: boolean; // This will be injected by the extension
@@ -443,38 +472,6 @@ if (document.readyState === 'loading') {
 }
 
 // Helper functions for smart defaults
-function extractRepoNameFromUrl(repositoryUrl: string): string {
-    if (!repositoryUrl) return '';
-
-    // Handle various Git repository URL formats
-    // https://github.com/owner/repo.git -> owner/repo
-    // git@github.com:owner/repo.git -> owner/repo
-    // https://github.com/owner/repo -> owner/repo
-
-    // Use string-based approach to avoid regex escaping issues in webview
-    try {
-        // Try GitHub pattern first
-        let match = repositoryUrl.match(new RegExp('github\\\\.com[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
-        if (match && match[1]) return match[1];
-
-        // Try GitLab pattern
-        match = repositoryUrl.match(new RegExp('gitlab\\\\.com[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
-        if (match && match[1]) return match[1];
-
-        // Try Bitbucket pattern
-        match = repositoryUrl.match(new RegExp('bitbucket\\\\.org[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
-        if (match && match[1]) return match[1];
-
-        // Generic pattern as fallback
-        match = repositoryUrl.match(new RegExp('[/:]([^/]+/[^/]+?)(?:\\\\.git)?(?:/|$)'));
-        if (match && match[1]) return match[1];
-    } catch (e) {
-        console.warn('Error parsing repository URL:', e);
-    }
-
-    return '';
-}
-
 function isThemeDark(): boolean {
     const body = document.getElementsByTagName('body')[0] as HTMLElement;
     if (body.classList.contains('vscode-dark')) {
@@ -2059,9 +2056,9 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     container.innerHTML = '';
     container.appendChild(table);
 
-    // Initialize selection if needed
+    // Initialize selection if needed - only select if there's a matching rule
     if (selectedRepoRuleIndex === -1 && rules.length > 0) {
-        // Prefer matched workspace rule, then first enabled rule, then first rule
+        // Only select if there's a matched workspace rule
         if (
             matchingIndex !== undefined &&
             matchingIndex !== null &&
@@ -2069,11 +2066,9 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
             matchingIndex < rules.length
         ) {
             selectedRepoRuleIndex = matchingIndex;
-        } else {
-            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
-            selectedRepoRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
+            renderBranchRulesForSelectedRepo();
         }
-        renderBranchRulesForSelectedRepo();
+        // Don't auto-select the first rule when there's no match
 
         // If preview mode is enabled, trigger preview for the initially selected rule
         if (previewMode && selectedRepoRuleIndex >= 0) {
@@ -2647,7 +2642,7 @@ function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?:
     // Initialize selection if needed (only for the first render or when switching repos)
     // Check if we need to initialize selectedBranchRuleIndex
     if (selectedBranchRuleIndex === -1 && rules.length > 0) {
-        // Prefer matched branch rule, then first enabled rule, then first rule
+        // Only select if there's a matched branch rule
         if (
             matchingIndex !== undefined &&
             matchingIndex !== null &&
@@ -2655,15 +2650,13 @@ function renderBranchRules(rules: any[], matchingIndex?: number, repoRuleIndex?:
             matchingIndex < rules.length
         ) {
             selectedBranchRuleIndex = matchingIndex;
-        } else {
-            const firstEnabledIndex = rules.findIndex((r: any) => r.enabled !== false);
-            selectedBranchRuleIndex = firstEnabledIndex !== -1 ? firstEnabledIndex : 0;
-        }
 
-        // Trigger re-render to show the selection
-        if (currentConfig && selectedRepoRuleIndex >= 0) {
-            renderBranchRulesForSelectedRepo();
+            // Trigger re-render to show the selection
+            if (currentConfig && selectedRepoRuleIndex >= 0) {
+                renderBranchRulesForSelectedRepo();
+            }
         }
+        // Don't auto-select the first rule when there's no match
     }
 }
 
@@ -3499,6 +3492,29 @@ function selectRepoRule(index: number) {
         return;
     }
 
+    // Toggle: if clicking the already-selected rule, deselect it
+    if (selectedRepoRuleIndex === index) {
+        console.log(`[selectRepoRule] Deselecting rule at index ${index}`);
+        selectedRepoRuleIndex = -1;
+        selectedBranchRuleIndex = -1;
+
+        // Clear preview when deselecting
+        if (previewMode) {
+            vscode.postMessage({
+                command: 'clearPreview',
+                data: {
+                    previewEnabled: true,
+                },
+            });
+        }
+
+        // Re-render to show deselected state
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+        renderBranchRulesForSelectedRepo();
+        hidePreviewToast();
+        return;
+    }
+
     selectedRepoRuleIndex = index;
     console.log(`[selectRepoRule] Set selectedRepoRuleIndex to ${index}`);
 
@@ -3578,6 +3594,29 @@ function selectBranchRule(index: number) {
     const branchRules = currentConfig?.sharedBranchTables?.[tableName]?.rules || [];
 
     if (!branchRules?.[index]) return;
+
+    // Toggle: if clicking the already-selected rule, deselect it
+    if (selectedBranchRuleIndex === index) {
+        console.log(`[selectBranchRule] Deselecting rule at index ${index}`);
+        selectedBranchRuleIndex = -1;
+
+        // Clear branch preview when deselecting
+        if (previewMode) {
+            // Revert to just repo rule preview
+            vscode.postMessage({
+                command: 'previewRepoRule',
+                data: {
+                    index: selectedRepoRuleIndex,
+                    previewEnabled: true,
+                    clearBranchPreview: true,
+                },
+            });
+        }
+
+        // Re-render to show deselected state
+        renderBranchRulesForSelectedRepo();
+        return;
+    }
 
     selectedBranchRuleIndex = index;
 
@@ -4420,6 +4459,37 @@ function handleColorInputClick(event: MouseEvent) {
         return;
     }
 
+    // Check for regular click on repo rule color input to navigate to profile
+    if (!event.shiftKey && target.classList.contains('native-color-input')) {
+        const dataAction = target.getAttribute('data-action');
+        if (dataAction) {
+            const match = dataAction.match(/updateColorRule\('(\w+)', (\d+), '(\w+)',/);
+            if (match) {
+                const [, ruleType, index] = match;
+                if (ruleType === 'repo') {
+                    const rules = currentConfig?.repoRules;
+                    const rule = rules?.[parseInt(index)];
+                    if (rule) {
+                        // Check if this rule uses a profile
+                        const colorValue = rule.profileName || rule.primaryColor;
+                        const advancedProfiles = currentConfig?.advancedProfiles || {};
+
+                        // If the color value is a profile name, navigate to Profiles tab
+                        if (colorValue && advancedProfiles[colorValue]) {
+                            event.preventDefault();
+                            const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+                            if (profilesTab) {
+                                profilesTab.click();
+                            }
+                            selectProfile(colorValue);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (event.shiftKey) {
         event.preventDefault();
 
@@ -5132,6 +5202,27 @@ function sendConfiguration() {
 }
 
 function openColorPicker(ruleType: string, index: number, field: string) {
+    // Check if this is a profile-based repo rule
+    if (ruleType === 'repo' && field === 'primaryColor') {
+        const rules = currentConfig?.repoRules;
+        const rule = rules?.[index];
+        if (rule) {
+            // Check if this rule uses a profile
+            const colorValue = rule.profileName || rule.primaryColor;
+            const advancedProfiles = currentConfig?.advancedProfiles || {};
+
+            // If the color value is a profile name, navigate to Profiles tab
+            if (colorValue && advancedProfiles[colorValue]) {
+                const profilesTab = document.getElementById('tab-profiles') as HTMLElement;
+                if (profilesTab) {
+                    profilesTab.click();
+                }
+                selectProfile(colorValue);
+                return;
+            }
+        }
+    }
+
     vscode.postMessage({
         command: 'openColorPicker',
         data: {
@@ -5157,12 +5248,6 @@ function updateColorInUI(ruleType: string, ruleIndex: number, field: string, col
 }
 
 // Utility functions
-function escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 /**
  * Expand environment variables in a path for display in tooltips
  */
@@ -5203,17 +5288,6 @@ function isValidColorName(color: string): boolean {
     } catch (e) {
         return false;
     }
-}
-
-function rgbToHex(rgb: string): string | null {
-    const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-    if (!match) return null;
-
-    const r = parseInt(match[1]).toString(16).padStart(2, '0');
-    const g = parseInt(match[2]).toString(16).padStart(2, '0');
-    const b = parseInt(match[3]).toString(16).padStart(2, '0');
-
-    return `#${r}${g}${b}`;
 }
 
 function convertColorToValidCSS(color: string): string {
@@ -5284,34 +5358,6 @@ function convertColorToHex(color: string): string {
 
     // If conversion failed or it's an unknown format, return default
     return '#4A90E2';
-}
-
-/**
- * Convert hex color to rgba with opacity
- */
-function hexToRgba(hex: string, opacity: number): string {
-    // Remove # if present
-    hex = hex.replace('#', '');
-
-    // Parse the hex values
-    let r: number, g: number, b: number;
-
-    if (hex.length === 3) {
-        // Short form like #RGB
-        r = parseInt(hex[0] + hex[0], 16);
-        g = parseInt(hex[1] + hex[1], 16);
-        b = parseInt(hex[2] + hex[2], 16);
-    } else if (hex.length === 6) {
-        // Long form like #RRGGBB
-        r = parseInt(hex.substring(0, 2), 16);
-        g = parseInt(hex.substring(2, 4), 16);
-        b = parseInt(hex.substring(4, 6), 16);
-    } else {
-        // Invalid hex, return transparent
-        return 'rgba(0, 0, 0, 0)';
-    }
-
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 }
 
 function runConfigurationTests() {
@@ -5416,7 +5462,10 @@ function showPreviewToast() {
         if (resetBtn) {
             resetBtn.style.display = 'none';
         }
-        toast.title = 'Color preview requires an open workspace. Open a folder or workspace to preview colors.';
+        toast.setAttribute(
+            'data-tooltip',
+            'Color preview requires an open workspace. Open a folder or workspace to preview colors.',
+        );
         toast.classList.add('visible');
         return;
     }
@@ -5450,20 +5499,24 @@ function showPreviewToast() {
                 resetBtn.textContent = 'add';
                 resetBtn.setAttribute('data-action', 'addRepoRuleFromPreview');
                 resetBtn.style.display = '';
-                toast.title =
-                    'No repository rules match the current workspace. Press [add] to create a rule for this repository.';
+                toast.setAttribute(
+                    'data-tooltip',
+                    'This workspace has no matching rule. Use the [add] button to add a rule for this workspace.',
+                );
             } else {
                 // Hide button for non-git workspaces
                 resetBtn.style.display = 'none';
-                toast.title = 'Preview mode: The current workspace is not a git repository.';
+                toast.setAttribute('data-tooltip', 'Preview mode: The current workspace is not a git repository.');
             }
         } else {
             // Show "reset" button for normal preview mode
             resetBtn.textContent = 'reset';
             resetBtn.setAttribute('data-action', 'resetToMatchingRules');
             resetBtn.style.display = '';
-            toast.title =
-                'You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.';
+            toast.setAttribute(
+                'data-tooltip',
+                'You are viewing a preview of colors that would be applied to the selected rule, but the selected rule is not associated with the current workspace. Press [reset] to reselect the rules for this workspace.',
+            );
         }
     }
 
@@ -5523,57 +5576,6 @@ function showPreviewToast() {
     }
 
     toast.classList.add('visible');
-}
-
-// Helper to resolve a color from a palette slot definition
-function resolveColorFromSlot(slot: any, rule: any): string | null {
-    if (!slot) return null;
-
-    console.log('[resolveColorFromSlot] slot:', slot, 'rule:', rule);
-
-    // If slot is a direct color string
-    if (typeof slot === 'string') {
-        console.log('[resolveColorFromSlot] Direct string:', slot);
-        return slot;
-    }
-
-    // If slot is an object
-    if (typeof slot === 'object') {
-        // Check for fixed source with value
-        if (slot.source === 'fixed' && slot.value) {
-            console.log('[resolveColorFromSlot] Fixed value:', slot.value);
-            return slot.value;
-        }
-
-        // Check for direct color property
-        if (slot.color) {
-            console.log('[resolveColorFromSlot] Has color property:', slot.color);
-            return slot.color;
-        }
-
-        // Check for source-based definitions
-        if (slot.source === 'repoColor' && rule.primaryColor) {
-            console.log('[resolveColorFromSlot] Using repoColor:', rule.primaryColor);
-            return rule.primaryColor;
-        }
-        if (slot.source === 'branchColor' && rule.branchColor) {
-            console.log('[resolveColorFromSlot] Using branchColor:', rule.branchColor);
-            return rule.branchColor;
-        }
-
-        // If has value property (alternative format)
-        if (slot.value) {
-            console.log('[resolveColorFromSlot] Using value property:', slot.value);
-            return slot.value;
-        }
-
-        // If no source but has modifiers, might need base color
-        // For now, we can't resolve these without the full palette generator
-        console.log('[resolveColorFromSlot] Cannot resolve slot with modifiers only');
-    }
-
-    console.log('[resolveColorFromSlot] Returning null');
-    return null;
 }
 
 function hidePreviewToast() {
@@ -5671,22 +5673,6 @@ function addRepoRuleFromPreview() {
     if (rulesTab) {
         (rulesTab as HTMLElement).click();
     }
-}
-
-// Helper to determine if a color is light or dark for text contrast
-function getContrastingTextColor(color: string): string {
-    // Simple approach: try to determine if color is light or dark
-    // For hex colors
-    if (color.startsWith('#')) {
-        const hex = color.replace('#', '');
-        const r = parseInt(hex.substr(0, 2), 16);
-        const g = parseInt(hex.substr(2, 2), 16);
-        const b = parseInt(hex.substr(4, 2), 16);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness > 155 ? '#000000' : '#ffffff';
-    }
-    // For named colors or rgb(), default to white text
-    return '#ffffff';
 }
 
 // Color Auto-complete Functions
@@ -6239,24 +6225,6 @@ const THEME_KEY_LABELS: Record<string, string> = {
     'sideBar.border': 'Side Bar: Border',
 };
 
-// Explicit ordering for palette slots to ensure consistent display order
-// Order: Primary (Active Fg, Active Bg, Inactive Fg, Inactive Bg),
-//        Secondary (same pattern), Tertiary (Fg, Bg), Quaternary (Fg, Bg)
-const PALETTE_SLOT_ORDER: string[] = [
-    'primaryActiveFg',
-    'primaryActiveBg',
-    'primaryInactiveFg',
-    'primaryInactiveBg',
-    'secondaryActiveFg',
-    'secondaryActiveBg',
-    'secondaryInactiveFg',
-    'secondaryInactiveBg',
-    'tertiaryFg',
-    'tertiaryBg',
-    'quaternaryFg',
-    'quaternaryBg',
-];
-
 const DEFAULT_PALETTE: Palette = {
     primaryActiveBg: { source: 'fixed', value: '#4A90E2' },
     primaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
@@ -6356,231 +6324,6 @@ let selectedProfileName: string | null = (() => {
 // selectedMappingTab and syncFgBgEnabled are declared at the top of the file
 
 /**
- * Definitive mapping of foreground/background pairs
- * Maps each foreground key to its background counterpart (and implicitly vice versa)
- */
-const FG_BG_PAIRS: { [key: string]: string } = {
-    // Title Bar
-    'titleBar.activeForeground': 'titleBar.activeBackground',
-    'titleBar.activeBackground': 'titleBar.activeForeground',
-    'titleBar.inactiveForeground': 'titleBar.inactiveBackground',
-    'titleBar.inactiveBackground': 'titleBar.inactiveForeground',
-
-    // Activity Bar
-    'activityBar.foreground': 'activityBar.background',
-    'activityBar.background': 'activityBar.foreground',
-    'activityBar.inactiveForeground': 'activityBar.background',
-
-    // Status Bar
-    'statusBar.foreground': 'statusBar.background',
-    'statusBar.background': 'statusBar.foreground',
-
-    // Tabs
-    'tab.activeForeground': 'tab.activeBackground',
-    'tab.activeBackground': 'tab.activeForeground',
-    'tab.inactiveForeground': 'tab.inactiveBackground',
-    'tab.inactiveBackground': 'tab.inactiveForeground',
-
-    // Breadcrumbs
-    'breadcrumb.foreground': 'breadcrumb.background',
-    'breadcrumb.background': 'breadcrumb.foreground',
-
-    // Command Center
-    'commandCenter.foreground': 'commandCenter.background',
-    'commandCenter.background': 'commandCenter.foreground',
-    'commandCenter.activeForeground': 'commandCenter.activeBackground',
-    'commandCenter.activeBackground': 'commandCenter.activeForeground',
-
-    // Terminal
-    'terminal.foreground': 'terminal.background',
-    'terminal.background': 'terminal.foreground',
-
-    // Panels
-    'panelTitle.activeForeground': 'panel.background',
-    'panelTitle.inactiveForeground': 'panel.background',
-
-    // Lists
-    'list.activeSelectionForeground': 'list.activeSelectionBackground',
-    'list.activeSelectionBackground': 'list.activeSelectionForeground',
-    'list.inactiveSelectionForeground': 'list.inactiveSelectionBackground',
-    'list.inactiveSelectionBackground': 'list.inactiveSelectionForeground',
-    'list.hoverForeground': 'list.hoverBackground',
-    'list.hoverBackground': 'list.hoverForeground',
-
-    // Badges
-    'badge.foreground': 'badge.background',
-    'badge.background': 'badge.foreground',
-    'panelTitleBadge.foreground': 'panelTitleBadge.background',
-    'panelTitleBadge.background': 'panelTitleBadge.foreground',
-
-    // Input
-    'input.foreground': 'input.background',
-    'input.background': 'input.foreground',
-    'input.placeholderForeground': 'input.background',
-
-    // Side Bar
-    'sideBar.foreground': 'sideBar.background',
-    'sideBar.background': 'sideBar.foreground',
-};
-
-/**
- * Definitive mapping of active/inactive pairs
- * Maps each active key to its inactive counterpart (and implicitly vice versa)
- */
-const ACTIVE_INACTIVE_PAIRS: { [key: string]: string } = {
-    // Title Bar
-    'titleBar.activeBackground': 'titleBar.inactiveBackground',
-    'titleBar.inactiveBackground': 'titleBar.activeBackground',
-    'titleBar.activeForeground': 'titleBar.inactiveForeground',
-    'titleBar.inactiveForeground': 'titleBar.activeForeground',
-
-    // Activity Bar (note: activity bar uses different naming)
-    'activityBar.foreground': 'activityBar.inactiveForeground',
-    'activityBar.inactiveForeground': 'activityBar.foreground',
-
-    // Tabs
-    'tab.activeBackground': 'tab.inactiveBackground',
-    'tab.inactiveBackground': 'tab.activeBackground',
-    'tab.activeForeground': 'tab.inactiveForeground',
-    'tab.inactiveForeground': 'tab.activeForeground',
-
-    // Command Center
-    'commandCenter.background': 'commandCenter.activeBackground',
-    'commandCenter.activeBackground': 'commandCenter.background',
-    'commandCenter.foreground': 'commandCenter.activeForeground',
-    'commandCenter.activeForeground': 'commandCenter.foreground',
-
-    // Panel titles
-    'panelTitle.activeForeground': 'panelTitle.inactiveForeground',
-    'panelTitle.inactiveForeground': 'panelTitle.activeForeground',
-
-    // Lists
-    'list.activeSelectionBackground': 'list.inactiveSelectionBackground',
-    'list.inactiveSelectionBackground': 'list.activeSelectionBackground',
-    'list.activeSelectionForeground': 'list.inactiveSelectionForeground',
-    'list.inactiveSelectionForeground': 'list.activeSelectionForeground',
-};
-
-/**
- * Find the corresponding foreground or background element key using definitive mapping
- */
-function findCorrespondingFgBg(key: string): string | null {
-    return FG_BG_PAIRS[key] || null;
-}
-
-/**
- * Get the corresponding palette slot for a given slot
- * e.g., 'primaryActiveFg' <-> 'primaryActiveBg'
- */
-function getCorrespondingPaletteSlot(slotName: string): string | null {
-    if (slotName === 'none') return null;
-
-    if (slotName.endsWith('Fg')) {
-        return slotName.replace('Fg', 'Bg');
-    } else if (slotName.endsWith('Bg')) {
-        return slotName.replace('Bg', 'Fg');
-    }
-    return null;
-}
-
-/**
- * Find the corresponding active or inactive element key using definitive mapping
- */
-function findCorrespondingActiveInactive(key: string): string | null {
-    return ACTIVE_INACTIVE_PAIRS[key] || null;
-}
-
-/**
- * Get the corresponding active/inactive palette slot
- * e.g., 'primaryActiveFg' <-> 'primaryInactiveFg'
- */
-function getCorrespondingActiveInactiveSlot(slotName: string): string | null {
-    if (slotName === 'none') return null;
-
-    if (slotName.includes('Active')) {
-        return slotName.replace('Active', 'Inactive');
-    } else if (slotName.includes('Inactive')) {
-        return slotName.replace('Inactive', 'Active');
-    }
-    return null;
-}
-
-/**
- * Determine if an element key is for a background color
- */
-function isBackgroundElement(key: string): boolean {
-    return key.toLowerCase().includes('background') || key.toLowerCase().endsWith('bg');
-}
-
-/**
- * Determine if an element key is for a foreground color
- */
-function isForegroundElement(key: string): boolean {
-    return key.toLowerCase().includes('foreground') || key.toLowerCase().endsWith('fg');
-}
-
-/**
- * Determine if an element key is for an active state
- */
-function isActiveElement(key: string): boolean {
-    // Check for 'active' in the key but not 'inactive'
-    const keyLower = key.toLowerCase();
-    return keyLower.includes('active') && !keyLower.includes('inactive');
-}
-
-/**
- * Determine if an element key is for an inactive state
- */
-function isInactiveElement(key: string): boolean {
-    return key.toLowerCase().includes('inactive');
-}
-
-/**
- * Determine if an element key is for neither active nor inactive (neutral)
- */
-function isNeutralElement(key: string): boolean {
-    const keyLower = key.toLowerCase();
-    return !keyLower.includes('active') && !keyLower.includes('inactive');
-}
-
-/**
- * Check if a palette slot is compatible with a mapping key for drag-and-drop
- * Returns true if the slot can logically be assigned to this key
- */
-function isSlotCompatibleWithKey(slotName: string, mappingKey: string): boolean {
-    const keyIsBg = isBackgroundElement(mappingKey);
-    const keyIsFg = isForegroundElement(mappingKey);
-    const keyIsActive = isActiveElement(mappingKey);
-    const keyIsInactive = isInactiveElement(mappingKey);
-    const keyIsNeutral = isNeutralElement(mappingKey);
-
-    const slotIsBg = slotName.endsWith('Bg');
-    const slotIsFg = slotName.endsWith('Fg');
-    const slotIsActive = slotName.includes('Active') && !slotName.includes('Inactive');
-    const slotIsInactive = slotName.includes('Inactive');
-    const slotIsNeutral = !slotName.includes('Active') && !slotName.includes('Inactive');
-
-    // Neutral keys are compatible with everything
-    if (keyIsNeutral && !keyIsBg && !keyIsFg && !keyIsActive && !keyIsInactive) {
-        return true;
-    }
-
-    // Check Bg/Fg compatibility
-    if (keyIsBg && !slotIsBg) return false;
-    if (keyIsFg && !slotIsFg) return false;
-
-    // Check Active/Inactive compatibility
-    // Active keys can use active or neutral slots
-    if (keyIsActive && !(slotIsActive || slotIsNeutral)) return false;
-    // Inactive keys can use inactive or neutral slots
-    if (keyIsInactive && !(slotIsInactive || slotIsNeutral)) return false;
-    // Neutral keys with bg/fg context can use neutral slots or matching state
-    if (keyIsNeutral && !slotIsNeutral) return false;
-
-    return true;
-}
-
-/**
  * Highlight or unhighlight compatible drop zones during drag
  */
 function highlightCompatibleDropZones(slotName: string, highlight: boolean) {
@@ -6599,135 +6342,6 @@ function highlightCompatibleDropZones(slotName: string, highlight: boolean) {
             dropdownEl.classList.remove('drag-hover');
         }
     });
-}
-
-/**
- * Check if a palette slot is congruous with a theme key for Fg/Bg
- * Returns true if the slot type matches the key type (both Fg or both Bg)
- */
-function isSlotCongruousFgBg(key: string, slot: string): boolean {
-    if (slot === 'none' || slot === '__fixed__') return true; // Special cases are always congruous
-
-    const keyIsBg = isBackgroundElement(key);
-    const keyIsFg = isForegroundElement(key);
-    const slotIsBg = slot.endsWith('Bg');
-    const slotIsFg = slot.endsWith('Fg');
-
-    // Congruous if both are Bg or both are Fg
-    return (keyIsBg && slotIsBg) || (keyIsFg && slotIsFg);
-}
-
-/**
- * Check if a palette slot is congruous with a theme key for Active/Inactive
- * Returns true if the slot state matches the key state (both Active, both Inactive, or both Neutral)
- */
-function isSlotCongruousActiveInactive(key: string, slot: string): boolean {
-    if (slot === 'none' || slot === '__fixed__') return true; // Special cases are always congruous
-
-    const keyIsActive = isActiveElement(key);
-    const keyIsInactive = isInactiveElement(key);
-    const keyIsNeutral = isNeutralElement(key);
-    const slotIsActive = slot.includes('Active') && !slot.includes('Inactive');
-    const slotIsInactive = slot.includes('Inactive');
-    const slotIsNeutral = !slot.includes('Active') && !slot.includes('Inactive');
-
-    // Congruous if states match
-    return (keyIsActive && slotIsActive) || (keyIsInactive && slotIsInactive) || (keyIsNeutral && slotIsNeutral);
-}
-
-/**
- * Filter palette slots to only show related options based on element characteristics
- */
-function getFilteredPaletteOptions(elementKey: string, allSlots: string[], currentSlot?: string): string[] {
-    if (!limitOptionsEnabled) {
-        // Even when not filtering, return in proper order
-        const sorted = allSlots
-            .filter((s) => s !== 'none')
-            .sort((a, b) => {
-                const indexA = PALETTE_SLOT_ORDER.indexOf(a);
-                const indexB = PALETTE_SLOT_ORDER.indexOf(b);
-                if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-                if (indexA === -1) return 1;
-                if (indexB === -1) return -1;
-                return indexA - indexB;
-            });
-        return sorted;
-    }
-
-    const isBg = isBackgroundElement(elementKey);
-    const isFg = isForegroundElement(elementKey);
-    const isActive = isActiveElement(elementKey);
-    const isInactive = isInactiveElement(elementKey);
-    const isNeutral = isNeutralElement(elementKey);
-
-    // If element is neutral (no fg/bg or active/inactive context), don't filter - show all slots
-    if (isNeutral && !isBg && !isFg && !isActive && !isInactive) {
-        const sorted = allSlots
-            .filter((s) => s !== 'none')
-            .sort((a, b) => {
-                const indexA = PALETTE_SLOT_ORDER.indexOf(a);
-                const indexB = PALETTE_SLOT_ORDER.indexOf(b);
-                if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-                if (indexA === -1) return 1;
-                if (indexB === -1) return -1;
-                return indexA - indexB;
-            });
-        // Include current slot if specified
-        if (currentSlot && currentSlot !== 'none' && currentSlot !== '__fixed__' && !sorted.includes(currentSlot)) {
-            sorted.push(currentSlot);
-        }
-        return sorted;
-    }
-
-    const filtered = allSlots.filter((slot) => {
-        if (slot === 'none') return false; // Will be added manually in dropdown
-
-        const slotLower = slot.toLowerCase();
-
-        // Check bg/fg match
-        const slotIsBg = slotLower.endsWith('bg');
-        const slotIsFg = slotLower.endsWith('fg');
-
-        // For elements that are clearly bg or fg, filter by that
-        if (isBg && !slotIsBg) return false;
-        if (isFg && !slotIsFg) return false;
-
-        // Check active/inactive match
-        const slotIsActive = slotLower.includes('active') && !slotLower.includes('inactive');
-        const slotIsInactive = slotLower.includes('inactive');
-        const slotIsNeutral = !slotLower.includes('active') && !slotLower.includes('inactive');
-
-        // For elements with active/inactive state, filter accordingly
-        if (isActive && !(slotIsActive || slotIsNeutral)) return false;
-        if (isInactive && !(slotIsInactive || slotIsNeutral)) return false;
-
-        return true;
-    });
-
-    // Always include the current slot if it's set and not already in the filtered list
-    if (currentSlot && currentSlot !== 'none' && currentSlot !== '__fixed__' && !filtered.includes(currentSlot)) {
-        filtered.push(currentSlot);
-    }
-
-    // Sort according to PALETTE_SLOT_ORDER
-    filtered.sort((a, b) => {
-        const indexA = PALETTE_SLOT_ORDER.indexOf(a);
-        const indexB = PALETTE_SLOT_ORDER.indexOf(b);
-
-        // If both are in the order array, sort by their index
-        if (indexA !== -1 && indexB !== -1) {
-            return indexA - indexB;
-        }
-
-        // If only one is in the order array, it comes first
-        if (indexA !== -1) return -1;
-        if (indexB !== -1) return 1;
-
-        // If neither is in the order array, sort alphabetically
-        return a.localeCompare(b);
-    });
-
-    return filtered;
 }
 
 function renderProfiles(profiles: AdvancedProfileMap | undefined) {
@@ -6961,54 +6575,6 @@ function addNewProfile() {
     selectProfile(name);
 }
 
-/**
- * Count how many mappings in a section have non-None values
- */
-function countActiveMappings(profile: AdvancedProfile, sectionKeys: string[]): number {
-    let count = 0;
-    sectionKeys.forEach((key: string) => {
-        const mappingValue = profile.mappings[key];
-        let slot: string;
-
-        if (typeof mappingValue === 'string') {
-            slot = mappingValue || 'none';
-        } else if (mappingValue) {
-            slot = mappingValue.slot || 'none';
-        } else {
-            slot = 'none';
-        }
-
-        if (slot !== 'none') {
-            count++;
-        }
-    });
-    return count;
-}
-
-/**
- * Count total active mappings across all sections in a profile
- */
-function countTotalActiveMappings(profile: AdvancedProfile): number {
-    let total = 0;
-    Object.keys(profile.mappings || {}).forEach((key: string) => {
-        const mappingValue = profile.mappings[key];
-        let slot: string;
-
-        if (typeof mappingValue === 'string') {
-            slot = mappingValue || 'none';
-        } else if (mappingValue) {
-            slot = mappingValue.slot || 'none';
-        } else {
-            slot = 'none';
-        }
-
-        if (slot !== 'none') {
-            total++;
-        }
-    });
-    return total;
-}
-
 let paletteGeneratorInitialized = false;
 
 // Algorithm definitions with metadata
@@ -7055,154 +6621,6 @@ const PALETTE_ALGORITHMS = [
     },
     { id: 'square', name: 'Square', description: 'Four colors 90° apart with uniform saturation. Bold and dynamic.' },
 ];
-
-/**
- * Convert hex color to HSL components
- */
-function hexToHsl(hex: string): [number, number, number] {
-    // Remove # if present
-    hex = hex.replace(/^#/, '');
-
-    // Parse RGB
-    const r = parseInt(hex.substring(0, 2), 16) / 255;
-    const g = parseInt(hex.substring(2, 4), 16) / 255;
-    const b = parseInt(hex.substring(4, 6), 16) / 255;
-
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const l = (max + min) / 2;
-
-    let h = 0;
-    let s = 0;
-
-    if (max !== min) {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-
-        switch (max) {
-            case r:
-                h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-                break;
-            case g:
-                h = ((b - r) / d + 2) / 6;
-                break;
-            case b:
-                h = ((r - g) / d + 4) / 6;
-                break;
-        }
-    }
-
-    return [h * 360, s * 100, l * 100];
-}
-
-/**
- * Convert HSL to hex color
- */
-function hslToHex(h: number, s: number, l: number): string {
-    h = ((h % 360) + 360) % 360; // Normalize hue to 0-360
-    s = Math.max(0, Math.min(100, s)) / 100;
-    l = Math.max(0, Math.min(100, l)) / 100;
-
-    const c = (1 - Math.abs(2 * l - 1)) * s;
-    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-    const m = l - c / 2;
-
-    let r = 0,
-        g = 0,
-        b = 0;
-
-    if (h < 60) {
-        r = c;
-        g = x;
-        b = 0;
-    } else if (h < 120) {
-        r = x;
-        g = c;
-        b = 0;
-    } else if (h < 180) {
-        r = 0;
-        g = c;
-        b = x;
-    } else if (h < 240) {
-        r = 0;
-        g = x;
-        b = c;
-    } else if (h < 300) {
-        r = x;
-        g = 0;
-        b = c;
-    } else {
-        r = c;
-        g = 0;
-        b = x;
-    }
-
-    const toHex = (v: number) =>
-        Math.round((v + m) * 255)
-            .toString(16)
-            .padStart(2, '0');
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
-
-/**
- * Generate preview colors for a palette algorithm (client-side approximation)
- */
-function generatePreviewColors(primaryHex: string, algorithm: string): string[] {
-    const [h, s, l] = hexToHsl(primaryHex);
-
-    switch (algorithm) {
-        case 'balanced':
-            return [
-                primaryHex,
-                hslToHex(h + 90, s * 0.9, l),
-                hslToHex(h + 180, s * 0.85, l),
-                hslToHex(h + 270, s * 0.95, l),
-            ];
-        case 'monochromatic':
-            return [
-                primaryHex,
-                hslToHex(h, s * 0.8, Math.min(100, l + 8)),
-                hslToHex(h, s * 0.6, Math.min(100, l + 16)),
-                hslToHex(h, s * 0.4, Math.min(100, l + 24)),
-            ];
-        case 'bold-contrast':
-            return [
-                primaryHex,
-                hslToHex(h + 120, Math.min(100, s * 1.3), l),
-                hslToHex(h + 180, Math.min(100, s * 1.3), l),
-                hslToHex(h + 240, Math.min(100, s * 1.3), l),
-            ];
-        case 'analogous':
-            return [
-                primaryHex,
-                hslToHex(h + 30, s * 0.95, l),
-                hslToHex(h + 60, s * 0.9, l),
-                hslToHex(h - 30, s * 0.95, l),
-            ];
-        case 'analogous-minor-plus':
-            return [
-                primaryHex,
-                hslToHex(h + 10, s * 0.95, l),
-                hslToHex(h + 20, s * 0.9, l),
-                hslToHex(h + 30, s * 0.85, l),
-            ];
-        case 'analogous-minor-minus':
-            return [
-                primaryHex,
-                hslToHex(h - 10, s * 0.95, l),
-                hslToHex(h - 20, s * 0.9, l),
-                hslToHex(h - 30, s * 0.85, l),
-            ];
-        case 'split-complementary':
-            return [primaryHex, hslToHex(h + 150, s, l), hslToHex(h + 180, s * 0.9, l), hslToHex(h + 210, s, l)];
-        case 'triadic':
-            return [primaryHex, hslToHex(h + 120, s, l), hslToHex(h + 240, s * 0.95, l), hslToHex(h + 60, s * 0.85, l)];
-        case 'square':
-            return [primaryHex, hslToHex(h + 90, s, l), hslToHex(h + 180, s, l), hslToHex(h + 270, s, l)];
-        default:
-            return [primaryHex, primaryHex, primaryHex, primaryHex];
-    }
-}
 
 /**
  * Build the algorithm cards in the dropdown

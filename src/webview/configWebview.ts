@@ -125,7 +125,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // If we already have a panel, show it
         if (this._panel) {
-            this._panel.reveal(column);
+            this._panel.reveal && this._panel.reveal(column);
             return;
         }
 
@@ -148,17 +148,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         );
 
         // Set the HTML content
-        this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
+        this._panel!.webview.html = this._getHtmlForWebview(this._panel!.webview);
 
         // Handle messages from the webview
-        this._panel.webview.onDidReceiveMessage(
+        this._panel!.webview.onDidReceiveMessage(
             async (message: WebviewMessage) => await this._handleMessage(message),
             undefined,
             this._disposables,
         );
 
         // Handle when the panel is disposed
-        this._panel.onDidDispose(() => this._onPanelDisposed(), null, this._disposables);
+        this._panel!.onDidDispose(() => this._onPanelDisposed(), null, this._disposables);
 
         // Send initial configuration to webview
         this._sendConfigurationToWebview();
@@ -913,7 +913,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         try {
             const config = vscode.workspace.getConfiguration('windowColors');
-            const updatePromises: Thenable<void>[] = [];
+            const updatePromises: Promise<void>[] = [];
 
             // Update repository rules
             if (data.repoRules) {
@@ -921,7 +921,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     const formatted = this._formatRepoRule(rule);
                     return formatted;
                 });
-                updatePromises.push(config.update('repoConfigurationList', repoRulesArray, true));
+                updatePromises.push(Promise.resolve(config.update('repoConfigurationList', repoRulesArray, true)));
             }
 
             // Update branch rules
@@ -934,24 +934,28 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         enabled: rule.enabled !== undefined ? rule.enabled : true,
                     };
                 });
-                updatePromises.push(config.update('branchConfigurationList', branchRulesArray, true));
+                updatePromises.push(Promise.resolve(config.update('branchConfigurationList', branchRulesArray, true)));
             }
 
             // Update shared branch tables
             if (data.sharedBranchTables) {
-                updatePromises.push(config.update('sharedBranchTables', data.sharedBranchTables, true));
+                updatePromises.push(
+                    Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
+                );
             }
 
             // Update advanced profiles
             if (data.advancedProfiles) {
-                updatePromises.push(config.update('advancedProfiles', data.advancedProfiles, true));
+                updatePromises.push(Promise.resolve(config.update('advancedProfiles', data.advancedProfiles, true)));
             }
 
             // Update other settings
             if (data.otherSettings) {
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
-                    updatePromises.push(config.update(key, settings[key as keyof OtherSettings], true));
+                    updatePromises.push(
+                        Promise.resolve(config.update(key, settings[key as keyof OtherSettings], true)),
+                    );
                 });
             }
 
@@ -1254,7 +1258,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 value: currentColor,
                 placeHolder: 'e.g., blue, #FF0000, rgb(255,0,0)',
             })
-            .then((color) => {
+            .then((color: string | undefined) => {
                 if (color !== undefined) {
                     // Send the new color back to webview
                     if (this._panel) {

@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../out/test",
+    "rootDir": "..",
+    "types": [
+      "mocha",
+      "chai",
+      "sinon",
+      "node"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "vscode": [
+        "./mocks/vscode"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
