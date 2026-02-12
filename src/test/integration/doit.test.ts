@@ -22,6 +22,7 @@ import {
     countSetColors,
 } from '../helpers/settingsVerifier';
 import { DEFAULT_CONFIG, REPO_CONFIGS, SCENARIOS, BRANCH_TABLES } from '../fixtures/configFixtures';
+import { createThemedColor } from '../../colorDerivation';
 
 /**
  * Test environment setup
@@ -232,7 +233,9 @@ describe('doit() Integration Tests', () => {
 
             let repoList = getConfig('repoConfigurationList');
             expect(repoList).to.have.lengthOf(1);
-            expect(repoList[0].primaryColor).to.equal('#3B82F6');
+            // primaryColor is now a ThemedColor object
+            expect(repoList[0].primaryColor).to.be.an('object');
+            expect(repoList[0].primaryColor.dark.value).to.equal('#3B82F6');
 
             // Scenario 2: Advanced mode
             setupMockEnvironment({
@@ -281,7 +284,7 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: 'github.com/testorg', primaryColor: '#3B82F6', enabled: true },
+                        { repoQualifier: 'github.com/testorg', primaryColor: createThemedColor('#3B82F6', 'dark'), enabled: true },
                     ],
                 },
             });
@@ -302,7 +305,7 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: '!/home/user/projects/local-repo', primaryColor: '#10B981', enabled: true },
+                        { repoQualifier: '!/home/user/projects/local-repo', primaryColor: createThemedColor('#10B981', 'dark'), enabled: true },
                     ],
                 },
             });
@@ -324,8 +327,8 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: 'github.com/testorg', primaryColor: '#FF0000', enabled: true }, // First - should win
-                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: '#00FF00', enabled: true }, // Second - more specific but comes later
+                        { repoQualifier: 'github.com/testorg', primaryColor: createThemedColor('#FF0000', 'dark'), enabled: true }, // First - should win
+                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: createThemedColor('#00FF00', 'dark'), enabled: true }, // Second - more specific but comes later
                     ],
                 },
             });
@@ -346,7 +349,7 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: '#FF0000', enabled: false },
+                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: createThemedColor('#FF0000', 'dark'), enabled: false },
                     ],
                 },
             });
@@ -409,7 +412,7 @@ describe('doit() Integration Tests', () => {
                     repoConfigurationList: [
                         {
                             repoQualifier: 'github.com/testorg/testrepo',
-                            primaryColor: '#3B82F6',
+                            primaryColor: createThemedColor('#3B82F6', 'dark'),
                             branchTableName: 'Default Rules',
                             enabled: true,
                         },
@@ -471,7 +474,7 @@ describe('doit() Integration Tests', () => {
                     repoConfigurationList: [
                         {
                             repoQualifier: 'github.com/testorg/testrepo',
-                            primaryColor: '#999999',
+                            primaryColor: createThemedColor('#999999', 'dark'),
                             branchTableName: 'Test Table',
                             enabled: true,
                         },
@@ -479,8 +482,8 @@ describe('doit() Integration Tests', () => {
                     sharedBranchTables: {
                         'Test Table': {
                             rules: [
-                                { pattern: '^feature/', color: '#FF0000', enabled: true }, // First - should win
-                                { pattern: '^feature/test', color: '#00FF00', enabled: true }, // Second - more specific but comes later
+                                { pattern: '^feature/', color: createThemedColor('#FF0000', 'dark'), enabled: true }, // First - should win
+                                { pattern: '^feature/test', color: createThemedColor('#00FF00', 'dark'), enabled: true }, // Second - more specific but comes later
                             ],
                         },
                     },
@@ -630,7 +633,7 @@ describe('doit() Integration Tests', () => {
                             name: 'Generated Palette',
                             slots: {
                                 __palette__: {
-                                    primaryColor: '#3B82F6',
+                                    primaryColor: createThemedColor('#3B82F6', 'dark'),
                                     algorithm: 'balanced',
                                 },
                             },
@@ -855,8 +858,8 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: '#3B82F6', enabled: true },
-                        { repoQualifier: 'github.com/other/repo', primaryColor: '#EF4444', enabled: true },
+                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: createThemedColor('#3B82F6', 'dark'), enabled: true },
+                        { repoQualifier: 'github.com/other/repo', primaryColor: createThemedColor('#EF4444', 'dark'), enabled: true },
                     ],
                     previewSelectedRepoRule: true,
                 },
@@ -884,7 +887,7 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: '#3B82F6', enabled: true },
+                        { repoQualifier: 'github.com/testorg/testrepo', primaryColor: createThemedColor('#3B82F6', 'dark'), enabled: true },
                     ],
                     previewSelectedRepoRule: true,
                 },
@@ -913,7 +916,7 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: 'github.com/different/repo', primaryColor: '#3B82F6', enabled: true },
+                        { repoQualifier: 'github.com/different/repo', primaryColor: createThemedColor('#3B82F6', 'dark'), enabled: true },
                     ],
                 },
             });
@@ -1009,13 +1012,13 @@ describe('doit() Integration Tests', () => {
                 config: {
                     ...DEFAULT_CONFIG,
                     repoConfigurationList: [
-                        { repoQualifier: 'github.com/different/repo', primaryColor: '#3B82F6', enabled: true },
+                        { repoQualifier: 'github.com/different/repo', primaryColor: createThemedColor('#3B82F6', 'dark'), enabled: true },
                     ],
                     sharedBranchTables: {
                         'Default Rules': {
                             rules: [
-                                { pattern: '^feature/', color: '#10B981', enabled: true },
-                                { pattern: '^bug/', color: '#EF4444', enabled: true },
+                                { pattern: '^feature/', color: createThemedColor('#10B981', 'dark'), enabled: true },
+                                { pattern: '^bug/', color: createThemedColor('#EF4444', 'dark'), enabled: true },
                             ],
                         },
                     },

@@ -63,6 +63,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Set up configuration listener once
         this._configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration('windowColors')) {
+                // Note: We don't refresh for themed color updates because
+                // _handleThemedColorUpdate sends the data directly
                 this._sendConfigurationToWebview();
             } else if (event.affectsConfiguration('workbench.colorTheme')) {
                 // Notify webview of theme change
@@ -79,7 +81,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     }
 
     public setWorkspaceInfo(repositoryUrl: string, currentBranch: string, isGitRepo: boolean = true): void {
+        console.log('[ConfigWebviewProvider.setWorkspaceInfo] Called with:');
+        console.log('  repositoryUrl:', repositoryUrl);
+        console.log('  currentBranch:', currentBranch);
+        console.log('  isGitRepo:', isGitRepo);
         this._workspaceInfo = { repositoryUrl, currentBranch, isGitRepo };
+        console.log('[ConfigWebviewProvider.setWorkspaceInfo] Stored _workspaceInfo:', this._workspaceInfo);
         // Refresh the webview if it's open
         if (this._panel) {
             this._sendConfigurationToWebview();
@@ -311,6 +318,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return;
         }
 
+        console.log('[_sendConfigurationToWebview] Called from:', new Error().stack?.split('\n')[2]?.trim());
+
         const repoRules = this._getRepoRules();
         const sharedBranchTables = this._getSharedBranchTables();
         const otherSettings = this._getOtherSettings();
@@ -426,6 +435,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             previewRepoRuleIndex: this._previewRepoRuleIndex,
             previewBranchRuleContext: this._previewBranchRuleContext,
         };
+
+        console.log('[_sendConfigurationToWebview] Sending workspaceInfo to webview:', workspaceInfo);
 
         this._panel.webview.postMessage({
             command: 'configData',
@@ -1019,9 +1030,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return;
         }
 
+        const themeKind = this._getThemeKind();
+        console.log('[ConfigWebviewProvider] Sending theme change to webview:', themeKind);
         this._panel.webview.postMessage({
             command: 'themeChanged',
-            data: { themeKind: this._getThemeKind() },
+            data: { themeKind },
         });
     }
 
@@ -1033,55 +1046,248 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         const { type, index, color, tableName } = data;
         const themeKind = this._getThemeKind();
 
+        console.log('[_handleThemedColorUpdate] Received:', { type, index, color, tableName, themeKind });
+
         try {
             const config = vscode.workspace.getConfiguration('windowColors');
 
             if (type === 'repo') {
                 // Update repo rule
-                const repoRules = config.get<any[]>('repoConfigurationList', []);
+                console.log(
+                    '[_handleThemedColorUpdate] REPO: Incoming color:',
+                    color,
+                    'themeKind:',
+                    themeKind,
+                    'index:',
+                    index,
+                );
+                // Deep clone to avoid mutating VS Code's internal data structure
+                const repoRules = JSON.parse(JSON.stringify(config.get<any[]>('repoConfigurationList', [])));
                 if (index >= 0 && index < repoRules.length) {
                     const rule = repoRules[index];
+                    console.log(
+                        '[_handleThemedColorUpdate] REPO: Current rule.primaryColor:',
+                        JSON.stringify(rule.primaryColor),
+                    );
 
                     // If current value is a string or undefined, create new ThemedColor
                     // If it's already a ThemedColor, update it
                     let themedColor: ThemedColor;
                     if (typeof rule.primaryColor === 'string' || !rule.primaryColor) {
+                        console.log('[_handleThemedColorUpdate] REPO: Creating new ThemedColor');
                         themedColor = createThemedColor(color, themeKind);
                     } else {
+                        console.log('[_handleThemedColorUpdate] REPO: Updating existing ThemedColor');
                         themedColor = updateThemedColor(rule.primaryColor, color, themeKind);
                     }
+                    console.log('[_handleThemedColorUpdate] REPO: Created themedColor:', JSON.stringify(themedColor));
 
                     rule.primaryColor = themedColor;
+                    console.log(
+                        '[_handleThemedColorUpdate] REPO: Set rule.primaryColor:',
+                        JSON.stringify(rule.primaryColor),
+                    );
                     await config.update('repoConfigurationList', repoRules, true);
+                    console.log('[_handleThemedColorUpdate] REPO: Config update complete');
+
+                    // Send updated config directly using our local repoRules to avoid stale read
+                    if (this._panel) {
+                        const parsedRepoRules = repoRules
+                            .map((r) => this._parseRepoRule(r))
+                            .filter((r) => r !== null) as RepoRule[];
+                        console.log(
+                            '[_handleThemedColorUpdate] REPO: Parsed rule [' + index + '] primaryColor:',
+                            JSON.stringify(parsedRepoRules[index]?.primaryColor),
+                        );
+                        const sharedBranchTables = this._getSharedBranchTables();
+                        const otherSettings = this._getOtherSettings();
+                        const advancedProfiles = this._getAdvancedProfiles();
+                        const workspaceInfo = this._getWorkspaceInfo();
+                        const starredKeys = this._getStarredKeys();
+                        const hintFlags = this._getHintFlags();
+                        const tourFlags = this._getTourFlags();
+
+                        const msgData = {
+                            repoRules: parsedRepoRules, // Use local updated version
+                            sharedBranchTables,
+                            otherSettings,
+                            advancedProfiles,
+                            workspaceInfo,
+                            colorCustomizations: vscode.workspace
+                                .getConfiguration('workbench')
+                                .get('colorCustomizations', {}),
+                            starredKeys,
+                            hintFlags,
+                            tourFlags,
+                            themeKind: this._getThemeKind(),
+                            tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
+                            helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
+                            validationErrors: { repoRules: {}, branchRules: {} },
+                            localFolderPathValidation: {},
+                            expandedPaths: {},
+                            matchingIndexes: {
+                                repoRule: this._getMatchingRepoRuleIndex(parsedRepoRules, workspaceInfo.repositoryUrl),
+                                branchRule: -1,
+                                repoIndexForBranchRule: -1,
+                            },
+                            previewRepoRuleIndex: this._previewRepoRuleIndex,
+                            previewBranchRuleContext: this._previewBranchRuleContext,
+                        };
+
+                        console.log(
+                            '[_handleThemedColorUpdate] REPO: About to send msgData.repoRules[' +
+                                index +
+                                '].primaryColor:',
+                            JSON.stringify(msgData.repoRules[index]?.primaryColor),
+                        );
+                        this._panel.webview.postMessage({
+                            command: 'configData',
+                            data: msgData,
+                        });
+                        console.log('[_handleThemedColorUpdate] REPO: Message sent to webview');
+                    }
+                    return; // Skip the normal refresh below
                 }
             } else if (type === 'branch') {
                 // Update branch rule in shared table
-                const sharedTables = config.get<any>('sharedBranchTables', {});
+                console.log(
+                    '[_handleThemedColorUpdate] BRANCH: Incoming color:',
+                    color,
+                    'themeKind:',
+                    themeKind,
+                    'tableName:',
+                    tableName,
+                    'index:',
+                    index,
+                );
+                // Deep clone to avoid mutating VS Code's internal data structure
+                const sharedTables = JSON.parse(JSON.stringify(config.get<any>('sharedBranchTables', {})));
+                console.log('[_handleThemedColorUpdate] BRANCH: sharedTables keys:', Object.keys(sharedTables));
                 if (tableName && sharedTables[tableName]) {
                     const rules = sharedTables[tableName].rules;
+                    console.log('[_handleThemedColorUpdate] BRANCH: Found table with', rules.length, 'rules');
                     if (index >= 0 && index < rules.length) {
                         const rule = rules[index];
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Current rule.color:',
+                            JSON.stringify(rule.color),
+                        );
 
                         // If current value is a string or undefined, create new ThemedColor
                         // If it's already a ThemedColor, update it
                         let themedColor: ThemedColor;
                         if (typeof rule.color === 'string' || !rule.color) {
+                            console.log('[_handleThemedColorUpdate] BRANCH: Creating new ThemedColor');
                             themedColor = createThemedColor(color, themeKind);
                         } else {
+                            console.log('[_handleThemedColorUpdate] BRANCH: Updating existing ThemedColor');
                             themedColor = updateThemedColor(rule.color, color, themeKind);
                         }
 
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Created themedColor:',
+                            JSON.stringify(themedColor),
+                        );
                         rule.color = themedColor;
+                        console.log('[_handleThemedColorUpdate] BRANCH: Set rule.color:', JSON.stringify(rule.color));
+
                         await config.update('sharedBranchTables', sharedTables, true);
+                        console.log('[_handleThemedColorUpdate] BRANCH: Config update complete');
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Checking sharedTables after config.update:',
+                            JSON.stringify(sharedTables[tableName]?.rules[index]?.color),
+                        );
+
+                        // Double-check by reading config fresh
+                        const freshConfig = vscode.workspace.getConfiguration('windowColors');
+                        const freshTables = freshConfig.get<any>('sharedBranchTables', {});
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Fresh read from config:',
+                            JSON.stringify(freshTables[tableName]?.rules[index]?.color),
+                        );
+                    } else {
+                        console.error(
+                            '[_handleThemedColorUpdate] Index out of range:',
+                            index,
+                            'rules.length:',
+                            rules.length,
+                        );
                     }
+                } else {
+                    console.error('[_handleThemedColorUpdate] Table not found or no tableName provided');
                 }
+
+                // Send updated config directly using our local sharedTables to avoid stale read
+                if (this._panel) {
+                    const repoRules = this._getRepoRules();
+                    const otherSettings = this._getOtherSettings();
+                    const advancedProfiles = this._getAdvancedProfiles();
+                    const workspaceInfo = this._getWorkspaceInfo();
+                    const starredKeys = this._getStarredKeys();
+                    const hintFlags = this._getHintFlags();
+                    const tourFlags = this._getTourFlags();
+
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: Checking sharedTables before msgData:',
+                        JSON.stringify(sharedTables[tableName]?.rules[index]?.color),
+                    );
+                    console.log('[_handleThemedColorUpdate] BRANCH: sharedTables object ID:', sharedTables);
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: sharedTables[' + tableName + '] object ID:',
+                        sharedTables[tableName],
+                    );
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: sharedTables[' + tableName + '].rules object ID:',
+                        sharedTables[tableName]?.rules,
+                    );
+
+                    // Use our updated sharedTables instead of reading from config
+                    const msgData = {
+                        repoRules,
+                        sharedBranchTables: sharedTables, // Use local updated version
+                        otherSettings,
+                        advancedProfiles,
+                        workspaceInfo,
+                        colorCustomizations: vscode.workspace
+                            .getConfiguration('workbench')
+                            .get('colorCustomizations', {}),
+                        starredKeys,
+                        hintFlags,
+                        tourFlags,
+                        themeKind: this._getThemeKind(),
+                        tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
+                        helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
+                        validationErrors: { repoRules: {}, branchRules: {} },
+                        localFolderPathValidation: {},
+                        expandedPaths: {},
+                        matchingIndexes: {
+                            repoRule: this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl),
+                            branchRule: -1,
+                            repoIndexForBranchRule: -1,
+                        },
+                        previewRepoRuleIndex: this._previewRepoRuleIndex,
+                        previewBranchRuleContext: this._previewBranchRuleContext,
+                    };
+
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: About to send msgData.sharedBranchTables[' +
+                            tableName +
+                            '].rules[' +
+                            index +
+                            '].color:',
+                        JSON.stringify(msgData.sharedBranchTables[tableName]?.rules[index]?.color),
+                    );
+
+                    this._panel.webview.postMessage({
+                        command: 'configData',
+                        data: msgData,
+                    });
+                    console.log('[_handleThemedColorUpdate] BRANCH: Message sent to webview');
+                }
+                return; // Skip the normal refresh below
             }
 
-            // Wait for configuration to propagate
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            // Refresh the webview
-            this._sendConfigurationToWebview();
+            // Should not reach here
         } catch (error) {
             console.error('Failed to update themed color:', error);
             vscode.window.showErrorMessage('Failed to update themed color: ' + (error as Error).message);

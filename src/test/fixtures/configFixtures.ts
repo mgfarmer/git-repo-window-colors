@@ -3,6 +3,8 @@
  * Provides reusable test configurations for various scenarios
  */
 
+import { createThemedColor } from '../../colorDerivation';
+
 /**
  * Default extension configuration (matches package.json defaults)
  */
@@ -33,22 +35,22 @@ export const DEFAULT_CONFIG = {
 export const REPO_CONFIGS = {
     github: {
         repoQualifier: 'github.com/testorg/testrepo',
-        primaryColor: '#3B82F6',
+        primaryColor: createThemedColor('#3B82F6', ThemeKind.Dark),
         enabled: true,
     },
     gitlab: {
         repoQualifier: 'gitlab.com/mygroup/myproject',
-        primaryColor: '#EF4444',
+        primaryColor: createThemedColor('#EF4444', ThemeKind.Dark),
         enabled: true,
     },
     localFolder: {
         repoQualifier: '!/home/user/projects/local-repo',
-        primaryColor: '#10B981',
+        primaryColor: createThemedColor('#10B981', ThemeKind.Dark),
         enabled: true,
     },
     disabled: {
         repoQualifier: 'github.com/disabled/repo',
-        primaryColor: '#8B5CF6',
+        primaryColor: createThemedColor('#8B5CF6', ThemeKind.Dark),
         enabled: false,
     },
     noneColor: {
@@ -64,22 +66,22 @@ export const REPO_CONFIGS = {
 export const BRANCH_CONFIGS = {
     feature: {
         pattern: '^feature/',
-        color: '#10B981',
+        color: createThemedColor('#10B981', ThemeKind.Dark),
         enabled: true,
     },
     bugfix: {
         pattern: '^(bug/|bugfix/)',
-        color: '#EF4444',
+        color: createThemedColor('#EF4444', ThemeKind.Dark),
         enabled: true,
     },
     main: {
         pattern: '^(main|master)$',
-        color: '#3B82F6',
+        color: createThemedColor('#3B82F6', ThemeKind.Dark),
         enabled: true,
     },
     disabled: {
         pattern: '^disabled/',
-        color: '#8B5CF6',
+        color: createThemedColor('#8B5CF6', ThemeKind.Dark),
         enabled: false,
     },
     noneColor: {
@@ -96,23 +98,23 @@ export const BRANCH_TABLES = {
     default: {
         'Default Rules': {
             rules: [
-                { pattern: '^feature/', color: '#10B981', enabled: true },
-                { pattern: '^bug/', color: '#EF4444', enabled: true },
-                { pattern: '^(main|master)$', color: '#3B82F6', enabled: true },
+                { pattern: '^feature/', color: createThemedColor('#10B981', ThemeKind.Dark), enabled: true },
+                { pattern: '^bug/', color: createThemedColor('#EF4444', ThemeKind.Dark), enabled: true },
+                { pattern: '^(main|master)$', color: createThemedColor('#3B82F6', ThemeKind.Dark), enabled: true },
             ],
         },
     },
     multiTable: {
         Production: {
             rules: [
-                { pattern: '^(main|master)$', color: '#DC2626', enabled: true },
-                { pattern: '^release/', color: '#F59E0B', enabled: true },
+                { pattern: '^(main|master)$', color: createThemedColor('#DC2626', ThemeKind.Dark), enabled: true },
+                { pattern: '^release/', color: createThemedColor('#F59E0B', ThemeKind.Dark), enabled: true },
             ],
         },
         Development: {
             rules: [
-                { pattern: '^feature/', color: '#10B981', enabled: true },
-                { pattern: '^dev', color: '#3B82F6', enabled: true },
+                { pattern: '^feature/', color: createThemedColor('#10B981', ThemeKind.Dark), enabled: true },
+                { pattern: '^dev', color: createThemedColor('#3B82F6', ThemeKind.Dark), enabled: true },
             ],
         },
     },
@@ -125,10 +127,10 @@ export const ADVANCED_PROFILES = {
     blueTheme: {
         name: 'Blue Theme',
         slots: {
-            primaryActiveBg: { value: '#3B82F6' },
-            primaryActiveFg: { value: '#FFFFFF' },
-            secondaryActiveBg: { value: '#1D4ED8' },
-            secondaryActiveFg: { value: '#FFFFFF' },
+            primaryActiveBg: { value: createThemedColor('#3B82F6', ThemeKind.Dark) },
+            primaryActiveFg: { value: createThemedColor('#FFFFFF', ThemeKind.Dark) },
+            secondaryActiveBg: { value: createThemedColor('#1D4ED8', ThemeKind.Dark) },
+            secondaryActiveFg: { value: createThemedColor('#FFFFFF', ThemeKind.Dark) },
         },
         mappings: {
             'titleBar.activeBackground': 'primaryActiveBg',
@@ -141,14 +143,14 @@ export const ADVANCED_PROFILES = {
         name: 'With Modifiers',
         slots: {
             base: {
-                value: '#3B82F6',
+                value: createThemedColor('#3B82F6', ThemeKind.Dark),
             },
             lighter: {
-                value: '#3B82F6',
+                value: createThemedColor('#3B82F6', ThemeKind.Dark),
                 lighten: 0.2,
             },
             withOpacity: {
-                value: '#3B82F6',
+                value: createThemedColor('#3B82F6', ThemeKind.Dark),
                 opacity: 0.5,
             },
         },
@@ -162,7 +164,7 @@ export const ADVANCED_PROFILES = {
         name: 'Generated Palette',
         slots: {
             __palette__: {
-                primaryColor: '#3B82F6',
+                primaryColor: createThemedColor('#3B82F6', ThemeKind.Dark),
                 algorithm: 'balanced',
             },
         },
@@ -211,9 +213,17 @@ export const SCENARIOS = {
     multipleRepos: {
         ...DEFAULT_CONFIG,
         repoConfigurationList: [
-            { repoQualifier: 'github.com/org', primaryColor: '#3B82F6', enabled: true },
-            { repoQualifier: 'github.com/org/specific', primaryColor: '#EF4444', enabled: true },
-            { repoQualifier: 'gitlab.com', primaryColor: '#10B981', enabled: true },
+            {
+                repoQualifier: 'github.com/org',
+                primaryColor: createThemedColor('#3B82F6', ThemeKind.Dark),
+                enabled: true,
+            },
+            {
+                repoQualifier: 'github.com/org/specific',
+                primaryColor: createThemedColor('#EF4444', ThemeKind.Dark),
+                enabled: true,
+            },
+            { repoQualifier: 'gitlab.com', primaryColor: createThemedColor('#10B981', ThemeKind.Dark), enabled: true },
         ],
     },
 
@@ -223,7 +233,7 @@ export const SCENARIOS = {
         repoConfigurationList: [
             {
                 repoQualifier: 'github.com/testorg/testrepo',
-                primaryColor: '#3B82F6',
+                primaryColor: createThemedColor('#3B82F6', ThemeKind.Dark),
                 branchTableName: 'Default Rules',
                 enabled: true,
             },
@@ -235,7 +245,11 @@ export const SCENARIOS = {
     mixedMode: {
         ...DEFAULT_CONFIG,
         repoConfigurationList: [
-            { repoQualifier: 'github.com/simple', primaryColor: '#3B82F6', enabled: true },
+            {
+                repoQualifier: 'github.com/simple',
+                primaryColor: createThemedColor('#3B82F6', ThemeKind.Dark),
+                enabled: true,
+            },
             { repoQualifier: 'github.com/advanced', profileName: 'Blue Theme', enabled: true },
         ],
         advancedProfiles: {
@@ -260,7 +274,7 @@ export function createTestConfig(overrides: Partial<typeof DEFAULT_CONFIG> = {})
 export function createRepoRule(repoQualifier: string, primaryColor: string, options: any = {}) {
     return {
         repoQualifier,
-        primaryColor,
+        primaryColor: primaryColor === 'none' ? 'none' : createThemedColor(primaryColor, ThemeKind.Dark),
         enabled: true,
         ...options,
     };
@@ -272,7 +286,7 @@ export function createRepoRule(repoQualifier: string, primaryColor: string, opti
 export function createBranchRule(pattern: string, color: string, enabled = true) {
     return {
         pattern,
-        color,
+        color: color === 'none' ? 'none' : createThemedColor(color, ThemeKind.Dark),
         enabled,
     };
 }

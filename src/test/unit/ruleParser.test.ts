@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { parseRepoRules, parseBranchRules, ConfigProvider, ValidationContext } from '../../ruleParser';
-import { AdvancedProfile } from '../../types/advancedModeTypes';
+import { AdvancedProfile, ThemeKind } from '../../types/advancedModeTypes';
+import { createThemedColor } from '../../colorDerivation';
 
 describe('ruleParser', () => {
     // Create minimal valid profile for testing
@@ -58,6 +59,28 @@ describe('ruleParser', () => {
             expect(result.rules[0].primaryColor).to.equal('#ff0000');
             expect(result.rules[0].enabled).to.be.true;
             expect(result.errors.size).to.equal(0);
+        });
+
+        it('should parse repo rule with themed color object', () => {
+            const themedColor = createThemedColor('#3B82F6', 'dark' as ThemeKind);
+            const configProvider: ConfigProvider = {
+                getRepoConfigurationList: () => ({
+                    0: {
+                        repoQualifier: 'github.com/owner/repo',
+                        primaryColor: themedColor,
+                        enabled: true,
+                    },
+                }),
+                getBranchConfigurationList: () => ({}),
+                getAdvancedProfiles: () => ({}),
+            };
+            const validationContext: ValidationContext = { isActive: true };
+
+            const result = parseRepoRules(configProvider, true, validationContext);
+
+            expect(result.rules).to.have.lengthOf(1);
+            expect(result.errors.size).to.equal(0);
+            expect(result.rules[0].primaryColor).to.deep.equal(themedColor);
         });
 
         it('should parse repo rule with profile name', () => {
@@ -186,6 +209,29 @@ describe('ruleParser', () => {
             expect(result.rules[0].primaryColor).to.equal('none');
         });
 
+        it('should validate invalid themed color', () => {
+            const themedColor = createThemedColor('#3B82F6', 'dark' as ThemeKind);
+            themedColor.dark.value = 'not-a-color';
+            const configProvider: ConfigProvider = {
+                getRepoConfigurationList: () => ({
+                    0: {
+                        repoQualifier: 'github.com/owner/repo',
+                        primaryColor: themedColor,
+                        enabled: true,
+                    },
+                }),
+                getBranchConfigurationList: () => ({}),
+                getAdvancedProfiles: () => ({}),
+            };
+            const validationContext: ValidationContext = { isActive: true };
+
+            const result = parseRepoRules(configProvider, true, validationContext);
+
+            expect(result.rules).to.have.lengthOf(1);
+            expect(result.errors.size).to.equal(1);
+            expect(result.errors.get(0)).to.include('Invalid primary color');
+        });
+
         it('should validate local folder rule cannot have branch table', () => {
             const configProvider: ConfigProvider = {
                 getRepoConfigurationList: () => ({
@@ -309,6 +355,27 @@ describe('ruleParser', () => {
             expect(result.rules.get('main')).to.equal('#ff0000');
         });
 
+        it('should parse branch rule with themed color object', () => {
+            const themedColor = createThemedColor('#3B82F6', 'dark' as ThemeKind);
+            const configProvider: ConfigProvider = {
+                getRepoConfigurationList: () => ({}),
+                getBranchConfigurationList: () => ({
+                    0: {
+                        pattern: 'main',
+                        color: themedColor,
+                        enabled: true,
+                    },
+                }),
+                getAdvancedProfiles: () => ({}),
+            };
+
+            const result = parseBranchRules(configProvider, true);
+
+            expect(result.rules.size).to.equal(1);
+            expect(result.errors.size).to.equal(0);
+            expect(result.rules.get('main')).to.deep.equal(themedColor);
+        });
+
         it('should skip disabled branch rules', () => {
             const configProvider: ConfigProvider = {
                 getRepoConfigurationList: () => ({}),
@@ -385,6 +452,28 @@ describe('ruleParser', () => {
             expect(result.rules.size).to.equal(1);
             expect(result.rules.get('main')).to.equal('none');
             expect(result.errors.size).to.equal(0);
+        });
+
+        it('should validate invalid themed color in branch rule', () => {
+            const themedColor = createThemedColor('#3B82F6', 'dark' as ThemeKind);
+            themedColor.dark.value = 'not-a-color';
+            const configProvider: ConfigProvider = {
+                getRepoConfigurationList: () => ({}),
+                getBranchConfigurationList: () => ({
+                    0: {
+                        pattern: 'main',
+                        color: themedColor,
+                        enabled: true,
+                    },
+                }),
+                getAdvancedProfiles: () => ({}),
+            };
+
+            const result = parseBranchRules(configProvider, true);
+
+            expect(result.rules.size).to.equal(0);
+            expect(result.errors.size).to.equal(1);
+            expect(result.errors.get(0)).to.include('Invalid color');
         });
 
         it('should parse multiple branch rules', () => {

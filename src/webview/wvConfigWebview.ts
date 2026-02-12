@@ -510,21 +510,65 @@ function isThemedColor(value: any): boolean {
  * @returns The color string for the current theme
  */
 function extractColorForTheme(colorValue: any): string {
+    console.log('[extractColorForTheme] Input:', colorValue, 'currentTheme:', currentThemeKind);
+
+    if (typeof colorValue === 'string') {
+        console.log('[extractColorForTheme] Returning string as-is:', colorValue);
+        return colorValue;
+    }
+
     if (isThemedColor(colorValue)) {
         const themeValue = colorValue[currentThemeKind];
         if (themeValue && themeValue.value) {
+            console.log('[extractColorForTheme] Extracted for', currentThemeKind, ':', themeValue.value);
             return themeValue.value;
         }
 
         // Fallback: return first defined color
-        for (const theme of ['dark', 'light', 'highContrast']) {
+        for (const theme of ['dark', 'light', 'highContrast'] as const) {
             if (colorValue[theme] && colorValue[theme].value) {
+                console.log('[extractColorForTheme] Fallback to', theme, ':', colorValue[theme].value);
                 return colorValue[theme].value;
             }
         }
     }
 
+    console.log('[extractColorForTheme] No color found, returning empty string');
     return ''; // Return empty string if no color found
+}
+
+const THEME_KINDS: Array<'dark' | 'light' | 'highContrast'> = ['dark', 'light', 'highContrast'];
+
+function deriveThemeVariantForWebview(
+    baseColor: string,
+    fromTheme: 'dark' | 'light' | 'highContrast',
+    toTheme: 'dark' | 'light' | 'highContrast',
+): string {
+    const baseHex = convertColorToHex(baseColor || '#4A90E2');
+    const [h, sPercent, lPercent] = hexToHsl(baseHex);
+    let normalizedLightness = lPercent / 100;
+
+    if (toTheme === 'light' && (fromTheme === 'dark' || fromTheme === 'highContrast')) {
+        normalizedLightness = 1 - normalizedLightness;
+        if (normalizedLightness > 0.85) {
+            normalizedLightness = 0.35 + (normalizedLightness - 0.85) * 0.5;
+        }
+    } else if (toTheme === 'dark' && fromTheme === 'light') {
+        normalizedLightness = 1 - normalizedLightness;
+        if (normalizedLightness > 0.75) {
+            normalizedLightness = 0.6 + (normalizedLightness - 0.75) * 0.3;
+        }
+    } else if (toTheme === 'highContrast') {
+        if (fromTheme === 'light') {
+            normalizedLightness = 1 - normalizedLightness;
+        } else {
+            normalizedLightness = Math.min(0.7, normalizedLightness + 0.1);
+        }
+    }
+
+    normalizedLightness = Math.max(0.1, Math.min(0.9, normalizedLightness));
+
+    return hslToHex(h, sPercent, normalizedLightness * 100).toUpperCase();
 }
 
 /**
@@ -533,25 +577,42 @@ function extractColorForTheme(colorValue: any): string {
  * This is a simplified version for the webview context
  */
 function createThemedColorInWebview(color: string): any {
-    // For webview: just create a simple ThemedColor with auto=false for current theme
-    // and let the backend handle full derivation when saved
-    return {
-        dark: currentThemeKind === 'dark' ? { value: color, auto: false } : { value: undefined, auto: true },
-        light: currentThemeKind === 'light' ? { value: color, auto: false } : { value: undefined, auto: true },
-        highContrast:
-            currentThemeKind === 'highContrast' ? { value: color, auto: false } : { value: undefined, auto: true },
+    if (color === 'none') {
+        return 'none';
+    }
+
+    const themedColor: Record<'dark' | 'light' | 'highContrast', { value: string | undefined; auto: boolean }> = {
+        dark: { value: undefined, auto: true },
+        light: { value: undefined, auto: true },
+        highContrast: { value: undefined, auto: true },
     };
+
+    themedColor[currentThemeKind] = { value: color, auto: false };
+
+    for (const theme of THEME_KINDS) {
+        if (theme === currentThemeKind) {
+            continue;
+        }
+        const derived = deriveThemeVariantForWebview(color, currentThemeKind, theme);
+        themedColor[theme] = { value: derived, auto: true };
+    }
+
+    return themedColor;
 }
 
 /**
  * Handles theme change notifications from the extension
  */
 function handleThemeChanged(data: any) {
+    console.log('[wvConfigWebview] Received theme change:', data);
     if (data && data.themeKind) {
+        console.log('[wvConfigWebview] Updating theme from', currentThemeKind, 'to', data.themeKind);
         currentThemeKind = data.themeKind;
         //  Refresh the UI to show colors for the new theme by re-rendering config
         // This will extract colors from ThemedColor objects for the new theme
         if (currentConfig) {
+            // Update the stored config's themeKind to prevent it from being overwritten
+            currentConfig.themeKind = data.themeKind;
             handleConfigurationData(currentConfig);
         }
     }
@@ -591,12 +652,12 @@ function getProfileUsageInfo(): {
                 ruleUsesProfile = true;
             }
             // Check if primaryColor is actually a profile name
-            if (rule.primaryColor && advancedProfiles[rule.primaryColor]) {
+            if (typeof rule.primaryColor === 'string' && advancedProfiles[rule.primaryColor]) {
                 result.profileNames.add(rule.primaryColor);
                 ruleUsesProfile = true;
             }
             // Check if branchColor is actually a profile name
-            if (rule.branchColor && advancedProfiles[rule.branchColor]) {
+            if (typeof rule.branchColor === 'string' && advancedProfiles[rule.branchColor]) {
                 result.profileNames.add(rule.branchColor);
                 ruleUsesProfile = true;
             }
@@ -607,7 +668,7 @@ function getProfileUsageInfo(): {
                         result.profileNames.add(branchRule.profileName);
                         ruleUsesProfile = true;
                     }
-                    if (branchRule.color && advancedProfiles[branchRule.color]) {
+                    if (typeof branchRule.color === 'string' && advancedProfiles[branchRule.color]) {
                         result.profileNames.add(branchRule.color);
                         ruleUsesProfile = true;
                     }
@@ -632,7 +693,7 @@ function getProfileUsageInfo(): {
                         result.profileNames.add(rule.profileName);
                         ruleUsesProfile = true;
                     }
-                    if (rule.color && advancedProfiles[rule.color]) {
+                    if (typeof rule.color === 'string' && advancedProfiles[rule.color]) {
                         result.profileNames.add(rule.color);
                         ruleUsesProfile = true;
                     }
@@ -761,10 +822,13 @@ function collectUniqueBranchPatterns(): string[] {
 // Message handler for extension communication
 window.addEventListener('message', (event) => {
     const message = event.data;
-    //console.log('[Message Listener] Received message:', message.command);
+    console.log('[Message Listener] ============ RECEIVED MESSAGE ============');
+    console.log('[Message Listener] Command:', message.command);
+    console.log('[Message Listener] Timestamp:', new Date().toISOString());
 
     switch (message.command) {
         case 'configData':
+            console.log('[Message Listener] Calling handleConfigurationData');
             handleConfigurationData(message.data);
             break;
         case 'themeChanged':
@@ -835,13 +899,47 @@ window.addEventListener('message', (event) => {
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
-    // console.log('[handleConfigurationData] Received data from backend');
+    console.log('[handleConfigurationData] ============ START ============');
+    console.log('[handleConfigurationData] Received data from backend');
     // if (data?.repoRules) {
     //     console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
     //     data.repoRules.forEach((rule: any, index: number) => {
     //         console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
     //     });
     // }
+
+    // LOG: Check if workspaceInfo is being received correctly
+    console.log('[handleConfigurationData] workspaceInfo:', data.workspaceInfo);
+    console.log('[handleConfigurationData] workspaceInfo.isGitRepo:', data.workspaceInfo?.isGitRepo);
+
+    // LOG: Check repo rules with detailed color info
+    if (data.repoRules) {
+        data.repoRules.forEach((rule: any, index: number) => {
+            console.log(
+                `[handleConfigurationData] RepoRule[${index}].primaryColor:`,
+                JSON.stringify(rule.primaryColor),
+            );
+        });
+    }
+
+    // LOG: Check branch tables
+    if (data.sharedBranchTables && data.sharedBranchTables['My Branches']) {
+        console.log('[handleConfigurationData] My Branches rules:', data.sharedBranchTables['My Branches'].rules);
+        data.sharedBranchTables['My Branches'].rules.forEach((rule: any, index: number) => {
+            console.log(`[handleConfigurationData] My Branches rule[${index}].color:`, JSON.stringify(rule.color));
+        });
+    }
+
+    // LOG: All shared branch tables
+    if (data.sharedBranchTables) {
+        Object.keys(data.sharedBranchTables).forEach((tableName) => {
+            const table = data.sharedBranchTables[tableName];
+            console.log(`[handleConfigurationData] Table "${tableName}" has ${table.rules?.length || 0} rules`);
+            table.rules?.forEach((rule: any, index: number) => {
+                console.log(`[handleConfigurationData]   Rule[${index}].color:`, JSON.stringify(rule.color));
+            });
+        });
+    }
 
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
@@ -907,7 +1005,11 @@ function handleConfigurationData(data: any) {
 
         for (const rule of currentConfig.repoRules) {
             // Check primaryColor
-            if (rule.primaryColor && !rule.profileName && currentConfig.advancedProfiles[rule.primaryColor]) {
+            if (
+                typeof rule.primaryColor === 'string' &&
+                !rule.profileName &&
+                currentConfig.advancedProfiles[rule.primaryColor]
+            ) {
                 rule.profileName = rule.primaryColor;
                 needsUpdate = true;
             }
@@ -916,7 +1018,7 @@ function handleConfigurationData(data: any) {
             if (rule.branchRules) {
                 for (const branchRule of rule.branchRules) {
                     if (
-                        branchRule.color &&
+                        typeof branchRule.color === 'string' &&
                         !branchRule.profileName &&
                         currentConfig.advancedProfiles[branchRule.color]
                     ) {
@@ -930,7 +1032,11 @@ function handleConfigurationData(data: any) {
         // Check global branch rules
         if (currentConfig.branchRules) {
             for (const branchRule of currentConfig.branchRules) {
-                if (branchRule.color && !branchRule.profileName && currentConfig.advancedProfiles[branchRule.color]) {
+                if (
+                    typeof branchRule.color === 'string' &&
+                    !branchRule.profileName &&
+                    currentConfig.advancedProfiles[branchRule.color]
+                ) {
                     branchRule.profileName = branchRule.color;
                     needsUpdate = true;
                 }
@@ -955,8 +1061,10 @@ function handleColorPickerResult(data: any) {
 
 function handleAddRepoRule(data: any) {
     // Add a new repository rule with the provided data
+    console.log('[handleAddRepoRule] Called with data:', data);
     if (data.repoQualifier) {
         // Call the existing addRepoRule function to add a new rule
+        console.log('[handleAddRepoRule] Calling addRepoRule()');
         addRepoRule();
 
         // After the rule is added, populate it with the provided data
@@ -999,12 +1107,17 @@ function handleDeleteConfirmed(data: any) {
 
 function handlePathSimplified(data: any) {
     // Received simplified path from backend, complete addRepoRule action
+    console.log('[handlePathSimplified] Called with data:', data);
+    console.log('[handlePathSimplified] This means a LOCAL FOLDER rule is being created');
     if (!currentConfig || !data.simplifiedPath) return;
 
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
-        primaryColor: getThemeAppropriateColor(),
+        primaryColor: createThemedColorInWebview(randomColor),
     };
+
+    console.log('[handlePathSimplified] Creating local folder rule with color:', randomColor);
 
     currentConfig.repoRules.push(newRule);
     sendConfiguration();
@@ -1014,9 +1127,10 @@ function handlePathSimplifiedForPreview(data: any) {
     // Received simplified path from backend, complete addRepoRuleFromPreview action
     if (!currentConfig || !data.simplifiedPath) return;
 
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
-        primaryColor: getThemeAppropriateColor(),
+        primaryColor: createThemedColorInWebview(randomColor),
     };
 
     currentConfig.repoRules.push(newRule);
@@ -1482,7 +1596,10 @@ function handleDocumentClick(event: Event) {
         if (repoMatch) {
             const index = parseInt(repoMatch[1]);
             const rule = currentConfig?.repoRules?.[index];
-            const ruleDescription = rule ? `"${rule.repoQualifier}" -> ${rule.primaryColor}` : `#${index + 1}`;
+            const colorDisplay = rule ? rule.profileName || extractColorForTheme(rule.primaryColor) || '' : '';
+            const ruleDescription = rule
+                ? `"${rule.repoQualifier}" -> ${colorDisplay || '(no color)'}`
+                : `#${index + 1}`;
 
             // Send delete confirmation request to backend
             vscode.postMessage({
@@ -1607,11 +1724,13 @@ function handleDocumentClick(event: Event) {
 
     // Handle Add buttons
     if (target.getAttribute('data-action') === 'addRepoRule') {
+        console.log('[handleDocumentClick] Add Repo Rule button clicked');
         addRepoRule();
         return;
     }
 
     if (target.getAttribute('data-action') === 'addBranchRule') {
+        console.log('[handleDocumentClick] Add Branch Rule button clicked');
         addBranchRule();
         return;
     }
@@ -2195,7 +2314,7 @@ function createBranchTableDropdown(
     }
 
     // Check if primaryColor is 'none' (excluded from coloring)
-    if (rule && rule.primaryColor === 'none') {
+    if (rule && typeof rule.primaryColor === 'string' && rule.primaryColor === 'none') {
         const icon = document.createElement('span');
         icon.textContent = '⊘';
         icon.style.marginRight = '4px';
@@ -2764,6 +2883,10 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
     const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
+    console.log(
+        `[createColorInputHTML] ${ruleType}[${index}].${field}: color="${color}", currentTheme="${currentThemeKind}"`,
+    );
+
     // Handle special 'none' value - show indicator instead of color picker
     const isSpecialNone = color === 'none';
 
@@ -2876,7 +2999,7 @@ function renderOtherSettings(settings: any) {
     if (selectedRule?.profileName) {
         const profile = currentConfig?.advancedProfiles?.[selectedRule.profileName];
         isProfileRule = profile && !profile.virtual;
-    } else if (selectedRule?.primaryColor) {
+    } else if (typeof selectedRule?.primaryColor === 'string') {
         const profile = currentConfig?.advancedProfiles?.[selectedRule.primaryColor];
         isProfileRule = profile && !profile.virtual;
     }
@@ -3164,7 +3287,8 @@ function renderColorReport(config: any) {
                 };
             }
 
-            const color = escapeHtml(matchedBranchRule.color);
+            const branchColorDisplay = extractColorForTheme(matchedBranchRule.color);
+            const color = escapeHtml(branchColorDisplay || '(no color)');
             return {
                 description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
@@ -3183,7 +3307,8 @@ function renderColorReport(config: any) {
                     gotoData: profileGotoData,
                 };
             }
-            const primaryColor = escapeHtml(matchedRepoRule.primaryColor);
+            const repoColorDisplay = extractColorForTheme(matchedRepoRule.primaryColor);
+            const primaryColor = escapeHtml(repoColorDisplay || '(no color)');
             return {
                 description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${primaryColor}</span>)`,
                 gotoData: gotoData,
@@ -3226,11 +3351,11 @@ function renderColorReport(config: any) {
             let gotoTarget = '';
             if (isActivityBarKey && matchedBranchRule) {
                 // Check if branch rule uses a profile
+                const branchColorName =
+                    typeof matchedBranchRule.color === 'string' ? matchedBranchRule.color : undefined;
                 const branchProfileName =
                     matchedBranchRule.profileName ||
-                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
-                        ? matchedBranchRule.color
-                        : null);
+                    (branchColorName && currentConfig?.advancedProfiles?.[branchColorName] ? branchColorName : null);
                 if (branchProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
                 } else {
@@ -3243,10 +3368,12 @@ function renderColorReport(config: any) {
                 }
             } else if (matchedRepoRule) {
                 // Check if repo rule uses a profile (can be in profileName or primaryColor field)
+                const repoPrimaryColorName =
+                    typeof matchedRepoRule.primaryColor === 'string' ? matchedRepoRule.primaryColor : undefined;
                 const repoProfileName =
                     matchedRepoRule.profileName ||
-                    (matchedRepoRule.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
-                        ? matchedRepoRule.primaryColor
+                    (repoPrimaryColorName && currentConfig?.advancedProfiles?.[repoPrimaryColorName]
+                        ? repoPrimaryColorName
                         : null);
                 if (repoProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(repoProfileName)}" data-theme-key="${escapeHtml(key)}"`;
@@ -3255,11 +3382,11 @@ function renderColorReport(config: any) {
                 }
             } else if (matchedBranchRule) {
                 // Check if branch rule uses a profile
+                const branchColorName =
+                    typeof matchedBranchRule.color === 'string' ? matchedBranchRule.color : undefined;
                 const branchProfileName =
                     matchedBranchRule.profileName ||
-                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
-                        ? matchedBranchRule.color
-                        : null);
+                    (branchColorName && currentConfig?.advancedProfiles?.[branchColorName] ? branchColorName : null);
                 if (branchProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
                 } else {
@@ -3434,17 +3561,29 @@ function handlePreviewModeChange() {
 function addRepoRule() {
     if (!currentConfig) return;
 
+    // LOG: Trace where the flow is going
+    console.log('[addRepoRule] Starting - currentConfig.workspaceInfo:', currentConfig.workspaceInfo);
+    console.log('[addRepoRule] workspaceInfo?.isGitRepo:', currentConfig.workspaceInfo?.isGitRepo);
+    console.log('[addRepoRule] workspaceInfo?.repositoryUrl:', currentConfig.workspaceInfo?.repositoryUrl);
+
     // Check if workspace is a git repo or local folder
     const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
     let repoQualifier = '';
 
+    console.log('[addRepoRule] Determined isGitRepo:', isGitRepo);
+
     if (isGitRepo) {
         // Git repository - extract repo name from URL
+        console.log('[addRepoRule] Taking GIT REPO path');
         repoQualifier = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
+        console.log('[addRepoRule] Extracted repoQualifier:', repoQualifier);
     } else {
         // Local folder - create pattern with ! prefix and env var substitution
+        console.log('[addRepoRule] Taking LOCAL FOLDER path');
         const folderPath = currentConfig.workspaceInfo?.repositoryUrl || '';
+        console.log('[addRepoRule] folderPath:', folderPath);
         if (folderPath) {
+            console.log('[addRepoRule] Sending simplifyPath message to backend');
             // Send message to backend to simplify path
             vscode.postMessage({
                 command: 'simplifyPath',
@@ -3455,13 +3594,17 @@ function addRepoRule() {
         }
     }
 
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         repoQualifier: repoQualifier,
-        primaryColor: getThemeAppropriateColor(),
+        primaryColor: createThemedColorInWebview(randomColor),
     };
+
+    console.log('[addRepoRule] Creating new repo rule with color:', randomColor);
 
     // Always append new rules to the end for predictable behavior
     currentConfig.repoRules.push(newRule);
+    console.log('[addRepoRule] Rule added, sending configuration');
     sendConfiguration();
 }
 
@@ -3487,9 +3630,10 @@ function addBranchRule() {
 
     // Get a random humorous defect name for the default pattern
     const randomDefectName = humorousDefectNames[Math.floor(Math.random() * humorousDefectNames.length)];
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         pattern: randomDefectName,
-        color: getThemeAppropriateColor(),
+        color: createThemedColorInWebview(randomColor),
         enabled: true,
     };
 
@@ -4433,8 +4577,13 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
             if (selectedRule?.branchTableName) {
                 messageData.tableName = selectedRule.branchTableName;
+                console.log('[updateColorRule] Branch rule - tableName:', messageData.tableName);
+            } else {
+                console.error('[updateColorRule] Branch rule but no branchTableName!', selectedRule);
             }
         }
+
+        console.log('[updateColorRule] Sending updateThemedColor:', messageData);
 
         vscode.postMessage({
             command: 'updateThemedColor',
@@ -4560,7 +4709,8 @@ function handleColorInputClick(event: MouseEvent) {
                     const rule = rules?.[parseInt(index)];
                     if (rule) {
                         // Check if this rule uses a profile
-                        const colorValue = rule.profileName || rule.primaryColor;
+                        const primaryColorName = typeof rule.primaryColor === 'string' ? rule.primaryColor : undefined;
+                        const colorValue = rule.profileName || primaryColorName;
                         const advancedProfiles = currentConfig?.advancedProfiles || {};
 
                         // If the color value is a profile name, navigate to Profiles tab
@@ -5201,7 +5351,8 @@ function validateRules(): boolean {
                 markFieldAsError('repo-qualifier-' + index);
             }
 
-            if (!rule.primaryColor?.trim()) {
+            const primaryColorValue = extractColorForTheme(rule.primaryColor);
+            if (!primaryColorValue || !primaryColorValue.trim()) {
                 errors.push(`Repository rule ${index + 1}: Primary color is required`);
                 markFieldAsError('repo-primaryColor-' + index);
             }
@@ -5216,7 +5367,8 @@ function validateRules(): boolean {
                 markFieldAsError('branch-pattern-' + index);
             }
 
-            if (!rule.color?.trim()) {
+            const branchColorValue = extractColorForTheme(rule.color);
+            if (!branchColorValue || !branchColorValue.trim()) {
                 errors.push(`Branch rule ${index + 1}: Color is required`);
                 markFieldAsError('branch-color-' + index);
             }
@@ -5297,7 +5449,8 @@ function openColorPicker(ruleType: string, index: number, field: string) {
         const rule = rules?.[index];
         if (rule) {
             // Check if this rule uses a profile
-            const colorValue = rule.profileName || rule.primaryColor;
+            const primaryColorName = typeof rule.primaryColor === 'string' ? rule.primaryColor : undefined;
+            const colorValue = rule.profileName || primaryColorName;
             const advancedProfiles = currentConfig?.advancedProfiles || {};
 
             // If the color value is a profile name, navigate to Profiles tab
@@ -5614,10 +5767,11 @@ function showPreviewToast() {
     if (!selectedRule) return;
 
     // Check if this rule uses a profile (not virtual)
-    const profileName = selectedRule.profileName || selectedRule.primaryColor;
-    const profile = currentConfig?.advancedProfiles?.[profileName];
+    const fallbackProfileName = typeof selectedRule.primaryColor === 'string' ? selectedRule.primaryColor : undefined;
+    const profileName = selectedRule.profileName || fallbackProfileName;
+    const profile = profileName ? currentConfig?.advancedProfiles?.[profileName] : undefined;
 
-    let primaryColor = selectedRule.primaryColor;
+    let primaryColor = extractColorForTheme(selectedRule.primaryColor) || undefined;
     let secondaryBgColor = null;
     let secondaryFgColor = null;
 
@@ -6493,16 +6647,17 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
                 : null;
 
         // Extract profile names from matched rules
+        const matchedRepoPrimaryColor =
+            typeof matchedRepoRule?.primaryColor === 'string' ? matchedRepoRule.primaryColor : undefined;
         const repoProfileName =
             matchedRepoRule?.profileName ||
-            (matchedRepoRule?.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
-                ? matchedRepoRule.primaryColor
+            (matchedRepoPrimaryColor && currentConfig?.advancedProfiles?.[matchedRepoPrimaryColor]
+                ? matchedRepoPrimaryColor
                 : null);
+        const matchedBranchColor = typeof matchedBranchRule?.color === 'string' ? matchedBranchRule.color : undefined;
         const branchProfileName =
             matchedBranchRule?.profileName ||
-            (matchedBranchRule?.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
-                ? matchedBranchRule.color
-                : null);
+            (matchedBranchColor && currentConfig?.advancedProfiles?.[matchedBranchColor] ? matchedBranchColor : null);
 
         // console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
         // console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);

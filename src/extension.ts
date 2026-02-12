@@ -10,7 +10,6 @@ import { resolveThemedColor, createThemedColor } from './colorDerivation';
 import { BranchRule } from './types/webviewTypes';
 import { ConfigWebviewProvider } from './webview/configWebview';
 import { matchesLocalFolderPattern } from './pathUtils';
-import { extractProfileName as extractProfileNameCore } from './colorResolvers';
 import { extractRepoNameFromUrl as extractRepoNameFromUrlCore } from './repoUrlParser';
 import { createRepoProfile, createBranchProfile, ProfileFactorySettings, ProfileFactoryLogger } from './profileFactory';
 import {
@@ -116,19 +115,6 @@ export async function __doitForTesting(reason: string, usePreviewMode: boolean =
 
 // Export path utilities for use in webview and other modules
 export { expandEnvVars, simplifyPath, validateLocalFolderPath } from './pathUtils';
-
-/**
- * Extracts profile name from color string.
- * Returns the profile name if:
- * 1. It exists as a profile
- * 2. It's NOT a valid HTML color name (HTML colors take precedence)
- * Returns null otherwise
- *
- * Note: This is a wrapper around the extracted colorResolvers module.
- */
-function extractProfileName(colorString: string, advancedProfiles: { [key: string]: AdvancedProfile }): string | null {
-    return extractProfileNameCore(colorString, advancedProfiles);
-}
 
 /**
  * Converts VS Code's ColorThemeKind to our ThemeKind type
@@ -676,8 +662,6 @@ export async function activate(context: ExtensionContext) {
     // Register openConfig command early so it works even without a workspace
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.openConfig', () => {
-            // Refresh workspace info to ensure it's up-to-date when opening configurator
-            updateWorkspaceInfo();
             configProvider.show(context.extensionUri);
         }),
     );
@@ -989,36 +973,6 @@ export async function activate(context: ExtensionContext) {
     }
 }
 
-/**
- * Updates workspace info in the config provider with current git repository state.
- * This should be called when initializing and when opening the configurator to ensure
- * the workspace info is up-to-date.
- */
-function updateWorkspaceInfo(): void {
-    if (!configProvider) return;
-
-    const repo = getWorkspaceRepo();
-    if (repo) {
-        const remoteUrl = getRemoteUrl(repo);
-        if (remoteUrl) {
-            const branch = getCurrentGitBranch();
-            if (branch) {
-                configProvider.setWorkspaceInfo(remoteUrl, branch, true);
-                outputChannel.appendLine(`Updated workspace info: ${remoteUrl} (${branch})`);
-            }
-        } else {
-            outputChannel.appendLine('Git repository has no remote URL yet');
-        }
-    } else {
-        // Not a git repo - set workspace folder path
-        if (workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
-            const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
-            configProvider.setWorkspaceInfo(workspaceFolder, '', false);
-            outputChannel.appendLine(`Updated workspace info: local folder ${workspaceFolder}`);
-        }
-    }
-}
-
 async function init() {
     gitRepository = getWorkspaceRepo();
     if (gitRepository) {
@@ -1034,6 +988,10 @@ async function init() {
 
             // Update workspace info for the configuration webview
             if (configProvider) {
+                outputChannel.appendLine('[Extension] Calling setWorkspaceInfo for GIT REPO:');
+                outputChannel.appendLine('  URL: ' + gitRepoRemoteFetchUrl);
+                outputChannel.appendLine('  Branch: ' + currentBranch);
+                outputChannel.appendLine('  isGitRepo: true (implicit)');
                 configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
             }
 
@@ -1071,6 +1029,12 @@ async function init() {
 
                             // Update workspace info for the configuration webview
                             if (configProvider) {
+                                outputChannel.appendLine(
+                                    '[Extension] Calling setWorkspaceInfo for GIT REPO (delayed):',
+                                );
+                                outputChannel.appendLine('  URL: ' + gitRepoRemoteFetchUrl);
+                                outputChannel.appendLine('  Branch: ' + currentBranch);
+                                outputChannel.appendLine('  isGitRepo: true (implicit)');
                                 configProvider.setWorkspaceInfo(gitRepoRemoteFetchUrl, currentBranch);
                             }
 
@@ -1093,6 +1057,10 @@ async function init() {
         if (configProvider && workspace.workspaceFolders && workspace.workspaceFolders.length > 0) {
             const workspaceFolder = workspace.workspaceFolders[0].uri.fsPath;
             outputChannel.appendLine('Workspace folder: ' + workspaceFolder);
+            outputChannel.appendLine('[Extension] Calling setWorkspaceInfo for LOCAL FOLDER:');
+            outputChannel.appendLine('  Path: ' + workspaceFolder);
+            outputChannel.appendLine('  Branch: (empty)');
+            outputChannel.appendLine('  isGitRepo: false (explicit)');
             configProvider.setWorkspaceInfo(workspaceFolder, '', false); // false = not a git repo
 
             // Apply colors if there's a matching local folder rule
@@ -1186,7 +1154,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
  * Gets branch configuration rules from settings.
  * This is a wrapper around the extracted ruleParser module.
  */
-function getBranchData(validate: boolean = false): Map<string, string> {
+function getBranchData(validate: boolean = false): Map<string, string | ThemedColor> {
     const configProvider: RuleConfigProvider = {
         getRepoConfigurationList: () => getObjectSetting('repoConfigurationList'),
         getBranchConfigurationList: () => getObjectSetting('branchConfigurationList'),
@@ -1650,16 +1618,15 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                     }
 
                     if (currentBranch?.match(rule.pattern)) {
-                        // Check if this is a profile name
+                        // Check if this rule specifies a profile name
                         const advancedProfiles = workspace
                             .getConfiguration('windowColors')
                             .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
-                        const profileName = extractProfileName(rule.color, advancedProfiles);
 
-                        if (profileName && advancedProfiles[profileName]) {
+                        if (rule.profileName && advancedProfiles[rule.profileName]) {
                             // It's a profile - store it
                             outputChannel.appendLine(
-                                `  Branch rule matched in "${tableName}": "${rule.pattern}" using Profile: ${profileName}`,
+                                `  Branch rule matched in "${tableName}": "${rule.pattern}" using Profile: ${rule.profileName}`,
                             );
                             if (!matchedRepoConfig) {
                                 matchedRepoConfig = {
@@ -1667,7 +1634,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                                     primaryColor: 'none',
                                 };
                             }
-                            matchedRepoConfig.branchProfile = advancedProfiles[profileName];
+                            matchedRepoConfig.branchProfile = advancedProfiles[rule.profileName];
                         } else if (rule.color === 'none') {
                             // Special 'none' value - skip branch coloring
                             outputChannel.appendLine(

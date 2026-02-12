@@ -15,7 +15,11 @@
  * extractRepoNameFromUrl('git@github.com:owner/repo.git') // => 'owner/repo'
  */
 export function extractRepoNameFromUrl(repositoryUrl: string): string {
-    if (!repositoryUrl) return '';
+    console.log('[extractRepoNameFromUrl] Input:', repositoryUrl);
+    if (!repositoryUrl) {
+        console.log('[extractRepoNameFromUrl] Empty input, returning empty string');
+        return '';
+    }
 
     // Extract a user-friendly repo name from the git URL
     try {
@@ -24,7 +28,9 @@ export function extractRepoNameFromUrl(repositoryUrl: string): string {
             const pathPart = parts[1].split('/');
             if (pathPart.length > 1) {
                 const lastPart = pathPart.slice(-2).join('/');
-                return lastPart.replace('.git', '');
+                const result = lastPart.replace('.git', '');
+                console.log('[extractRepoNameFromUrl] Extracted from SSH format:', result);
+                return result;
             }
         }
 
@@ -36,14 +42,17 @@ export function extractRepoNameFromUrl(repositoryUrl: string): string {
         ) {
             const match = repositoryUrl.match(/[\/:]([^\/]+\/[^\/]+?)(?:\.git)?$/);
             if (match) {
+                console.log('[extractRepoNameFromUrl] Extracted from HTTPS format:', match[1]);
                 return match[1];
             }
         }
 
         // Final fallback
-        return repositoryUrl.split('/').pop()?.replace('.git', '') || '';
+        const result = repositoryUrl.split('/').pop()?.replace('.git', '') || '';
+        console.log('[extractRepoNameFromUrl] Using final fallback:', result);
+        return result;
     } catch (e) {
-        console.warn('Error parsing repository URL:', e);
+        console.warn('[extractRepoNameFromUrl] Error parsing repository URL:', e);
         return '';
     }
 }
