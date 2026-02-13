@@ -120,5 +120,9 @@ export interface WebviewMessage {
         commandTitle?: string;
         // Help panel width
         width?: number;
+        // Profile palette generation on save
+        profileName?: string;
+        algorithm?: string;
+        skipToast?: boolean;
     };
 }

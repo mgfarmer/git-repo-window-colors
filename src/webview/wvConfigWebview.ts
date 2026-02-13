@@ -730,16 +730,16 @@ function getThemeAppropriateColor(): string {
         let saturation;
 
         // Choose lightness based on base color luminance for maximum contrast
-        // For dark themes: make result 20% darker; for light themes: make result 20% brighter
+        // For dark themes: use deeper colors; for light themes: use brighter colors
         let lightness: number;
         if (isDark) {
-            // Base is dark (dark theme)
-            lightness = 0.2 + Math.random() * 0.2; // 36-72% (was 60-90%)
+            // Base is dark (dark theme) - use deeper, richer colors
+            lightness = 0.15 + Math.random() * 0.15; // 15-30%
             saturation = 0.8 + Math.random() * 0.2; // 80-100%
         } else {
             // Base is light (light theme)
-            lightness = 0.5 + Math.random() * 0.2; // 24-60% (was 20-50%)
-            saturation = 0.2 + Math.random() * 0.3; // 40-60%
+            lightness = 0.5 + Math.random() * 0.2; // 50-70%
+            saturation = 0.4 + Math.random() * 0.2; // 40-60%
         }
 
         // Convert HSL to RGB
@@ -6933,9 +6933,9 @@ function isHtmlColor(str: string): boolean {
 function addNewProfile() {
     let name = 'Profile ' + (Object.keys(currentConfig.advancedProfiles || {}).length + 1);
 
-    // Ensure the generated name is not a valid HTML color
+    // Ensure the generated name is unique and not a valid HTML color
     let counter = Object.keys(currentConfig.advancedProfiles || {}).length + 1;
-    while (isHtmlColor(name)) {
+    while (isHtmlColor(name) || (currentConfig.advancedProfiles && currentConfig.advancedProfiles[name])) {
         counter++;
         name = 'Profile ' + counter;
     }
@@ -6952,7 +6952,7 @@ function addNewProfile() {
         mappings: JSON.parse(JSON.stringify(DEFAULT_MAPPINGS)),
     };
 
-    saveProfiles();
+    saveProfiles(name, 'monochromatic', true);
     selectProfile(name);
 }
 
@@ -7142,13 +7142,17 @@ let previousPalette: any = null;
 
 /**
  * Generates a pleasing color palette and updates the current profile
+ * @param algorithm The palette generation algorithm to use
+ * @param profileName Optional profile name to generate palette for (defaults to currently selected profile)
  */
-function generatePalette(algorithm: string) {
-    if (!selectedProfileName || !currentConfig.advancedProfiles[selectedProfileName]) {
+function generatePalette(algorithm: string, profileName?: string) {
+    const targetProfileName = profileName || selectedProfileName;
+
+    if (!targetProfileName || !currentConfig.advancedProfiles[targetProfileName]) {
         return;
     }
 
-    const profile = currentConfig.advancedProfiles[selectedProfileName];
+    const profile = currentConfig.advancedProfiles[targetProfileName];
     const primaryBgValue = profile.palette.primaryActiveBg?.value;
     // Extract string color from ThemedColor object for current theme
     const primaryBg = extractColorForTheme(primaryBgValue);
@@ -7168,7 +7172,7 @@ function generatePalette(algorithm: string) {
         command: 'generatePalette',
         data: {
             paletteData: {
-                profileName: selectedProfileName,
+                profileName: targetProfileName,
                 primaryBg: primaryBg,
                 algorithm: algorithm,
             },
@@ -7179,7 +7183,12 @@ function generatePalette(algorithm: string) {
 /**
  * Handles the paletteGenerated message from the extension
  */
-function handlePaletteGenerated(data: { advancedProfiles: any; generatedPalette: any; profileName: string }) {
+function handlePaletteGenerated(data: {
+    advancedProfiles: any;
+    generatedPalette: any;
+    profileName: string;
+    skipToast?: boolean;
+}) {
     // Update current config with the new profiles
     currentConfig.advancedProfiles = data.advancedProfiles;
 
@@ -7188,10 +7197,12 @@ function handlePaletteGenerated(data: { advancedProfiles: any; generatedPalette:
         renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
     }
 
-    // Show the toast after the layout has stabilized
-    requestAnimationFrame(() => {
-        showPaletteToast(data.generatedPalette);
-    });
+    // Show the toast after the layout has stabilized (unless skipToast is true)
+    if (!data.skipToast) {
+        requestAnimationFrame(() => {
+            showPaletteToast(data.generatedPalette);
+        });
+    }
 }
 
 /**
@@ -8763,11 +8774,14 @@ function confirmDeleteProfile(profileName: string) {
     }
 }
 
-function saveProfiles() {
+function saveProfiles(profileName?: string, algorithm?: string, skipToast?: boolean) {
     vscode.postMessage({
         command: 'updateAdvancedProfiles',
         data: {
             advancedProfiles: currentConfig.advancedProfiles,
+            profileName: profileName,
+            algorithm: algorithm,
+            skipToast: skipToast,
         },
     });
 }

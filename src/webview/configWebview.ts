@@ -218,7 +218,33 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 await vscode.commands.executeCommand('windowColors.importConfig');
                 break;
             case 'updateAdvancedProfiles':
-                await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                // If profileName and algorithm are provided, generate palette before saving
+                if (message.data.profileName && message.data.algorithm) {
+                    // Get the profile's primary color to use for palette generation
+                    const profile = message.data.advancedProfiles![message.data.profileName];
+                    if (profile) {
+                        const primaryBg =
+                            profile.palette.primaryActiveBg?.value?.dark?.value ||
+                            profile.palette.primaryActiveBg?.value?.light?.value ||
+                            '#336699';
+
+                        await this._handlePaletteGeneration(
+                            {
+                                profileName: message.data.profileName,
+                                primaryBg: primaryBg,
+                                algorithm: message.data.algorithm,
+                                skipToast: message.data.skipToast,
+                            },
+                            message.data.advancedProfiles,
+                        );
+                    } else {
+                        // Profile not found, just save without palette generation
+                        await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                    }
+                } else {
+                    // No palette generation requested, just save
+                    await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                }
                 break;
             case 'requestHelp':
                 await this._sendHelpContent(message.data.helpType || 'getting-started');
@@ -1538,11 +1564,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private async _handlePaletteGeneration(paletteData: {
-        profileName: string;
-        primaryBg: string;
-        algorithm: string;
-    }): Promise<void> {
+    private async _handlePaletteGeneration(
+        paletteData: {
+            profileName: string;
+            primaryBg: string;
+            algorithm: string;
+            skipToast?: boolean;
+        },
+        providedProfiles?: { [key: string]: AdvancedProfile },
+    ): Promise<void> {
         if (!this._panel) {
             return;
         }
@@ -1553,8 +1583,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // Generate the palette using the palette generator
             const generatedPalette = generatePalette(primaryBg, algorithm as PaletteAlgorithm);
 
-            // Get the current profiles
-            const profiles = this._getAdvancedProfiles();
+            // Get the current profiles (use provided profiles if available, otherwise load from config)
+            const profiles = providedProfiles || this._getAdvancedProfiles();
             const profile = profiles[profileName];
 
             if (!profile) {
@@ -1637,6 +1667,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     advancedProfiles: profiles,
                     generatedPalette: generatedPalette,
                     profileName: profileName,
+                    skipToast: paletteData.skipToast,
                 },
             });
         } catch (error) {
