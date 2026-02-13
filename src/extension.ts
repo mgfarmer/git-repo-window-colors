@@ -1518,73 +1518,100 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         const selectedBranchContext = configProvider?.getPreviewBranchRuleContext();
 
         if (selectedBranchContext !== null && selectedBranchContext !== undefined) {
-            outputChannel.appendLine(
-                '  [PREVIEW MODE] Using selected branch rule at index ' + selectedBranchContext.index,
-            );
+            // Check if this is a profile-only preview (index === -1, tableName is profile name)
+            const repoIndex = configProvider?.getPreviewRepoRuleIndex();
+            if (repoIndex === -1 && selectedBranchContext.index === -1) {
+                // This is a profile preview - apply the profile directly
+                const profileName = selectedBranchContext.tableName;
+                outputChannel.appendLine('  [PROFILE PREVIEW MODE] Using profile: ' + profileName);
 
-            const sharedBranchTables = workspace
-                .getConfiguration('windowColors')
-                .get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
-
-            const tableName = selectedBranchContext.tableName;
-            outputChannel.appendLine(`  [PREVIEW MODE] Using branch table: "${tableName}"`);
-
-            const branchTable = sharedBranchTables[tableName];
-            let selectedRule: BranchRule | undefined;
-
-            if (branchTable && branchTable.rules && branchTable.rules[selectedBranchContext.index]) {
-                selectedRule = branchTable.rules[selectedBranchContext.index];
-            }
-
-            if (selectedRule) {
-                outputChannel.appendLine('  [PREVIEW MODE] Branch rule: "' + selectedRule.pattern + '"');
-                outputChannel.appendLine('  [PREVIEW MODE] Branch rule color type: ' + typeof selectedRule.color);
-                outputChannel.appendLine(
-                    '  [PREVIEW MODE] Branch rule color value: ' + JSON.stringify(selectedRule.color),
-                );
-
-                // Check if this is a profile name
                 const advancedProfiles = workspace
                     .getConfiguration('windowColors')
                     .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
 
-                // Check if rule has a profile name
-                if (selectedRule.profileName && advancedProfiles[selectedRule.profileName]) {
-                    // It's a profile - store it
-                    outputChannel.appendLine('  [PREVIEW MODE] Using Branch Profile: ' + selectedRule.profileName);
+                if (advancedProfiles[profileName]) {
                     if (!matchedRepoConfig) {
                         matchedRepoConfig = {
                             repoQualifier: '',
                             primaryColor: 'none',
                         };
                     }
-                    matchedRepoConfig.branchProfile = advancedProfiles[selectedRule.profileName];
-                } else if (selectedRule.color === 'none') {
-                    // Special 'none' value - skip branch coloring
-                    outputChannel.appendLine('  [PREVIEW MODE] Branch rule specifies "none" - skipping branch color');
-                    // Don't set branchProfile or branchColor
+                    matchedRepoConfig.profile = advancedProfiles[profileName];
+                    outputChannel.appendLine('  [PROFILE PREVIEW MODE] Applied profile: ' + profileName);
                 } else {
-                    // It's a themed color - create temporary branch profile
-                    const theme = window.activeColorTheme.kind;
-                    const themeKind = getThemeKind(theme);
-                    const themedColor = selectedRule.color as ThemedColor;
-                    const colorValue = resolveThemedColor(themedColor, themeKind);
-                    if (!colorValue) {
-                        outputChannel.appendLine('  [PREVIEW MODE] ERROR: Could not resolve themed color');
-                        throw new Error('No color value resolved for theme');
-                    }
-                    branchColor = Color(colorValue);
-                    outputChannel.appendLine('  [PREVIEW MODE] Using simple branch color: ' + branchColor.hex());
-
-                    if (!matchedRepoConfig) {
-                        matchedRepoConfig = {
-                            repoQualifier: '',
-                            primaryColor: 'none',
-                        };
-                    }
-                    matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                    outputChannel.appendLine('  [PROFILE PREVIEW MODE] ERROR: Profile not found: ' + profileName);
                 }
-                branchMatch = true;
+            } else {
+                outputChannel.appendLine(
+                    '  [PREVIEW MODE] Using selected branch rule at index ' + selectedBranchContext.index,
+                );
+
+                const sharedBranchTables = workspace
+                    .getConfiguration('windowColors')
+                    .get<{ [key: string]: { rules: any[] } }>('sharedBranchTables', {});
+
+                const tableName = selectedBranchContext.tableName;
+                outputChannel.appendLine(`  [PREVIEW MODE] Using branch table: "${tableName}"`);
+
+                const branchTable = sharedBranchTables[tableName];
+                let selectedRule: BranchRule | undefined;
+
+                if (branchTable && branchTable.rules && branchTable.rules[selectedBranchContext.index]) {
+                    selectedRule = branchTable.rules[selectedBranchContext.index];
+                }
+
+                if (selectedRule) {
+                    outputChannel.appendLine('  [PREVIEW MODE] Branch rule: "' + selectedRule.pattern + '"');
+                    outputChannel.appendLine('  [PREVIEW MODE] Branch rule color type: ' + typeof selectedRule.color);
+                    outputChannel.appendLine(
+                        '  [PREVIEW MODE] Branch rule color value: ' + JSON.stringify(selectedRule.color),
+                    );
+
+                    // Check if this is a profile name
+                    const advancedProfiles = workspace
+                        .getConfiguration('windowColors')
+                        .get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {});
+
+                    // Check if rule has a profile name
+                    if (selectedRule.profileName && advancedProfiles[selectedRule.profileName]) {
+                        // It's a profile - store it
+                        outputChannel.appendLine('  [PREVIEW MODE] Using Branch Profile: ' + selectedRule.profileName);
+                        if (!matchedRepoConfig) {
+                            matchedRepoConfig = {
+                                repoQualifier: '',
+                                primaryColor: 'none',
+                            };
+                        }
+                        matchedRepoConfig.branchProfile = advancedProfiles[selectedRule.profileName];
+                    } else if (selectedRule.color === 'none') {
+                        // Special 'none' value - skip branch coloring
+                        outputChannel.appendLine(
+                            '  [PREVIEW MODE] Branch rule specifies "none" - skipping branch color',
+                        );
+                        // Don't set branchProfile or branchColor
+                    } else {
+                        // It's a themed color - create temporary branch profile
+                        const theme = window.activeColorTheme.kind;
+                        const themeKind = getThemeKind(theme);
+                        const themedColor = selectedRule.color as ThemedColor;
+                        const colorValue = resolveThemedColor(themedColor, themeKind);
+                        if (!colorValue) {
+                            outputChannel.appendLine('  [PREVIEW MODE] ERROR: Could not resolve themed color');
+                            throw new Error('No color value resolved for theme');
+                        }
+                        branchColor = Color(colorValue);
+                        outputChannel.appendLine('  [PREVIEW MODE] Using simple branch color: ' + branchColor.hex());
+
+                        if (!matchedRepoConfig) {
+                            matchedRepoConfig = {
+                                repoQualifier: '',
+                                primaryColor: 'none',
+                            };
+                        }
+                        matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                    }
+                    branchMatch = true;
+                }
             }
         }
     } else {

@@ -1679,10 +1679,30 @@ button:focus {
 }
 
 .profiles-list {
-    flex: 1;
+    height: calc(100% - 60px);
     overflow-y: auto;
     border: 1px solid var(--vscode-input-border);
     border-radius: 2px;
+}
+
+.profile-preview-control {
+    margin-top: 12px;
+    padding: 8px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+    background-color: var(--vscode-editor-background);
+}
+
+.profile-preview-control label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.profile-preview-control input[type='checkbox'] {
+    cursor: pointer;
 }
 
 .profile-item {

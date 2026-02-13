@@ -54,6 +54,8 @@ export interface WebviewMessage {
         | 'previewBranchRule'
         | 'clearPreview'
         | 'clearBranchPreview'
+        | 'previewProfile'
+        | 'clearProfilePreview'
         | 'generatePalette'
         | 'requestPalettePreviews'
         | 'toggleStarredKey'

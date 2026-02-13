@@ -258,6 +258,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 await this._waitForColorCustomizationsUpdate();
                 this._sendConfigurationToWebview();
                 break;
+            case 'previewProfile':
+                // Apply a profile preview without matching - just use the profile directly
+                this._previewRepoRuleIndex = -1; // Special marker for profile preview
+                this._previewBranchRuleContext = { index: -1, tableName: (message.data as any).profileName }; // Store profile name in tableName
+                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
+                // Pass preview mode as true
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview profile', true);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
+            case 'clearProfilePreview':
+                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
+                this._previewRepoRuleIndex = null;
+                this._previewBranchRuleContext = null;
+                // Pass preview mode as false to use matching rules
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared profile preview', false);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
             case 'clearBranchPreview':
                 // Clear branch preview context while keeping repo preview active
                 this._previewBranchRuleContext = null;
@@ -1890,6 +1911,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                 <button type="button" class="header-add-button" data-action="addProfile" data-tooltip="Add a new color profile">+ Add</button>
                            </div>
                            <div id="profilesList" class="profiles-list"></div>
+                           <div class="profile-preview-control">
+                               <label>
+                                   <input type="checkbox" id="preview-selected-profile" />
+                                   Preview Selected Profile
+                               </label>
+                           </div>
                         </section>
                         
                         <div class="profile-editor-top" id="profileEditorTop">

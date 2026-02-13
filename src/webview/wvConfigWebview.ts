@@ -75,6 +75,7 @@ let selectedMappingTab: string | null = null; // Track which mapping tab is acti
 let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
 let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
 let previewMode: boolean = false; // Track if preview mode is enabled
+let profilePreviewMode: boolean = false; // Track if profile preview mode is enabled
 
 // Load checkbox states from localStorage with defaults
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
@@ -6875,6 +6876,13 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
         (addBtn as HTMLElement).onclick = () => addNewProfile();
     }
 
+    // Attach Profile Preview Checkbox Handler
+    const profilePreviewCheckbox = document.getElementById('preview-selected-profile') as HTMLInputElement;
+    if (profilePreviewCheckbox) {
+        profilePreviewCheckbox.checked = profilePreviewMode;
+        profilePreviewCheckbox.onchange = handleProfilePreviewModeChange;
+    }
+
     // Render the selected profile if one exists
     if (selectedProfileName && profiles && profiles[selectedProfileName]) {
         renderProfileEditor(selectedProfileName, profiles[selectedProfileName]);
@@ -6904,6 +6912,11 @@ function selectProfile(name: string) {
     const profile = currentConfig.advancedProfiles[name];
     renderProfileEditor(name, profile);
     initializeProfileEditorCheckboxListeners();
+
+    // If profile preview mode is enabled, apply the preview
+    if (profilePreviewMode) {
+        applyProfilePreview(name);
+    }
 }
 
 /**
@@ -8755,6 +8768,51 @@ function saveProfiles() {
         command: 'updateAdvancedProfiles',
         data: {
             advancedProfiles: currentConfig.advancedProfiles,
+        },
+    });
+}
+/**
+ * Handles changes to the profile preview mode checkbox
+ */
+function handleProfilePreviewModeChange() {
+    const checkbox = document.getElementById('preview-selected-profile') as HTMLInputElement;
+    if (!checkbox) return;
+
+    profilePreviewMode = checkbox.checked;
+    console.log('[handleProfilePreviewModeChange] Profile preview mode changed to:', profilePreviewMode);
+
+    if (profilePreviewMode && selectedProfileName) {
+        // Enable preview and apply selected profile
+        applyProfilePreview(selectedProfileName);
+    } else {
+        // Disable preview and revert to workspace colors
+        clearProfilePreview();
+    }
+}
+
+/**
+ * Applies a profile preview by sending a message to the extension
+ */
+function applyProfilePreview(profileName: string) {
+    console.log('[applyProfilePreview] Applying profile preview:', profileName);
+    vscode.postMessage({
+        command: 'previewProfile',
+        data: {
+            profileName,
+            previewEnabled: true,
+        },
+    });
+}
+
+/**
+ * Clears the profile preview and reverts to workspace colors
+ */
+function clearProfilePreview() {
+    console.log('[clearProfilePreview] Clearing profile preview');
+    vscode.postMessage({
+        command: 'clearProfilePreview',
+        data: {
+            previewEnabled: false,
         },
     });
 }
