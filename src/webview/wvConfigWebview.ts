@@ -7628,6 +7628,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 select.setAttribute('aria-expanded', 'false');
                 select.style.flex = '1';
                 select.style.minWidth = '200px';
+                select.style.minHeight = '28px';
                 select.style.position = 'relative';
                 select.style.cursor = 'pointer';
 
@@ -7981,6 +7982,30 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 };
                 updateSelectWidth();
 
+                // Create close icon to clear the mapping
+                const clearIcon = document.createElement('span');
+                clearIcon.className = 'codicon codicon-close';
+                clearIcon.style.cursor = 'pointer';
+                clearIcon.style.fontSize = '14px';
+                clearIcon.style.color = 'var(--vscode-icon-foreground)';
+                clearIcon.style.opacity = '0.6';
+                clearIcon.style.padding = '4px';
+                clearIcon.title = 'Clear mapping (set to None)';
+                clearIcon.addEventListener('mouseenter', () => {
+                    clearIcon.style.opacity = '1';
+                });
+                clearIcon.addEventListener('mouseleave', () => {
+                    clearIcon.style.opacity = '0.6';
+                });
+                clearIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.setAttribute('data-value', 'none');
+                    (select as any).value = 'none';
+                    const changeEvent = new Event('change', { bubbles: true });
+                    select.dispatchEvent(changeEvent);
+                });
+
+                dropdownContainer.appendChild(clearIcon);
                 dropdownContainer.appendChild(select);
                 dropdownContainer.appendChild(fixedColorPicker);
 
