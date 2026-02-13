@@ -470,13 +470,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _parseRepoRule(rule: string | any): RepoRule | null {
         try {
+            const themeKind = this._getThemeKind();
+
             // Handle JSON object format (new format)
             if (typeof rule === 'object' && rule !== null) {
+                // If profileName is set, primaryColor is the profile name (keep as string)
+                // Otherwise, normalize to ThemedColor
+                const primaryColor = rule.profileName
+                    ? rule.primaryColor
+                    : this._normalizeColorToThemedColor(rule.primaryColor || '#4A90E2', themeKind);
+
                 return {
                     repoQualifier: rule.repoQualifier || '',
                     defaultBranch: rule.defaultBranch,
-                    primaryColor: rule.primaryColor || '',
-                    branchColor: rule.branchColor,
+                    primaryColor,
+                    branchColor: rule.branchColor
+                        ? this._normalizeColorToThemedColor(rule.branchColor, themeKind)
+                        : undefined,
                     profileName: rule.profileName,
                     enabled: rule.enabled !== undefined ? rule.enabled : true,
                     branchTableName: rule.branchTableName,
@@ -493,11 +503,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // Try parsing as JSON string (for backward compatibility)
             if (ruleString.trim().startsWith('{')) {
                 const obj = JSON.parse(ruleString);
+                const primaryColor = obj.profileName
+                    ? obj.primaryColor
+                    : this._normalizeColorToThemedColor(obj.primaryColor || '#4A90E2', themeKind);
+
                 return {
                     repoQualifier: obj.repoQualifier || '',
                     defaultBranch: obj.defaultBranch,
-                    primaryColor: obj.primaryColor || '',
-                    branchColor: obj.branchColor,
+                    primaryColor,
+                    branchColor: obj.branchColor
+                        ? this._normalizeColorToThemedColor(obj.branchColor, themeKind)
+                        : undefined,
                     profileName: obj.profileName,
                     enabled: obj.enabled !== undefined ? obj.enabled : true,
                     branchTableName: obj.branchTableName,
@@ -524,7 +540,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Parse color section: primary-color
             const primaryColor = colorSection.trim();
-            const themeKind = this._getThemeKind();
 
             return {
                 repoQualifier: repoQualifier.trim(),
@@ -710,7 +725,48 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             };
         }
 
-        return sharedTables;
+        // Normalize all branch rule colors to ThemedColor objects
+        const themeKind = this._getThemeKind();
+        const normalizedTables: { [key: string]: { rules: BranchRule[] } } = {};
+
+        for (const [tableName, table] of Object.entries(sharedTables)) {
+            normalizedTables[tableName] = {
+                rules: table.rules.map((rule) => ({
+                    ...rule,
+                    color:
+                        rule.color === 'none' || rule.profileName
+                            ? rule.color
+                            : this._normalizeColorToThemedColor(rule.color, themeKind),
+                })),
+            };
+        }
+
+        return normalizedTables;
+    }
+
+    /**
+     * Normalize a color value to ThemedColor format.
+     * If already a ThemedColor object, return as-is.
+     * If a string, convert to ThemedColor.
+     */
+    private _normalizeColorToThemedColor(color: any, themeKind: ThemeKind): ThemedColor | 'none' {
+        // Handle 'none' special value
+        if (color === 'none') {
+            return 'none';
+        }
+
+        // If it's already looks like a ThemedColor, return as-is
+        if (typeof color === 'object' && color !== null && 'dark' in color) {
+            return color as ThemedColor;
+        }
+
+        // If it's a string, convert to ThemedColor
+        if (typeof color === 'string') {
+            return createThemedColor(color, themeKind);
+        }
+
+        // Fallback: convert undefined/null to a default ThemedColor
+        return createThemedColor('#4A90E2', themeKind);
     }
 
     private async _handleToggleStarredKey(mappingKey: string): Promise<void> {
@@ -970,6 +1026,16 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Update shared branch tables
             if (data.sharedBranchTables) {
+                // Log any rules with profileName set
+                Object.entries(data.sharedBranchTables).forEach(([tableName, table]: [string, any]) => {
+                    table.rules?.forEach((rule: any, index: number) => {
+                        if (rule.profileName) {
+                            console.log(
+                                `[_updateConfiguration] Saving branch rule ${index} in table '${tableName}' with profileName='${rule.profileName}'`,
+                            );
+                        }
+                    });
+                });
                 updatePromises.push(
                     Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
                 );
@@ -1093,8 +1159,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     // Send updated config directly using our local repoRules to avoid stale read
                     if (this._panel) {
                         const parsedRepoRules = repoRules
-                            .map((r) => this._parseRepoRule(r))
-                            .filter((r) => r !== null) as RepoRule[];
+                            .map((r: any) => this._parseRepoRule(r))
+                            .filter((r: any) => r !== null) as RepoRule[];
                         console.log(
                             '[_handleThemedColorUpdate] REPO: Parsed rule [' + index + '] primaryColor:',
                             JSON.stringify(parsedRepoRules[index]?.primaryColor),

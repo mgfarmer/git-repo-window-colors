@@ -1538,6 +1538,10 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
 
             if (selectedRule) {
                 outputChannel.appendLine('  [PREVIEW MODE] Branch rule: "' + selectedRule.pattern + '"');
+                outputChannel.appendLine('  [PREVIEW MODE] Branch rule color type: ' + typeof selectedRule.color);
+                outputChannel.appendLine(
+                    '  [PREVIEW MODE] Branch rule color value: ' + JSON.stringify(selectedRule.color),
+                );
 
                 // Check if this is a profile name
                 const advancedProfiles = workspace
@@ -1566,6 +1570,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                     const themedColor = selectedRule.color as ThemedColor;
                     const colorValue = resolveThemedColor(themedColor, themeKind);
                     if (!colorValue) {
+                        outputChannel.appendLine('  [PREVIEW MODE] ERROR: Could not resolve themed color');
                         throw new Error('No color value resolved for theme');
                     }
                     branchColor = Color(colorValue);
@@ -1618,6 +1623,11 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                     }
 
                     if (currentBranch?.match(rule.pattern)) {
+                        // Log the matched rule for debugging
+                        outputChannel.appendLine(
+                            `  Matched branch rule: pattern="${rule.pattern}", color="${JSON.stringify(rule.color)}", profileName="${rule.profileName || 'not set'}"`,
+                        );
+
                         // Check if this rule specifies a profile name
                         const advancedProfiles = workspace
                             .getConfiguration('windowColors')

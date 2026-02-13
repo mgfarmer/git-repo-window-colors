@@ -510,30 +510,30 @@ function isThemedColor(value: any): boolean {
  * @returns The color string for the current theme
  */
 function extractColorForTheme(colorValue: any): string {
-    console.log('[extractColorForTheme] Input:', colorValue, 'currentTheme:', currentThemeKind);
+    //console.log('[extractColorForTheme] Input:', colorValue, 'currentTheme:', currentThemeKind);
 
     if (typeof colorValue === 'string') {
-        console.log('[extractColorForTheme] Returning string as-is:', colorValue);
+        //console.log('[extractColorForTheme] Returning string as-is:', colorValue);
         return colorValue;
     }
 
     if (isThemedColor(colorValue)) {
         const themeValue = colorValue[currentThemeKind];
         if (themeValue && themeValue.value) {
-            console.log('[extractColorForTheme] Extracted for', currentThemeKind, ':', themeValue.value);
+            //console.log('[extractColorForTheme] Extracted for', currentThemeKind, ':', themeValue.value);
             return themeValue.value;
         }
 
         // Fallback: return first defined color
         for (const theme of ['dark', 'light', 'highContrast'] as const) {
             if (colorValue[theme] && colorValue[theme].value) {
-                console.log('[extractColorForTheme] Fallback to', theme, ':', colorValue[theme].value);
+                //console.log('[extractColorForTheme] Fallback to', theme, ':', colorValue[theme].value);
                 return colorValue[theme].value;
             }
         }
     }
 
-    console.log('[extractColorForTheme] No color found, returning empty string');
+    //console.log('[extractColorForTheme] No color found, returning empty string');
     return ''; // Return empty string if no color found
 }
 
@@ -1417,6 +1417,11 @@ function renderConfiguration(config: any) {
 
     // Sync preview mode with configuration
     previewMode = config.otherSettings?.previewSelectedRepoRule ?? false;
+    console.log('[renderConfiguration] Initialized previewMode from config:', previewMode);
+    console.log(
+        '[renderConfiguration] config.otherSettings.previewSelectedRepoRule:',
+        config.otherSettings?.previewSelectedRepoRule,
+    );
 
     renderRepoRules(config.repoRules, config.matchingIndexes?.repoRule);
     renderBranchRulesForSelectedRepo();
@@ -1429,11 +1434,31 @@ function renderConfiguration(config: any) {
     // Show/hide preview toast based on preview mode and whether we're previewing a different rule
     // Also show "no workspace" toast if preview mode is on but there's no workspace open
     const hasWorkspace = config.workspaceInfo?.hasWorkspace ?? true;
-    const matchingRuleIndex = config.matchingIndexes?.repoRule ?? -1;
-    const isPreviewingDifferentRule = selectedRepoRuleIndex !== matchingRuleIndex;
+    const matchingRepoIndex = config.matchingIndexes?.repoRule ?? -1;
+    const matchingBranchIndex = config.matchingIndexes?.branchRule ?? -1;
+    const isPreviewingDifferentRule =
+        selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
+
+    console.log('[renderConfiguration] Toast decision - previewMode:', previewMode);
+    console.log(
+        '[renderConfiguration] selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+        'matchingRepoIndex:',
+        matchingRepoIndex,
+    );
+    console.log(
+        '[renderConfiguration] selectedBranchRuleIndex:',
+        selectedBranchRuleIndex,
+        'matchingBranchIndex:',
+        matchingBranchIndex,
+    );
+    console.log('[renderConfiguration] isPreviewingDifferentRule:', isPreviewingDifferentRule);
+
     if (previewMode && (!hasWorkspace || isPreviewingDifferentRule)) {
+        console.log('[renderConfiguration] Calling showPreviewToast()');
         showPreviewToast();
     } else {
+        console.log('[renderConfiguration] Calling hidePreviewToast()');
         hidePreviewToast();
     }
 
@@ -2874,7 +2899,7 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
                    data-action="updateBranchRule(${index}, 'pattern', this.value)">
         </td>
         <td class="color-cell">
-            ${createColorInputHTML(extractColorForTheme(rule.color) || '', 'branch', index, 'color')}
+            ${createColorInputHTML(rule.profileName || extractColorForTheme(rule.color) || '', 'branch', index, 'color')}
         </td>
     `;
 }
@@ -2891,7 +2916,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     const isSpecialNone = color === 'none';
 
     if (USE_NATIVE_COLOR_PICKER) {
-        const hexColor = isSpecialNone ? '#808080' : convertColorToHex(color);
+        const hexColor = isSpecialNone ? '#808080' : getRepresentativeColor(color);
         const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
         const noneIndicator = isSpecialNone
             ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
@@ -2917,9 +2942,11 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
             </div>
         `;
     } else {
+        // For non-native picker, resolve profile names to colors
+        const resolvedColor = isSpecialNone ? 'transparent' : getRepresentativeColor(color);
         const swatchStyle = isSpecialNone
             ? 'background-color: transparent; display: flex; align-items: center; justify-content: center;'
-            : `background-color: ${convertColorToValidCSS(color) || '#4A90E2'}`;
+            : `background-color: ${convertColorToValidCSS(resolvedColor) || '#4A90E2'}`;
         const swatchContent = isSpecialNone ? '⊘' : '';
         return `
             <div class="color-input-container${isSpecialNone ? ' is-none' : ''}">
@@ -3499,6 +3526,8 @@ function handlePreviewModeChange() {
     if (!checkbox) return;
 
     previewMode = checkbox.checked;
+    console.log('[handlePreviewModeChange] Preview mode changed to:', previewMode);
+    console.log('[handlePreviewModeChange] Checkbox checked:', checkbox.checked);
 
     // Mark hint as shown if user manually enables preview
     if (previewMode) {
@@ -3792,6 +3821,12 @@ function navigateToRepoRule(index: number) {
 }
 
 function selectBranchRule(index: number) {
+    console.log('====== selectBranchRule called ======');
+    console.log('[selectBranchRule] index:', index);
+    console.log('[selectBranchRule] previewMode:', previewMode);
+    console.log('[selectBranchRule] selectedRepoRuleIndex:', selectedRepoRuleIndex);
+    console.log('[selectBranchRule] current selectedBranchRuleIndex:', selectedBranchRuleIndex);
+
     // Determine which table we're selecting from
     let tableName = '__none__'; // Default
     if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
@@ -3799,14 +3834,20 @@ function selectBranchRule(index: number) {
         tableName = selectedRule.branchTableName || '__none__';
     }
 
+    console.log('[selectBranchRule] tableName:', tableName);
+
     // Can't select if no table selected
     if (tableName === '__none__') {
+        console.log('[selectBranchRule] ABORT: tableName is __none__');
         return;
     }
 
     const branchRules = currentConfig?.sharedBranchTables?.[tableName]?.rules || [];
 
-    if (!branchRules?.[index]) return;
+    if (!branchRules?.[index]) {
+        console.log('[selectBranchRule] ABORT: rule at index does not exist');
+        return;
+    }
 
     // Toggle: if clicking the already-selected rule, deselect it
     if (selectedBranchRuleIndex === index) {
@@ -3815,6 +3856,7 @@ function selectBranchRule(index: number) {
 
         // Clear branch preview when deselecting
         if (previewMode) {
+            console.log('[selectBranchRule] Sending previewRepoRule (deselect)');
             // Revert to just repo rule preview
             vscode.postMessage({
                 command: 'previewRepoRule',
@@ -3824,6 +3866,16 @@ function selectBranchRule(index: number) {
                     clearBranchPreview: true,
                 },
             });
+
+            // Update toast - still showing preview if repo rule differs from matching
+            const matchingRepoIndex = currentConfig?.matchingIndexes?.repoRule ?? -1;
+            const isPreviewingDifferentRepoRule = selectedRepoRuleIndex !== matchingRepoIndex;
+
+            if (isPreviewingDifferentRepoRule) {
+                showPreviewToast();
+            } else {
+                hidePreviewToast();
+            }
         }
 
         // Re-render to show deselected state
@@ -3832,12 +3884,15 @@ function selectBranchRule(index: number) {
     }
 
     selectedBranchRuleIndex = index;
+    console.log('[selectBranchRule] Set selectedBranchRuleIndex to:', index);
 
     // Clear any regex validation errors when switching rules
     clearRegexValidationError();
 
     // Send preview command only if preview mode is enabled
     if (previewMode) {
+        console.log('[selectBranchRule] Sending previewBranchRule message');
+        console.log('[selectBranchRule] Message data:', { index, tableName, repoIndex: selectedRepoRuleIndex });
         vscode.postMessage({
             command: 'previewBranchRule',
             data: {
@@ -3846,10 +3901,43 @@ function selectBranchRule(index: number) {
                 repoIndex: selectedRepoRuleIndex,
             },
         });
+    } else {
+        console.log('[selectBranchRule] NOT sending preview - previewMode is false');
+    }
+
+    // Update toast if preview mode is enabled
+    // Show toast only if the selected rules differ from the matching rules
+    const matchingRepoIndex = currentConfig?.matchingIndexes?.repoRule ?? -1;
+    const matchingBranchIndex = currentConfig?.matchingIndexes?.branchRule ?? -1;
+    const isPreviewingDifferentRule =
+        selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
+
+    console.log('[selectBranchRule] Toast decision - previewMode:', previewMode);
+    console.log(
+        '[selectBranchRule] selectedRepoRuleIndex:',
+        selectedRepoRuleIndex,
+        'matchingRepoIndex:',
+        matchingRepoIndex,
+    );
+    console.log(
+        '[selectBranchRule] selectedBranchRuleIndex:',
+        selectedBranchRuleIndex,
+        'matchingBranchIndex:',
+        matchingBranchIndex,
+    );
+    console.log('[selectBranchRule] isPreviewingDifferentRule:', isPreviewingDifferentRule);
+
+    if (previewMode && isPreviewingDifferentRule) {
+        console.log('[selectBranchRule] Calling showPreviewToast()');
+        showPreviewToast();
+    } else {
+        console.log('[selectBranchRule] Calling hidePreviewToast()');
+        hidePreviewToast();
     }
 
     // Re-render branch rules to update selected state and preview styling
     renderBranchRulesForSelectedRepo();
+    console.log('[selectBranchRule] ====== END ======');
 }
 
 function changeBranchMode(index: number, useGlobal: boolean) {
@@ -4635,8 +4723,18 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 
                 // If updating color with a profile name, also set the profileName field
                 if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
+                    console.log(
+                        `[updateColorRule] BRANCH PROFILE ASSIGNED: Setting profileName='${value}' for rule ${index} in table '${tableName}'`,
+                    );
                     currentConfig.sharedBranchTables[tableName].rules[index].profileName = value;
+                    console.log(
+                        `[updateColorRule] Rule after assignment:`,
+                        JSON.stringify(currentConfig.sharedBranchTables[tableName].rules[index]),
+                    );
                 } else if (field === 'color') {
+                    console.log(
+                        `[updateColorRule] BRANCH COLOR: Not a profile, clearing profileName for rule ${index}`,
+                    );
                     delete currentConfig.sharedBranchTables[tableName].rules[index].profileName;
                 }
             }
@@ -4657,8 +4755,8 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 function updateColorSwatch(ruleType: string, index: number, field: string, value: string) {
     const colorInput = document.getElementById(`${ruleType}-${field}-${index}`) as HTMLInputElement;
     if (colorInput && colorInput.type === 'color') {
-        // Convert any color format to hex for the native color input
-        const hexColor = convertColorToHex(value);
+        // Convert any color format to hex for the native color input (handles profile names)
+        const hexColor = getRepresentativeColor(value);
         colorInput.value = hexColor;
     }
 
@@ -4666,8 +4764,9 @@ function updateColorSwatch(ruleType: string, index: number, field: string, value
     const swatch = colorInput?.parentElement?.querySelector('.color-swatch') as HTMLElement;
 
     if (swatch) {
-        // For named colors and other formats, try to convert to a valid CSS color
-        const displayColor = convertColorToValidCSS(value) || '#4A90E2';
+        // For named colors and other formats, resolve profile names then convert to valid CSS color
+        const resolvedColor = getRepresentativeColor(value);
+        const displayColor = convertColorToValidCSS(resolvedColor) || '#4A90E2';
         swatch.style.backgroundColor = displayColor;
     } else {
         // No swatch element found - using native color picker`);
@@ -5564,19 +5663,14 @@ function convertColorToValidCSS(color: string): string {
     return '#4A90E2'; // Default fallback
 }
 
+/**
+ * Pure color format conversion utility - converts color strings to hex format.
+ * Does NOT handle profile name resolution.
+ * @param color - Color string (hex, named color, or rgb)
+ * @returns Hex color string
+ */
 function convertColorToHex(color: string): string {
     if (!color) return '#4A90E2'; // Default blue
-
-    // Check if it's a profile name (exists in current config)
-    if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[color]) {
-        // It's a profile, return a representative color from the profile
-        const profile = currentConfig.advancedProfiles[color];
-        if (profile.palette?.primaryActiveBg?.value) {
-            return convertColorToHex(profile.palette.primaryActiveBg.value);
-        }
-        // Fallback to a distinct color to indicate it's a profile
-        return '#9B59B6'; // Purple to indicate profile
-    }
 
     // If it's already a hex color, return it
     if (color.startsWith('#')) {
@@ -5600,6 +5694,33 @@ function convertColorToHex(color: string): string {
 
     // If conversion failed or it's an unknown format, return default
     return '#4A90E2';
+}
+
+/**
+ * Resolves profile names to representative colors and converts to hex.
+ * For repo/branch rule color swatches that may reference profile names.
+ * Uses the profile's primaryActiveBg slot as the representative color.
+ * @param value - Color string or profile name
+ * @returns Hex color string
+ */
+function getRepresentativeColor(value: string): string {
+    if (!value) return '#4A90E2';
+
+    // Check if it's a profile name (exists in current config)
+    if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[value]) {
+        // It's a profile, return a representative color from the profile
+        const profile = currentConfig.advancedProfiles[value];
+        if (profile.palette?.primaryActiveBg?.value) {
+            // Extract the color string for the current theme before converting to hex
+            const colorValue = extractColorForTheme(profile.palette.primaryActiveBg.value);
+            return convertColorToHex(colorValue);
+        }
+        // Fallback to a distinct color to indicate it's a profile
+        return '#9B59B6'; // Purple to indicate profile
+    }
+
+    // Not a profile, just convert the color
+    return convertColorToHex(value);
 }
 
 function runConfigurationTests() {
@@ -5689,14 +5810,19 @@ function clearRegexValidationError() {
 
 // Preview Toast Functions
 function showPreviewToast() {
+    console.log('[showPreviewToast] Called');
     const toast = document.getElementById('preview-toast');
     const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
     const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
-    if (!toast) return;
+    if (!toast) {
+        console.log('[showPreviewToast] Toast element not found');
+        return;
+    }
 
     // Check if there's no open workspace
     const hasWorkspace = currentConfig?.workspaceInfo?.hasWorkspace ?? true;
     if (!hasWorkspace) {
+        console.log('[showPreviewToast] No workspace, showing special message');
         // Show special message for no workspace
         if (toastText) {
             toastText.textContent = 'Previews require an open workspace folder';
@@ -5709,16 +5835,6 @@ function showPreviewToast() {
             'Color preview requires an open workspace. Open a folder or workspace to preview colors.',
         );
         toast.classList.add('visible');
-        return;
-    }
-
-    // Only show if actually previewing (selected indexes don't match the matching indexes)
-    const isActuallyPreviewing =
-        selectedRepoRuleIndex !== currentConfig?.matchingIndexes?.repoRule ||
-        selectedBranchRuleIndex !== currentConfig?.matchingIndexes?.branchRule;
-
-    if (!isActuallyPreviewing) {
-        hidePreviewToast();
         return;
     }
 
@@ -5764,24 +5880,34 @@ function showPreviewToast() {
 
     // Get the selected repo rule
     const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
-    if (!selectedRule) return;
+    if (!selectedRule) {
+        console.log('[showPreviewToast] No selected rule found');
+        return;
+    }
 
     // Check if this rule uses a profile (not virtual)
     const fallbackProfileName = typeof selectedRule.primaryColor === 'string' ? selectedRule.primaryColor : undefined;
     const profileName = selectedRule.profileName || fallbackProfileName;
     const profile = profileName ? currentConfig?.advancedProfiles?.[profileName] : undefined;
 
-    let primaryColor = extractColorForTheme(selectedRule.primaryColor) || undefined;
-    let secondaryBgColor = null;
-    let secondaryFgColor = null;
+    console.log('[showPreviewToast] profileName:', profileName, 'profile found:', !!profile);
+
+    let primaryColor: string | undefined = undefined;
+    let secondaryBgColor: string | null = null;
+    let secondaryFgColor: string | null = null;
 
     if (profile && !profile.virtual && profile.palette) {
+        console.log('[showPreviewToast] Using profile palette');
         // Resolve primary color from palette
         const primaryActiveBg = profile.palette.primaryActiveBg;
         if (primaryActiveBg) {
             const resolvedPrimary = resolveColorFromSlot(primaryActiveBg, selectedRule);
+            console.log('[showPreviewToast] resolvedPrimary:', resolvedPrimary, 'type:', typeof resolvedPrimary);
             if (resolvedPrimary) {
-                primaryColor = resolvedPrimary;
+                // resolveColorFromSlot might return a string or ThemedColor - extract if needed
+                primaryColor =
+                    typeof resolvedPrimary === 'string' ? resolvedPrimary : extractColorForTheme(resolvedPrimary);
+                console.log('[showPreviewToast] primaryColor after extraction:', primaryColor);
             }
         }
 
@@ -5790,27 +5916,52 @@ function showPreviewToast() {
         const secondaryActiveFg = profile.palette.secondaryActiveFg;
 
         if (secondaryActiveBg) {
-            secondaryBgColor = resolveColorFromSlot(secondaryActiveBg, selectedRule);
+            const resolved = resolveColorFromSlot(secondaryActiveBg, selectedRule);
+            secondaryBgColor = resolved
+                ? typeof resolved === 'string'
+                    ? resolved
+                    : extractColorForTheme(resolved)
+                : null;
         }
         if (secondaryActiveFg) {
-            secondaryFgColor = resolveColorFromSlot(secondaryActiveFg, selectedRule);
+            const resolved = resolveColorFromSlot(secondaryActiveFg, selectedRule);
+            secondaryFgColor = resolved
+                ? typeof resolved === 'string'
+                    ? resolved
+                    : extractColorForTheme(resolved)
+                : null;
         }
+    } else {
+        console.log('[showPreviewToast] Using direct color (not profile-based)');
+        // Not using a profile, use the primaryColor directly
+        primaryColor = extractColorForTheme(selectedRule.primaryColor) || undefined;
+        console.log('[showPreviewToast] Direct primaryColor:', primaryColor);
     }
 
     // Apply the primary color to toast
-    if (primaryColor) {
+    if (primaryColor && typeof primaryColor === 'string') {
+        console.log('[showPreviewToast] Applying primaryColor to toast:', primaryColor);
         toast.style.backgroundColor = primaryColor;
         toast.style.borderColor = primaryColor;
         toast.style.color = getContrastingTextColor(primaryColor);
+    } else {
+        console.log('[showPreviewToast] No valid primaryColor to apply:', primaryColor);
     }
 
     // Apply secondary colors to reset button if available
     if (resetBtn) {
-        if (secondaryBgColor && secondaryFgColor) {
+        if (
+            secondaryBgColor &&
+            secondaryFgColor &&
+            typeof secondaryBgColor === 'string' &&
+            typeof secondaryFgColor === 'string'
+        ) {
+            console.log('[showPreviewToast] Applying secondary colors to button');
             resetBtn.style.backgroundColor = secondaryBgColor;
             resetBtn.style.color = secondaryFgColor;
             resetBtn.style.borderColor = secondaryFgColor;
         } else {
+            console.log('[showPreviewToast] Using default button styling');
             // Fallback to default semi-transparent styling
             resetBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
             resetBtn.style.color = 'inherit';
@@ -5818,12 +5969,18 @@ function showPreviewToast() {
         }
     }
 
+    console.log('[showPreviewToast] Making toast visible');
     toast.classList.add('visible');
 }
 
 function hidePreviewToast() {
+    console.log('[hidePreviewToast] Called from:', new Error().stack?.split('\n')[2]?.trim());
     const toast = document.getElementById('preview-toast');
-    if (!toast) return;
+    if (!toast) {
+        console.log('[hidePreviewToast] Toast element not found');
+        return;
+    }
+    console.log('[hidePreviewToast] Removing visible class from toast');
     toast.classList.remove('visible');
 }
 
@@ -6810,8 +6967,13 @@ function addNewProfile() {
 
     if (!currentConfig.advancedProfiles) currentConfig.advancedProfiles = {};
 
+    // Generate a random color for the new profile
+    const randomColor = getThemeAppropriateColor();
+    const newPalette = JSON.parse(JSON.stringify(DEFAULT_PALETTE));
+    newPalette.primaryActiveBg.value = createThemedColorInWebview(randomColor);
+
     currentConfig.advancedProfiles[name] = {
-        palette: JSON.parse(JSON.stringify(DEFAULT_PALETTE)),
+        palette: newPalette,
         mappings: JSON.parse(JSON.stringify(DEFAULT_MAPPINGS)),
     };
 
@@ -6947,7 +7109,9 @@ function setupPaletteGenerator() {
             // Build/update cards with current primary color before showing
             let primaryColor: string | undefined;
             if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
-                primaryColor = currentConfig.advancedProfiles[selectedProfileName].palette.primaryActiveBg?.value;
+                const colorValue = currentConfig.advancedProfiles[selectedProfileName].palette.primaryActiveBg?.value;
+                // Extract string color from ThemedColor object
+                primaryColor = extractColorForTheme(colorValue);
             }
             buildPaletteAlgorithmCards(paletteGeneratorDropdown, primaryColor);
 
@@ -7010,7 +7174,9 @@ function generatePalette(algorithm: string) {
     }
 
     const profile = currentConfig.advancedProfiles[selectedProfileName];
-    const primaryBg = profile.palette.primaryActiveBg?.value;
+    const primaryBgValue = profile.palette.primaryActiveBg?.value;
+    // Extract string color from ThemedColor object for current theme
+    const primaryBg = extractColorForTheme(primaryBgValue);
 
     if (!primaryBg) {
         console.warn('Cannot generate palette: No primary background color defined');
@@ -8034,14 +8200,17 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         opacityLabel.style.opacity = '1';
 
                         if (slotName === '__fixed__') {
-                            // Use the fixed color
-                            const color = convertColorToHex(textInput.value);
+                            // Use the fixed color - extract it first if it's a ThemedColor
+                            const colorValue = extractColorForTheme(textInput.value);
+                            const color = convertColorToHex(colorValue);
                             opacitySlider.style.setProperty('--slider-color', color);
                         } else if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
                             const profile = currentConfig.advancedProfiles[selectedProfileName];
                             const slotDef = profile.palette[slotName];
                             if (slotDef && slotDef.value) {
-                                const color = convertColorToHex(slotDef.value);
+                                // Extract the color string for the current theme before converting to hex
+                                const colorValue = extractColorForTheme(slotDef.value);
+                                const color = convertColorToHex(colorValue);
                                 opacitySlider.style.setProperty('--slider-color', color);
                             }
                         }
