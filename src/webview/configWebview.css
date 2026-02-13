@@ -1671,7 +1671,7 @@ button:focus {
 }
 
 .profiles-list-section {
-    width: 350px;
+    width: 400px;
     border-right: 1px solid var(--vscode-panel-border);
     padding-right: 20px;
     display: flex;
@@ -1771,6 +1771,25 @@ button:focus {
 }
 
 .profile-indicator-icon:hover {
+    opacity: 1;
+}
+
+.profile-usage-indicators {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    min-width: 40px;
+    justify-content: flex-end;
+}
+
+.profile-usage-icon {
+    font-size: 14px;
+    color: var(--vscode-foreground);
+    opacity: 0.6;
+}
+
+.profile-usage-icon:hover {
     opacity: 1;
 }
 

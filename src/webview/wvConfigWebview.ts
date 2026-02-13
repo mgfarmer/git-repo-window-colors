@@ -953,22 +953,19 @@ function handleConfigurationData(data: any) {
 
     // LOG: Check repo rules with detailed color info
     if (data.repoRules) {
-        data.repoRules.forEach((rule: any, index: number) => {
-        });
+        data.repoRules.forEach((rule: any, index: number) => {});
     }
 
     // LOG: Check branch tables
     if (data.sharedBranchTables && data.sharedBranchTables['My Branches']) {
-        data.sharedBranchTables['My Branches'].rules.forEach((rule: any, index: number) => {
-        });
+        data.sharedBranchTables['My Branches'].rules.forEach((rule: any, index: number) => {});
     }
 
     // LOG: All shared branch tables
     if (data.sharedBranchTables) {
         Object.keys(data.sharedBranchTables).forEach((tableName) => {
             const table = data.sharedBranchTables[tableName];
-            table.rules?.forEach((rule: any, index: number) => {
-            });
+            table.rules?.forEach((rule: any, index: number) => {});
         });
     }
 
@@ -1116,7 +1113,6 @@ function handlePathSimplified(data: any) {
         primaryColor: createThemedColorInWebview(randomColor),
     };
 
-
     currentConfig.repoRules.push(newRule);
     sendConfiguration();
 }
@@ -1187,7 +1183,6 @@ function handleHelpContent(data: { helpType: string; content: string }) {
 }
 
 function handleSwitchHelp(target: string) {
-
     // Save scroll position of current help before switching
     saveCurrentHelpScrollPosition();
 
@@ -1408,7 +1403,6 @@ function renderConfiguration(config: any) {
     const matchingBranchIndex = config.matchingIndexes?.branchRule ?? -1;
     const isPreviewingDifferentRule =
         selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
-
 
     if (previewMode && (!hasWorkspace || isPreviewingDifferentRule)) {
         showPreviewToast();
@@ -2852,7 +2846,6 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
     const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
-
     // Handle special 'none' value - show indicator instead of color picker
     const isSpecialNone = color === 'none';
 
@@ -3535,7 +3528,6 @@ function addRepoRule() {
     const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
     let repoQualifier = '';
 
-
     if (isGitRepo) {
         // Git repository - extract repo name from URL
         repoQualifier = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
@@ -3558,7 +3550,6 @@ function addRepoRule() {
         repoQualifier: repoQualifier,
         primaryColor: createThemedColorInWebview(randomColor),
     };
-
 
     // Always append new rules to the end for predictable behavior
     currentConfig.repoRules.push(newRule);
@@ -3743,14 +3734,12 @@ function navigateToRepoRule(index: number) {
 }
 
 function selectBranchRule(index: number) {
-
     // Determine which table we're selecting from
     let tableName = '__none__'; // Default
     if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
         const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
         tableName = selectedRule.branchTableName || '__none__';
     }
-
 
     // Can't select if no table selected
     if (tableName === '__none__') {
@@ -3820,7 +3809,6 @@ function selectBranchRule(index: number) {
     const isPreviewingDifferentRule =
         selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
 
-
     if (previewMode && isPreviewingDifferentRule) {
         showPreviewToast();
     } else {
@@ -3858,10 +3846,8 @@ function changeBranchMode(index: number, useGlobal: boolean) {
 function changeBranchTable(index: number, tableName: string) {
     if (!currentConfig?.repoRules?.[index]) return;
 
-
     // Store '__none__' for No Branch Table, table name string for specific table
     currentConfig.repoRules[index].branchTableName = tableName;
-
 
     // Reset branch rule selection when changing tables so it reinitializes
     if (selectedRepoRuleIndex === index) {
@@ -3876,7 +3862,6 @@ function changeBranchTable(index: number, tableName: string) {
 }
 
 async function showCreateTableDialog(repoRuleIndex: number) {
-
     const tableName = await showInputDialog({
         title: 'Create New Branch Table',
         inputLabel: 'Table Name:',
@@ -4284,64 +4269,6 @@ function showCopyFromMenu(event: Event) {
         }
     }
 
-    // Add Global option if there are global rules (legacy)
-    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
-        const globalHeader = document.createElement('button');
-        globalHeader.type = 'button';
-        globalHeader.className = 'copy-from-option copy-from-table-header';
-        globalHeader.innerHTML = `<span class="codicon codicon-globe"></span> Global Rules <span class="copy-from-count">(all ${currentConfig.branchRules.length})</span>`;
-        globalHeader.setAttribute('role', 'menuitem');
-        globalHeader.setAttribute('data-source-type', 'global');
-        menu.appendChild(globalHeader);
-
-        // Individual global rules
-        currentConfig.branchRules.forEach((rule: any, ruleIndex: number) => {
-            const ruleOption = document.createElement('button');
-            ruleOption.type = 'button';
-            ruleOption.className = 'copy-from-option copy-from-rule';
-            const patternDisplay = rule.pattern.length > 25 ? rule.pattern.substring(0, 22) + '...' : rule.pattern;
-            ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${rule.color || '#888'};"></span> ${patternDisplay}`;
-            ruleOption.setAttribute('role', 'menuitem');
-            ruleOption.setAttribute('data-source-type', 'global-rule');
-            ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
-            ruleOption.title = rule.pattern;
-            menu.appendChild(ruleOption);
-        });
-    }
-
-    // Add options for other repos with local rules (legacy)
-    if (currentConfig?.repoRules) {
-        currentConfig.repoRules.forEach((rule: any, index: number) => {
-            if (index === selectedRepoRuleIndex) return; // Skip current repo
-            if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
-
-            const repoHeader = document.createElement('button');
-            repoHeader.type = 'button';
-            repoHeader.className = 'copy-from-option copy-from-table-header';
-            repoHeader.innerHTML = `<span class="codicon codicon-repo"></span> ${rule.repoQualifier} <span class="copy-from-count">(all ${rule.branchRules.length})</span>`;
-            repoHeader.setAttribute('role', 'menuitem');
-            repoHeader.setAttribute('data-source-type', 'repo');
-            repoHeader.setAttribute('data-source-index', String(index));
-            menu.appendChild(repoHeader);
-
-            // Individual repo rules
-            rule.branchRules.forEach((branchRule: any, ruleIndex: number) => {
-                const ruleOption = document.createElement('button');
-                ruleOption.type = 'button';
-                ruleOption.className = 'copy-from-option copy-from-rule';
-                const patternDisplay =
-                    branchRule.pattern.length > 25 ? branchRule.pattern.substring(0, 22) + '...' : branchRule.pattern;
-                ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${branchRule.color || '#888'};"></span> ${patternDisplay}`;
-                ruleOption.setAttribute('role', 'menuitem');
-                ruleOption.setAttribute('data-source-type', 'repo-rule');
-                ruleOption.setAttribute('data-source-index', String(index));
-                ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
-                ruleOption.title = branchRule.pattern;
-                menu.appendChild(ruleOption);
-            });
-        });
-    }
-
     // If no options, show message
     if (menu.children.length === 0) {
         const noOptions = document.createElement('div');
@@ -4429,13 +4356,6 @@ function copyBranchRulesFrom(
         if (sourceTable?.rules?.[sourceIndex]) {
             sourceRules = [sourceTable.rules[sourceIndex]];
         }
-    } else if (sourceType === 'global') {
-        sourceRules = currentConfig.branchRules || [];
-    } else if (sourceType === 'global-rule') {
-        // Copy a single global rule
-        if (currentConfig.branchRules?.[sourceIndex]) {
-            sourceRules = [currentConfig.branchRules[sourceIndex]];
-        }
     } else if (sourceType === 'repo') {
         const sourceRepo = currentConfig.repoRules?.[sourceIndex];
         if (sourceRepo) {
@@ -4495,7 +4415,6 @@ function copyBranchRulesFrom(
 function updateColorRule(ruleType: string, index: number, field: string, value: string) {
     if (!currentConfig) return;
 
-
     // For color fields (primaryColor or color), send themed color update to extension
     if ((field === 'primaryColor' || field === 'color') && value && !currentConfig.advancedProfiles?.[value]) {
         //Send themed color update message
@@ -4514,7 +4433,6 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
                 console.error('[updateColorRule] Branch rule but no branchTableName!', selectedRule);
             }
         }
-
 
         vscode.postMessage({
             command: 'updateThemedColor',
@@ -4702,31 +4620,21 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
             delete rules[index].profileName;
         }
     } else if (ruleType === 'branch') {
-        // Determine if we're updating global or local branch rules
+        // Determine which table to update
+        let tableName = '__none__';
         if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = !selectedRule.branchRules;
-
-            if (useGlobal) {
-                // Update global branch rules
-                if (!currentConfig?.branchRules?.[index]) return;
-                currentConfig.branchRules[index][field] = randomColor;
-                // Clear profileName when generating a random color
-                delete currentConfig.branchRules[index].profileName;
-            } else {
-                // Update local branch rules
-                if (!selectedRule.branchRules?.[index]) return;
-                selectedRule.branchRules[index][field] = randomColor;
-                // Clear profileName when generating a random color
-                delete selectedRule.branchRules[index].profileName;
-            }
-        } else {
-            // Fallback to global
-            if (!currentConfig?.branchRules?.[index]) return;
-            currentConfig.branchRules[index][field] = randomColor;
-            // Clear profileName when generating a random color
-            delete currentConfig.branchRules[index].profileName;
+            tableName = selectedRule.branchTableName || '__none__';
         }
+
+        // Can't update if no table selected
+        if (tableName === '__none__') return;
+
+        // Update the rule in the shared branch table
+        if (!currentConfig?.sharedBranchTables?.[tableName]?.rules?.[index]) return;
+        currentConfig.sharedBranchTables[tableName].rules[index][field] = randomColor;
+        // Clear profileName when generating a random color
+        delete currentConfig.sharedBranchTables[tableName].rules[index].profileName;
     }
 
     // Update the UI elements
@@ -5154,7 +5062,21 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
 
     if (!currentConfig) return;
 
-    const rules = targetType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
+    let rules;
+    if (targetType === 'repo') {
+        rules = currentConfig.repoRules;
+    } else {
+        // For branch rules, get from the selected table
+        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const tableName = selectedRule.branchTableName || '__none__';
+
+            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
+                rules = currentConfig.sharedBranchTables[tableName].rules;
+            }
+        }
+    }
+
     if (!rules) return;
 
     // Remove the dragged item
@@ -5289,18 +5211,23 @@ function validateRules(): boolean {
         });
     }
 
-    // Validate branch rules
-    if (currentConfig?.branchRules) {
-        currentConfig.branchRules.forEach((rule: any, index: number) => {
-            if (!rule.pattern?.trim()) {
-                errors.push(`Branch rule ${index + 1}: Branch pattern is required`);
-                markFieldAsError('branch-pattern-' + index);
-            }
+    // Validate branch rules in shared tables
+    if (currentConfig?.sharedBranchTables) {
+        Object.keys(currentConfig.sharedBranchTables).forEach((tableName) => {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table?.rules) {
+                table.rules.forEach((rule: any, index: number) => {
+                    if (!rule.pattern?.trim()) {
+                        errors.push(`Branch rule ${index + 1} in table "${tableName}": Branch pattern is required`);
+                        markFieldAsError('branch-pattern-' + index);
+                    }
 
-            const branchColorValue = extractColorForTheme(rule.color);
-            if (!branchColorValue || !branchColorValue.trim()) {
-                errors.push(`Branch rule ${index + 1}: Color is required`);
-                markFieldAsError('branch-color-' + index);
+                    const branchColorValue = extractColorForTheme(rule.color);
+                    if (!branchColorValue || !branchColorValue.trim()) {
+                        errors.push(`Branch rule ${index + 1} in table "${tableName}": Color is required`);
+                        markFieldAsError('branch-color-' + index);
+                    }
+                });
             }
         });
     }
@@ -5555,7 +5482,6 @@ function getRepresentativeColor(value: string): string {
 }
 
 function runConfigurationTests() {
-
     // Test color validation
 
     // Test rule parsing
@@ -5709,7 +5635,6 @@ function showPreviewToast() {
     const fallbackProfileName = typeof selectedRule.primaryColor === 'string' ? selectedRule.primaryColor : undefined;
     const profileName = selectedRule.profileName || fallbackProfileName;
     const profile = profileName ? currentConfig?.advancedProfiles?.[profileName] : undefined;
-
 
     let primaryColor: string | undefined = undefined;
     let secondaryBgColor: string | null = null;
@@ -6619,10 +6544,16 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             currentConfig?.matchingIndexes?.repoRule >= 0
                 ? currentConfig.repoRules?.[currentConfig.matchingIndexes.repoRule]
                 : null;
-        const matchedBranchRule =
-            currentConfig?.matchingIndexes?.branchRule >= 0
-                ? currentConfig.branchRules?.[currentConfig.matchingIndexes.branchRule]
-                : null;
+
+        // Get matched branch rule from shared table
+        let matchedBranchRule = null;
+        if (currentConfig?.matchingIndexes?.branchRule >= 0 && matchedRepoRule?.branchTableName) {
+            const branchTableName = matchedRepoRule.branchTableName;
+            const branchRuleIndex = currentConfig.matchingIndexes.branchRule;
+            if (currentConfig.sharedBranchTables?.[branchTableName]) {
+                matchedBranchRule = currentConfig.sharedBranchTables[branchTableName].rules[branchRuleIndex];
+            }
+        }
 
         // Extract profile names from matched rules
         const matchedRepoPrimaryColor =
@@ -6721,8 +6652,27 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             swatch.style.color = fgColor;
             swatch.textContent = 'Sample';
 
+            // Create usage indicators column (right side)
+            const usageContainer = document.createElement('div');
+            usageContainer.className = 'profile-usage-indicators';
+
+            if (name === repoProfileName) {
+                const repoIcon = document.createElement('span');
+                repoIcon.className = 'codicon codicon-repo profile-usage-icon';
+                repoIcon.title = 'Matches workspace repository rule';
+                usageContainer.appendChild(repoIcon);
+            }
+
+            if (name === branchProfileName) {
+                const branchIcon = document.createElement('span');
+                branchIcon.className = 'codicon codicon-git-branch profile-usage-icon';
+                branchIcon.title = 'Matches workspace branch rule';
+                usageContainer.appendChild(branchIcon);
+            }
+
             el.appendChild(nameContainer);
             el.appendChild(swatch);
+            el.appendChild(usageContainer);
             el.onclick = () => selectProfile(name);
             listContainer.appendChild(el);
         });
