@@ -6585,6 +6585,7 @@ const THEME_KEY_LABELS: Record<string, string> = {
     'titleBar.inactiveForeground': 'Title Bar: Inactive Foreground',
     'titleBar.border': 'Title Bar: Border',
     'sideBarTitle.background': 'Sidebar Title: Background',
+    'sideBarTitle.foreground': 'Sidebar Title: Foreground',
 
     // Activity Bar
     'activityBar.background': 'Activity Bar: Background',
@@ -6664,21 +6665,22 @@ const DEFAULT_PALETTE: Palette = {
 };
 
 const DEFAULT_MAPPINGS: SectionMappings = {
-    'activityBar.background': 'primaryActiveBg',
+    'activityBar.background': { slot: 'primaryActiveBg', opacity: 0.7 },
     'activityBar.foreground': 'primaryActiveFg',
-    'activityBar.inactiveForeground': 'primaryInactiveFg',
+    'activityBar.inactiveForeground': { slot: 'primaryInactiveFg', opacity: 0.8 },
     'statusBar.background': 'primaryActiveBg',
     'statusBar.foreground': 'secondaryActiveFg',
     'titleBar.activeBackground': 'primaryActiveBg',
     'titleBar.activeForeground': 'primaryActiveFg',
-    'titleBar.inactiveBackground': 'primaryInactiveBg',
-    'titleBar.inactiveForeground': 'primaryInactiveFg',
-    'sideBarTitle.background': 'primaryActiveBg',
-    'tab.inactiveBackground': 'primaryActiveBg',
+    'titleBar.inactiveBackground': { slot: 'primaryInactiveBg', opacity: 0.85 },
+    'titleBar.inactiveForeground': { slot: 'primaryInactiveFg', opacity: 0.7 },
+    'sideBarTitle.background': { slot: 'primaryActiveBg', opacity: 0.5 },
+    'sideBarTitle.foreground': { slot: 'primaryActiveFg', opacity: 1 },
+    'tab.inactiveBackground': { slot: 'primaryActiveBg', opacity: 0.5 },
     'tab.activeBackground': 'primaryActiveBg',
     'tab.activeForeground': 'primaryActiveFg',
-    'tab.inactiveForeground': 'primaryActiveFg',
-    'editorGroupHeader.tabsBackground': 'primaryActiveBg',
+    'tab.inactiveForeground': { slot: 'primaryActiveFg', opacity: 0.75 },
+    'editorGroupHeader.tabsBackground': { slot: 'primaryActiveBg', opacity: 0.3 },
 };
 
 const SECTION_DEFINITIONS: { [name: string]: string[] } = {
@@ -6708,6 +6710,7 @@ const SECTION_DEFINITIONS: { [name: string]: string[] } = {
         'breadcrumb.background',
         'breadcrumb.foreground',
         'sideBarTitle.background',
+        'sideBarTitle.foreground',
     ],
     'Command Center': [
         'commandCenter.background',
@@ -6739,7 +6742,13 @@ const SECTION_DEFINITIONS: { [name: string]: string[] } = {
         'input.placeholderForeground',
         'focusBorder',
     ],
-    'Side Bar': ['sideBar.background', 'sideBar.foreground', 'sideBar.border'],
+    'Side Bar': [
+        'sideBar.background',
+        'sideBar.foreground',
+        'sideBar.border',
+        'sideBarTitle.background',
+        'sideBarTitle.foreground',
+    ],
 };
 
 let selectedProfileName: string | null = (() => {
