@@ -1774,6 +1774,7 @@ button:focus {
     flex-direction: column;
     gap: 20px;
     overflow-y: auto;
+    position: relative; /* For absolute positioning of palette toast */
 }
 
 .profiles-bottom-section {
@@ -1942,8 +1943,9 @@ button:focus {
 /* Palette Toast */
 .palette-toast {
     position: absolute;
-    right: 100%;
-    top: -12px;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1951,20 +1953,14 @@ button:focus {
     background: var(--vscode-editor-background);
     border: 1px solid;
     border-radius: 3px;
-    margin-right: 12px;
-    animation: slideIn 0.3s ease-out;
     white-space: nowrap;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
 }
 
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+.palette-toast[style*='display: flex'] {
+    opacity: 1;
 }
 
 .palette-toast-message {

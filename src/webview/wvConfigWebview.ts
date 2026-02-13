@@ -7170,13 +7170,15 @@ function handlePaletteGenerated(data: { advancedProfiles: any; generatedPalette:
     // Update current config with the new profiles
     currentConfig.advancedProfiles = data.advancedProfiles;
 
-    // Show the toast with generated palette styling
-    showPaletteToast(data.generatedPalette);
-
     // Re-render the profile editor to show the new palette
     if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
         renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
     }
+
+    // Show the toast after the layout has stabilized
+    requestAnimationFrame(() => {
+        showPaletteToast(data.generatedPalette);
+    });
 }
 
 /**

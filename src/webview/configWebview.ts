@@ -1893,17 +1893,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         </section>
                         
                         <div class="profile-editor-top" id="profileEditorTop">
+                            <div id="paletteToast" class="palette-toast" style="display: none;">
+                                <span class="palette-toast-message">Palette generated</span>
+                                <div class="palette-toast-actions">
+                                    <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
+                                    <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
+                                </div>
+                            </div>
                             <div class="profile-header">
                                 <input type="text" id="profileNameInput" placeholder="Profile Name">
                                 <div class="profile-actions">
                                    <div class="palette-generator-container">
-                                        <div id="paletteToast" class="palette-toast" style="display: none;">
-                                            <span class="palette-toast-message">Palette generated</span>
-                                            <div class="palette-toast-actions">
-                                                <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
-                                                <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
-                                            </div>
-                                        </div>
                                         <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" data-tooltip="First select a Primary Active Background color, then use this to generate a harmonious palette using a selection of color theory algorithms" data-tooltip-position="bottom" aria-label="Generate Pleasing Palette from Primary Active Background">
                                             <span class="codicon codicon-wand"></span>
                                             <span class="codicon codicon-chevron-down"></span>
