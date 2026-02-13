@@ -605,9 +605,7 @@ function createThemedColorInWebview(color: string): any {
  * Handles theme change notifications from the extension
  */
 function handleThemeChanged(data: any) {
-    console.log('[wvConfigWebview] Received theme change:', data);
     if (data && data.themeKind) {
-        console.log('[wvConfigWebview] Updating theme from', currentThemeKind, 'to', data.themeKind);
         currentThemeKind = data.themeKind;
         //  Refresh the UI to show colors for the new theme by re-rendering config
         // This will extract colors from ThemedColor objects for the new theme
@@ -871,13 +869,9 @@ function collectUniqueBranchPatterns(): string[] {
 // Message handler for extension communication
 window.addEventListener('message', (event) => {
     const message = event.data;
-    console.log('[Message Listener] ============ RECEIVED MESSAGE ============');
-    console.log('[Message Listener] Command:', message.command);
-    console.log('[Message Listener] Timestamp:', new Date().toISOString());
 
     switch (message.command) {
         case 'configData':
-            console.log('[Message Listener] Calling handleConfigurationData');
             handleConfigurationData(message.data);
             break;
         case 'themeChanged':
@@ -948,8 +942,6 @@ window.addEventListener('message', (event) => {
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
-    console.log('[handleConfigurationData] ============ START ============');
-    console.log('[handleConfigurationData] Received data from backend');
     // if (data?.repoRules) {
     //     console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
     //     data.repoRules.forEach((rule: any, index: number) => {
@@ -958,24 +950,16 @@ function handleConfigurationData(data: any) {
     // }
 
     // LOG: Check if workspaceInfo is being received correctly
-    console.log('[handleConfigurationData] workspaceInfo:', data.workspaceInfo);
-    console.log('[handleConfigurationData] workspaceInfo.isGitRepo:', data.workspaceInfo?.isGitRepo);
 
     // LOG: Check repo rules with detailed color info
     if (data.repoRules) {
         data.repoRules.forEach((rule: any, index: number) => {
-            console.log(
-                `[handleConfigurationData] RepoRule[${index}].primaryColor:`,
-                JSON.stringify(rule.primaryColor),
-            );
         });
     }
 
     // LOG: Check branch tables
     if (data.sharedBranchTables && data.sharedBranchTables['My Branches']) {
-        console.log('[handleConfigurationData] My Branches rules:', data.sharedBranchTables['My Branches'].rules);
         data.sharedBranchTables['My Branches'].rules.forEach((rule: any, index: number) => {
-            console.log(`[handleConfigurationData] My Branches rule[${index}].color:`, JSON.stringify(rule.color));
         });
     }
 
@@ -983,9 +967,7 @@ function handleConfigurationData(data: any) {
     if (data.sharedBranchTables) {
         Object.keys(data.sharedBranchTables).forEach((tableName) => {
             const table = data.sharedBranchTables[tableName];
-            console.log(`[handleConfigurationData] Table "${tableName}" has ${table.rules?.length || 0} rules`);
             table.rules?.forEach((rule: any, index: number) => {
-                console.log(`[handleConfigurationData]   Rule[${index}].color:`, JSON.stringify(rule.color));
             });
         });
     }
@@ -1084,10 +1066,8 @@ function handleColorPickerResult(data: any) {
 
 function handleAddRepoRule(data: any) {
     // Add a new repository rule with the provided data
-    console.log('[handleAddRepoRule] Called with data:', data);
     if (data.repoQualifier) {
         // Call the existing addRepoRule function to add a new rule
-        console.log('[handleAddRepoRule] Calling addRepoRule()');
         addRepoRule();
 
         // After the rule is added, populate it with the provided data
@@ -1122,16 +1102,12 @@ function handleDeleteConfirmed(data: any) {
     // The configuration will be refreshed via the normal config update flow
     // We don't need to do anything here as the UI will be updated automatically
     if (data.success) {
-        console.log('Rule deleted successfully');
     } else {
-        console.log('Rule deletion was cancelled');
     }
 }
 
 function handlePathSimplified(data: any) {
     // Received simplified path from backend, complete addRepoRule action
-    console.log('[handlePathSimplified] Called with data:', data);
-    console.log('[handlePathSimplified] This means a LOCAL FOLDER rule is being created');
     if (!currentConfig || !data.simplifiedPath) return;
 
     const randomColor = getThemeAppropriateColor();
@@ -1140,7 +1116,6 @@ function handlePathSimplified(data: any) {
         primaryColor: createThemedColorInWebview(randomColor),
     };
 
-    console.log('[handlePathSimplified] Creating local folder rule with color:', randomColor);
 
     currentConfig.repoRules.push(newRule);
     sendConfiguration();
@@ -1183,32 +1158,23 @@ function toggleStarredKey(mappingKey: string): void {
 }
 
 function handleGettingStartedHelpContent(data: { content: string }) {
-    console.log('[TOC Navigation] handleGettingStartedHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
-        console.log('[TOC Navigation] Getting started help content loaded');
     }
 }
 
 function handleProfileHelpContent(data: { content: string }) {
-    console.log('[TOC Navigation] handleProfileHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
-        console.log('[TOC Navigation] Profile help content loaded');
     }
 }
 
 function handleHelpContent(data: { helpType: string; content: string }) {
-    console.log(
-        `[TOC Navigation] handleHelpContent called for ${data.helpType}, content length:`,
-        data.content?.length,
-    );
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
-        console.log(`[TOC Navigation] ${data.helpType} help content loaded`);
 
         // Update current help type to what was just loaded
         currentHelpType = data.helpType;
@@ -1221,7 +1187,6 @@ function handleHelpContent(data: { helpType: string; content: string }) {
 }
 
 function handleSwitchHelp(target: string) {
-    console.log('[TOC Navigation] handleSwitchHelp called with target:', target);
 
     // Save scroll position of current help before switching
     saveCurrentHelpScrollPosition();
@@ -1244,31 +1209,22 @@ function handleSwitchHelp(target: string) {
         } else if (target === 'colored') {
             titleElement.textContent = 'Colored Keys Guide';
         }
-        console.log('[TOC Navigation] Updated panel title to:', titleElement.textContent);
     }
 
     // Request the new content
     if (target === 'getting-started') {
-        console.log('[TOC Navigation] Requesting getting started help from extension');
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'profile') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'rules') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'branch-modes') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'report') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'starred') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'colored') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     }
 }
@@ -1282,7 +1238,6 @@ function saveCurrentHelpScrollPosition() {
         const contentDiv = document.getElementById('helpPanelContent');
         if (contentDiv) {
             helpScrollPositions[currentHelpType] = contentDiv.scrollTop;
-            console.log(`[Help] Saved scroll position for ${currentHelpType}: ${contentDiv.scrollTop}`);
         }
     }
 }
@@ -1293,11 +1248,9 @@ function restoreHelpScrollPosition(helpType: string) {
         const savedPosition = helpScrollPositions[helpType];
         if (savedPosition !== undefined) {
             contentDiv.scrollTop = savedPosition;
-            console.log(`[Help] Restored scroll position for ${helpType}: ${savedPosition}`);
         } else {
             // No saved position, reset to top
             contentDiv.scrollTop = 0;
-            console.log(`[Help] No saved scroll position for ${helpType}, resetting to top`);
         }
     }
 }
@@ -1327,7 +1280,6 @@ function openHelp(helpType: string) {
     }
 
     // Request help content from backend
-    console.log(`[Help] Requesting ${helpType} help content from extension`);
     currentHelpType = helpType;
     vscode.postMessage({ command: 'requestHelp', data: { helpType } });
 
@@ -1440,11 +1392,6 @@ function renderConfiguration(config: any) {
 
     // Sync preview mode with configuration
     previewMode = config.otherSettings?.previewSelectedRepoRule ?? false;
-    console.log('[renderConfiguration] Initialized previewMode from config:', previewMode);
-    console.log(
-        '[renderConfiguration] config.otherSettings.previewSelectedRepoRule:',
-        config.otherSettings?.previewSelectedRepoRule,
-    );
 
     renderRepoRules(config.repoRules, config.matchingIndexes?.repoRule);
     renderBranchRulesForSelectedRepo();
@@ -1462,26 +1409,10 @@ function renderConfiguration(config: any) {
     const isPreviewingDifferentRule =
         selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
 
-    console.log('[renderConfiguration] Toast decision - previewMode:', previewMode);
-    console.log(
-        '[renderConfiguration] selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-        'matchingRepoIndex:',
-        matchingRepoIndex,
-    );
-    console.log(
-        '[renderConfiguration] selectedBranchRuleIndex:',
-        selectedBranchRuleIndex,
-        'matchingBranchIndex:',
-        matchingBranchIndex,
-    );
-    console.log('[renderConfiguration] isPreviewingDifferentRule:', isPreviewingDifferentRule);
 
     if (previewMode && (!hasWorkspace || isPreviewingDifferentRule)) {
-        console.log('[renderConfiguration] Calling showPreviewToast()');
         showPreviewToast();
     } else {
-        console.log('[renderConfiguration] Calling hidePreviewToast()');
         hidePreviewToast();
     }
 
@@ -1668,14 +1599,6 @@ function handleDocumentClick(event: Event) {
             if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
                 tableName = currentConfig.repoRules[selectedRepoRuleIndex].branchTableName || '__none__';
             }
-            console.log(
-                '[DELETE BRANCH WEBVIEW] selectedRepoRuleIndex:',
-                selectedRepoRuleIndex,
-                'tableName:',
-                tableName,
-                'index:',
-                index,
-            );
 
             // Get the rule from the shared table
             let rule, ruleDescription;
@@ -1772,13 +1695,11 @@ function handleDocumentClick(event: Event) {
 
     // Handle Add buttons
     if (target.getAttribute('data-action') === 'addRepoRule') {
-        console.log('[handleDocumentClick] Add Repo Rule button clicked');
         addRepoRule();
         return;
     }
 
     if (target.getAttribute('data-action') === 'addBranchRule') {
-        console.log('[handleDocumentClick] Add Branch Rule button clicked');
         addBranchRule();
         return;
     }
@@ -2931,9 +2852,6 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
     const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
-    console.log(
-        `[createColorInputHTML] ${ruleType}[${index}].${field}: color="${color}", currentTheme="${currentThemeKind}"`,
-    );
 
     // Handle special 'none' value - show indicator instead of color picker
     const isSpecialNone = color === 'none';
@@ -3549,8 +3467,6 @@ function handlePreviewModeChange() {
     if (!checkbox) return;
 
     previewMode = checkbox.checked;
-    console.log('[handlePreviewModeChange] Preview mode changed to:', previewMode);
-    console.log('[handlePreviewModeChange] Checkbox checked:', checkbox.checked);
 
     // Mark hint as shown if user manually enables preview
     if (previewMode) {
@@ -3614,28 +3530,19 @@ function addRepoRule() {
     if (!currentConfig) return;
 
     // LOG: Trace where the flow is going
-    console.log('[addRepoRule] Starting - currentConfig.workspaceInfo:', currentConfig.workspaceInfo);
-    console.log('[addRepoRule] workspaceInfo?.isGitRepo:', currentConfig.workspaceInfo?.isGitRepo);
-    console.log('[addRepoRule] workspaceInfo?.repositoryUrl:', currentConfig.workspaceInfo?.repositoryUrl);
 
     // Check if workspace is a git repo or local folder
     const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
     let repoQualifier = '';
 
-    console.log('[addRepoRule] Determined isGitRepo:', isGitRepo);
 
     if (isGitRepo) {
         // Git repository - extract repo name from URL
-        console.log('[addRepoRule] Taking GIT REPO path');
         repoQualifier = extractRepoNameFromUrl(currentConfig.workspaceInfo?.repositoryUrl || '');
-        console.log('[addRepoRule] Extracted repoQualifier:', repoQualifier);
     } else {
         // Local folder - create pattern with ! prefix and env var substitution
-        console.log('[addRepoRule] Taking LOCAL FOLDER path');
         const folderPath = currentConfig.workspaceInfo?.repositoryUrl || '';
-        console.log('[addRepoRule] folderPath:', folderPath);
         if (folderPath) {
-            console.log('[addRepoRule] Sending simplifyPath message to backend');
             // Send message to backend to simplify path
             vscode.postMessage({
                 command: 'simplifyPath',
@@ -3652,11 +3559,9 @@ function addRepoRule() {
         primaryColor: createThemedColorInWebview(randomColor),
     };
 
-    console.log('[addRepoRule] Creating new repo rule with color:', randomColor);
 
     // Always append new rules to the end for predictable behavior
     currentConfig.repoRules.push(newRule);
-    console.log('[addRepoRule] Rule added, sending configuration');
     sendConfiguration();
 }
 
@@ -3749,17 +3654,12 @@ function updateBranchRule(index: number, field: string, value: string) {
 }
 
 function selectRepoRule(index: number) {
-    console.log(
-        `[selectRepoRule] Called with index: ${index}, current selectedRepoRuleIndex: ${selectedRepoRuleIndex}`,
-    );
     if (!currentConfig?.repoRules?.[index]) {
-        console.log(`[selectRepoRule] No rule found at index ${index}, returning`);
         return;
     }
 
     // Toggle: if clicking the already-selected rule, deselect it
     if (selectedRepoRuleIndex === index) {
-        console.log(`[selectRepoRule] Deselecting rule at index ${index}`);
         selectedRepoRuleIndex = -1;
         selectedBranchRuleIndex = -1;
 
@@ -3781,7 +3681,6 @@ function selectRepoRule(index: number) {
     }
 
     selectedRepoRuleIndex = index;
-    console.log(`[selectRepoRule] Set selectedRepoRuleIndex to ${index}`);
 
     // Reset branch rule selection when switching repos so it reinitializes
     selectedBranchRuleIndex = -1;
@@ -3844,11 +3743,6 @@ function navigateToRepoRule(index: number) {
 }
 
 function selectBranchRule(index: number) {
-    console.log('====== selectBranchRule called ======');
-    console.log('[selectBranchRule] index:', index);
-    console.log('[selectBranchRule] previewMode:', previewMode);
-    console.log('[selectBranchRule] selectedRepoRuleIndex:', selectedRepoRuleIndex);
-    console.log('[selectBranchRule] current selectedBranchRuleIndex:', selectedBranchRuleIndex);
 
     // Determine which table we're selecting from
     let tableName = '__none__'; // Default
@@ -3857,29 +3751,24 @@ function selectBranchRule(index: number) {
         tableName = selectedRule.branchTableName || '__none__';
     }
 
-    console.log('[selectBranchRule] tableName:', tableName);
 
     // Can't select if no table selected
     if (tableName === '__none__') {
-        console.log('[selectBranchRule] ABORT: tableName is __none__');
         return;
     }
 
     const branchRules = currentConfig?.sharedBranchTables?.[tableName]?.rules || [];
 
     if (!branchRules?.[index]) {
-        console.log('[selectBranchRule] ABORT: rule at index does not exist');
         return;
     }
 
     // Toggle: if clicking the already-selected rule, deselect it
     if (selectedBranchRuleIndex === index) {
-        console.log(`[selectBranchRule] Deselecting rule at index ${index}`);
         selectedBranchRuleIndex = -1;
 
         // Clear branch preview when deselecting
         if (previewMode) {
-            console.log('[selectBranchRule] Sending previewRepoRule (deselect)');
             // Revert to just repo rule preview
             vscode.postMessage({
                 command: 'previewRepoRule',
@@ -3907,15 +3796,12 @@ function selectBranchRule(index: number) {
     }
 
     selectedBranchRuleIndex = index;
-    console.log('[selectBranchRule] Set selectedBranchRuleIndex to:', index);
 
     // Clear any regex validation errors when switching rules
     clearRegexValidationError();
 
     // Send preview command only if preview mode is enabled
     if (previewMode) {
-        console.log('[selectBranchRule] Sending previewBranchRule message');
-        console.log('[selectBranchRule] Message data:', { index, tableName, repoIndex: selectedRepoRuleIndex });
         vscode.postMessage({
             command: 'previewBranchRule',
             data: {
@@ -3925,7 +3811,6 @@ function selectBranchRule(index: number) {
             },
         });
     } else {
-        console.log('[selectBranchRule] NOT sending preview - previewMode is false');
     }
 
     // Update toast if preview mode is enabled
@@ -3935,32 +3820,15 @@ function selectBranchRule(index: number) {
     const isPreviewingDifferentRule =
         selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
 
-    console.log('[selectBranchRule] Toast decision - previewMode:', previewMode);
-    console.log(
-        '[selectBranchRule] selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-        'matchingRepoIndex:',
-        matchingRepoIndex,
-    );
-    console.log(
-        '[selectBranchRule] selectedBranchRuleIndex:',
-        selectedBranchRuleIndex,
-        'matchingBranchIndex:',
-        matchingBranchIndex,
-    );
-    console.log('[selectBranchRule] isPreviewingDifferentRule:', isPreviewingDifferentRule);
 
     if (previewMode && isPreviewingDifferentRule) {
-        console.log('[selectBranchRule] Calling showPreviewToast()');
         showPreviewToast();
     } else {
-        console.log('[selectBranchRule] Calling hidePreviewToast()');
         hidePreviewToast();
     }
 
     // Re-render branch rules to update selected state and preview styling
     renderBranchRulesForSelectedRepo();
-    console.log('[selectBranchRule] ====== END ======');
 }
 
 function changeBranchMode(index: number, useGlobal: boolean) {
@@ -3990,19 +3858,10 @@ function changeBranchMode(index: number, useGlobal: boolean) {
 function changeBranchTable(index: number, tableName: string) {
     if (!currentConfig?.repoRules?.[index]) return;
 
-    console.log(
-        '[changeBranchTable] BEFORE - index:',
-        index,
-        'old value:',
-        currentConfig.repoRules[index].branchTableName,
-        'new value:',
-        tableName,
-    );
 
     // Store '__none__' for No Branch Table, table name string for specific table
     currentConfig.repoRules[index].branchTableName = tableName;
 
-    console.log('[changeBranchTable] AFTER - stored value:', currentConfig.repoRules[index].branchTableName);
 
     // Reset branch rule selection when changing tables so it reinitializes
     if (selectedRepoRuleIndex === index) {
@@ -4017,8 +3876,6 @@ function changeBranchTable(index: number, tableName: string) {
 }
 
 async function showCreateTableDialog(repoRuleIndex: number) {
-    console.log('[showCreateTableDialog] START - repoRuleIndex:', repoRuleIndex);
-    console.log('[showCreateTableDialog] selectedRepoRuleIndex before:', selectedRepoRuleIndex);
 
     const tableName = await showInputDialog({
         title: 'Create New Branch Table',
@@ -4039,7 +3896,6 @@ async function showCreateTableDialog(repoRuleIndex: number) {
     });
 
     if (!tableName) {
-        console.log('[showCreateTableDialog] User cancelled');
         return; // User cancelled
     }
 
@@ -4047,7 +3903,6 @@ async function showCreateTableDialog(repoRuleIndex: number) {
     const trimmedName = tableName.trim();
 
     // Create the new table via backend command
-    console.log('[showCreateTableDialog] Creating table via backend:', trimmedName, 'for repo rule:', repoRuleIndex);
     vscode.postMessage({
         command: 'createBranchTable',
         data: {
@@ -4059,7 +3914,6 @@ async function showCreateTableDialog(repoRuleIndex: number) {
     // The backend will send updated config back, which will trigger a refresh
     // For now, optimistically update the UI
     if (currentConfig && currentConfig.sharedBranchTables) {
-        console.log('[showCreateTableDialog] Optimistically updating UI');
         currentConfig.sharedBranchTables[trimmedName] = {
             rules: [],
         };
@@ -4079,25 +3933,14 @@ async function showCreateTableDialog(repoRuleIndex: number) {
 
         // Update the repo rule to use the new table
         if (currentConfig.repoRules?.[repoRuleIndex]) {
-            console.log(
-                '[showCreateTableDialog] BEFORE - branchTableName:',
-                currentConfig.repoRules[repoRuleIndex].branchTableName,
-            );
             currentConfig.repoRules[repoRuleIndex].branchTableName = trimmedName;
-            console.log(
-                '[showCreateTableDialog] AFTER - branchTableName:',
-                currentConfig.repoRules[repoRuleIndex].branchTableName,
-            );
         }
 
         // Select this repo rule so the Branch Rules section shows the new table
-        console.log('[showCreateTableDialog] Setting selectedRepoRuleIndex to:', repoRuleIndex);
         selectedRepoRuleIndex = repoRuleIndex;
 
         // Backend will update the repo rule and send back updated config
         // No need to call debounceValidateAndSend here - backend handles it atomically
-        console.log('[showCreateTableDialog] Waiting for backend to send updated config');
-        console.log('[showCreateTableDialog] END');
     }
 }
 
@@ -4188,20 +4031,14 @@ async function deleteBranchTableFromMgmt(tableName: string) {
 }
 
 function renderBranchRulesForSelectedRepo() {
-    console.log(`[renderBranchRulesForSelectedRepo] Called, selectedRepoRuleIndex: ${selectedRepoRuleIndex}`);
     if (!currentConfig || selectedRepoRuleIndex === -1) {
-        console.log(`[renderBranchRulesForSelectedRepo] Early return - no config or selectedRepoRuleIndex is -1`);
         return;
     }
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) {
-        console.log(`[renderBranchRulesForSelectedRepo] No selectedRule at index ${selectedRepoRuleIndex}`);
         return;
     }
-    console.log(
-        `[renderBranchRulesForSelectedRepo] selectedRule.repoQualifier: ${selectedRule.repoQualifier}, branchTableName: ${selectedRule.branchTableName}`,
-    );
 
     // Check if this is a local folder rule
     const isLocalFolderRule = selectedRule.repoQualifier && selectedRule.repoQualifier.startsWith('!');
@@ -4252,11 +4089,9 @@ function renderBranchRulesForSelectedRepo() {
 
     // Get table name - default to '__none__' if not set
     const tableName = selectedRule.branchTableName || '__none__';
-    console.log(`[renderBranchRulesForSelectedRepo] tableName: ${tableName}`);
 
     // If no table selected, show empty message
     if (!tableName || tableName === '__none__') {
-        console.log(`[renderBranchRulesForSelectedRepo] No table selected, showing empty message`);
         const header = document.querySelector('#branch-rules-heading');
         if (header) {
             header.innerHTML = `<span class="codicon codicon-circle-slash"></span> No Branch Table`;
@@ -4270,7 +4105,6 @@ function renderBranchRulesForSelectedRepo() {
 
     const branchTable = currentConfig.sharedBranchTables?.[tableName];
     const branchRules = branchTable?.rules || [];
-    console.log(`[renderBranchRulesForSelectedRepo] Rendering table "${tableName}" with ${branchRules.length} rules`);
 
     // Update section header with editable table name
     const header = document.querySelector('#branch-rules-heading');
@@ -4661,18 +4495,6 @@ function copyBranchRulesFrom(
 function updateColorRule(ruleType: string, index: number, field: string, value: string) {
     if (!currentConfig) return;
 
-    console.log(
-        '[updateColorRule] ruleType:',
-        ruleType,
-        'index:',
-        index,
-        'field:',
-        field,
-        'value:',
-        value,
-        'selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-    );
 
     // For color fields (primaryColor or color), send themed color update to extension
     if ((field === 'primaryColor' || field === 'color') && value && !currentConfig.advancedProfiles?.[value]) {
@@ -4688,13 +4510,11 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
             if (selectedRule?.branchTableName) {
                 messageData.tableName = selectedRule.branchTableName;
-                console.log('[updateColorRule] Branch rule - tableName:', messageData.tableName);
             } else {
                 console.error('[updateColorRule] Branch rule but no branchTableName!', selectedRule);
             }
         }
 
-        console.log('[updateColorRule] Sending updateThemedColor:', messageData);
 
         vscode.postMessage({
             command: 'updateThemedColor',
@@ -4746,18 +4566,8 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 
                 // If updating color with a profile name, also set the profileName field
                 if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
-                    console.log(
-                        `[updateColorRule] BRANCH PROFILE ASSIGNED: Setting profileName='${value}' for rule ${index} in table '${tableName}'`,
-                    );
                     currentConfig.sharedBranchTables[tableName].rules[index].profileName = value;
-                    console.log(
-                        `[updateColorRule] Rule after assignment:`,
-                        JSON.stringify(currentConfig.sharedBranchTables[tableName].rules[index]),
-                    );
                 } else if (field === 'color') {
-                    console.log(
-                        `[updateColorRule] BRANCH COLOR: Not a profile, clearing profileName for rule ${index}`,
-                    );
                     delete currentConfig.sharedBranchTables[tableName].rules[index].profileName;
                 }
             }
@@ -5167,7 +4977,6 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
             // If this is a branch rule with a repo index (local branch rule), select the repo first
             if (type === 'branch' && parts.length >= 3) {
                 const repoIndex = parseInt(parts[2]);
-                console.log(`[Navigation] Local branch rule detected, selecting repo ${repoIndex} first`);
 
                 // Select the repo rule to show its local branch rules
                 const repoContainer = document.getElementById('repoRulesContent');
@@ -5177,7 +4986,6 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
                         const repoRadio = repoRows[repoIndex].querySelector('input[type="radio"]') as HTMLInputElement;
                         if (repoRadio) {
                             repoRadio.click();
-                            console.log(`[Navigation] Selected repo ${repoIndex}`);
                         }
                     }
                 }
@@ -5747,19 +5555,12 @@ function getRepresentativeColor(value: string): string {
 }
 
 function runConfigurationTests() {
-    console.log('Running configuration tests...');
 
     // Test color validation
-    console.log('Testing color validation...');
 
     // Test rule parsing
-    console.log('Testing rule parsing...');
 
     // Test smart defaults
-    console.log('Testing smart defaults...');
-    console.log('Theme is dark:', isThemeDark());
-    console.log('Suggested color:', getThemeAppropriateColor());
-    console.log('Smart branch defaults:', getSmartBranchDefaults());
 
     alert('Configuration tests completed. Check console for details.');
 }
@@ -5833,19 +5634,16 @@ function clearRegexValidationError() {
 
 // Preview Toast Functions
 function showPreviewToast() {
-    console.log('[showPreviewToast] Called');
     const toast = document.getElementById('preview-toast');
     const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
     const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
     if (!toast) {
-        console.log('[showPreviewToast] Toast element not found');
         return;
     }
 
     // Check if there's no open workspace
     const hasWorkspace = currentConfig?.workspaceInfo?.hasWorkspace ?? true;
     if (!hasWorkspace) {
-        console.log('[showPreviewToast] No workspace, showing special message');
         // Show special message for no workspace
         if (toastText) {
             toastText.textContent = 'Previews require an open workspace folder';
@@ -5904,7 +5702,6 @@ function showPreviewToast() {
     // Get the selected repo rule
     const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) {
-        console.log('[showPreviewToast] No selected rule found');
         return;
     }
 
@@ -5913,24 +5710,20 @@ function showPreviewToast() {
     const profileName = selectedRule.profileName || fallbackProfileName;
     const profile = profileName ? currentConfig?.advancedProfiles?.[profileName] : undefined;
 
-    console.log('[showPreviewToast] profileName:', profileName, 'profile found:', !!profile);
 
     let primaryColor: string | undefined = undefined;
     let secondaryBgColor: string | null = null;
     let secondaryFgColor: string | null = null;
 
     if (profile && !profile.virtual && profile.palette) {
-        console.log('[showPreviewToast] Using profile palette');
         // Resolve primary color from palette
         const primaryActiveBg = profile.palette.primaryActiveBg;
         if (primaryActiveBg) {
             const resolvedPrimary = resolveColorFromSlot(primaryActiveBg, selectedRule);
-            console.log('[showPreviewToast] resolvedPrimary:', resolvedPrimary, 'type:', typeof resolvedPrimary);
             if (resolvedPrimary) {
                 // resolveColorFromSlot might return a string or ThemedColor - extract if needed
                 primaryColor =
                     typeof resolvedPrimary === 'string' ? resolvedPrimary : extractColorForTheme(resolvedPrimary);
-                console.log('[showPreviewToast] primaryColor after extraction:', primaryColor);
             }
         }
 
@@ -5955,20 +5748,16 @@ function showPreviewToast() {
                 : null;
         }
     } else {
-        console.log('[showPreviewToast] Using direct color (not profile-based)');
         // Not using a profile, use the primaryColor directly
         primaryColor = extractColorForTheme(selectedRule.primaryColor) || undefined;
-        console.log('[showPreviewToast] Direct primaryColor:', primaryColor);
     }
 
     // Apply the primary color to toast
     if (primaryColor && typeof primaryColor === 'string') {
-        console.log('[showPreviewToast] Applying primaryColor to toast:', primaryColor);
         toast.style.backgroundColor = primaryColor;
         toast.style.borderColor = primaryColor;
         toast.style.color = getContrastingTextColor(primaryColor);
     } else {
-        console.log('[showPreviewToast] No valid primaryColor to apply:', primaryColor);
     }
 
     // Apply secondary colors to reset button if available
@@ -5979,12 +5768,10 @@ function showPreviewToast() {
             typeof secondaryBgColor === 'string' &&
             typeof secondaryFgColor === 'string'
         ) {
-            console.log('[showPreviewToast] Applying secondary colors to button');
             resetBtn.style.backgroundColor = secondaryBgColor;
             resetBtn.style.color = secondaryFgColor;
             resetBtn.style.borderColor = secondaryFgColor;
         } else {
-            console.log('[showPreviewToast] Using default button styling');
             // Fallback to default semi-transparent styling
             resetBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
             resetBtn.style.color = 'inherit';
@@ -5992,18 +5779,14 @@ function showPreviewToast() {
         }
     }
 
-    console.log('[showPreviewToast] Making toast visible');
     toast.classList.add('visible');
 }
 
 function hidePreviewToast() {
-    console.log('[hidePreviewToast] Called from:', new Error().stack?.split('\n')[2]?.trim());
     const toast = document.getElementById('preview-toast');
     if (!toast) {
-        console.log('[hidePreviewToast] Toast element not found');
         return;
     }
-    console.log('[hidePreviewToast] Removing visible class from toast');
     toast.classList.remove('visible');
 }
 
@@ -8899,7 +8682,6 @@ function handleProfilePreviewModeChange() {
     if (!checkbox) return;
 
     profilePreviewMode = checkbox.checked;
-    console.log('[handleProfilePreviewModeChange] Profile preview mode changed to:', profilePreviewMode);
 
     if (profilePreviewMode && selectedProfileName) {
         // Enable preview and apply selected profile
@@ -8914,7 +8696,6 @@ function handleProfilePreviewModeChange() {
  * Applies a profile preview by sending a message to the extension
  */
 function applyProfilePreview(profileName: string) {
-    console.log('[applyProfilePreview] Applying profile preview:', profileName);
     vscode.postMessage({
         command: 'previewProfile',
         data: {
@@ -8928,7 +8709,6 @@ function applyProfilePreview(profileName: string) {
  * Clears the profile preview and reverts to workspace colors
  */
 function clearProfilePreview() {
-    console.log('[clearProfilePreview] Clearing profile preview');
     vscode.postMessage({
         command: 'clearProfilePreview',
         data: {
