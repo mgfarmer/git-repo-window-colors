@@ -700,6 +700,66 @@ function getProfileUsageInfo(): {
     return result;
 }
 
+// Check if a specific profile is referenced in any rules
+function isProfileInUse(profileName: string): { inUse: boolean; repoRules: number; branchRules: number } {
+    const result = { inUse: false, repoRules: 0, branchRules: 0 };
+
+    if (!currentConfig || !profileName) return result;
+
+    const advancedProfiles = currentConfig.advancedProfiles || {};
+    if (!advancedProfiles[profileName]) return result;
+
+    // Check repo rules
+    if (currentConfig.repoRules) {
+        for (const rule of currentConfig.repoRules) {
+            let ruleUsesProfile = false;
+
+            // Check explicit profileName field
+            if (rule.profileName === profileName) {
+                ruleUsesProfile = true;
+            }
+            // Check if primaryColor is the profile name
+            if (typeof rule.primaryColor === 'string' && rule.primaryColor === profileName) {
+                ruleUsesProfile = true;
+            }
+            // Check if branchColor is the profile name
+            if (typeof rule.branchColor === 'string' && rule.branchColor === profileName) {
+                ruleUsesProfile = true;
+            }
+
+            if (ruleUsesProfile) {
+                result.repoRules++;
+            }
+        }
+    }
+
+    // Check shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                for (const rule of table.rules) {
+                    let ruleUsesProfile = false;
+
+                    if (rule.profileName === profileName) {
+                        ruleUsesProfile = true;
+                    }
+                    if (typeof rule.color === 'string' && rule.color === profileName) {
+                        ruleUsesProfile = true;
+                    }
+
+                    if (ruleUsesProfile) {
+                        result.branchRules++;
+                    }
+                }
+            }
+        }
+    }
+
+    result.inUse = result.repoRules > 0 || result.branchRules > 0;
+    return result;
+}
+
 function getThemeAppropriateColor(): string {
     const isDark = isThemeDark();
 
@@ -6613,6 +6673,12 @@ const DEFAULT_MAPPINGS: SectionMappings = {
     'titleBar.activeForeground': 'primaryActiveFg',
     'titleBar.inactiveBackground': 'primaryInactiveBg',
     'titleBar.inactiveForeground': 'primaryInactiveFg',
+    'sideBarTitle.background': 'primaryActiveBg',
+    'tab.inactiveBackground': 'primaryActiveBg',
+    'tab.activeBackground': 'primaryActiveBg',
+    'tab.activeForeground': 'primaryActiveFg',
+    'tab.inactiveForeground': 'primaryActiveFg',
+    'editorGroupHeader.tabsBackground': 'primaryActiveBg',
 };
 
 const SECTION_DEFINITIONS: { [name: string]: string[] } = {
@@ -7333,7 +7399,38 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
     // Wire up action buttons
     const deleteBtn = document.querySelector('[data-action="deleteProfile"]') as HTMLElement;
     if (deleteBtn) {
-        deleteBtn.onclick = () => deleteProfile(name);
+        // Check if profile is in use
+        const usage = isProfileInUse(name);
+
+        if (usage.inUse) {
+            // Disable button and show tooltip explaining why
+            deleteBtn.classList.add('disabled');
+            deleteBtn.style.opacity = '0.5';
+            deleteBtn.style.cursor = 'not-allowed';
+
+            const parts = [];
+            if (usage.repoRules > 0) {
+                parts.push(`${usage.repoRules} repo ${usage.repoRules === 1 ? 'rule' : 'rules'}`);
+            }
+            if (usage.branchRules > 0) {
+                parts.push(`${usage.branchRules} branch ${usage.branchRules === 1 ? 'rule' : 'rules'}`);
+            }
+            deleteBtn.setAttribute('data-tooltip', `Cannot delete: Profile is used by ${parts.join(' and ')}`);
+            deleteBtn.removeAttribute('title');
+
+            deleteBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            };
+        } else {
+            // Enable button with normal behavior
+            deleteBtn.classList.remove('disabled');
+            deleteBtn.style.opacity = '1';
+            deleteBtn.style.cursor = 'pointer';
+            deleteBtn.setAttribute('data-tooltip', 'Delete profile');
+            deleteBtn.removeAttribute('title');
+            deleteBtn.onclick = () => deleteProfile(name);
+        }
     }
 
     const duplicateBtn = document.querySelector('[data-action="duplicateProfile"]') as HTMLElement;
