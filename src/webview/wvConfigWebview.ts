@@ -6588,36 +6588,6 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             const isRepoProfile = name === repoProfileName;
             const isBranchProfile = name === branchProfileName;
 
-            // console.log(
-            //     `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
-            // );
-
-            // Create indicator container (even if empty, to maintain alignment)
-            const indicatorContainer = document.createElement('span');
-            indicatorContainer.className = 'profile-indicators';
-
-            // if (isRepoProfile || isBranchProfile) {
-            //     console.log(`[Profile Indicators] Adding indicators for "${name}"`);
-
-            //     if (isRepoProfile) {
-            //         const repoIcon = document.createElement('span');
-            //         repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
-            //         repoIcon.title = 'Applied to repository rule for this workspace';
-            //         indicatorContainer.appendChild(repoIcon);
-            //         console.log(`[Profile Indicators] Added repo icon for "${name}"`);
-            //     }
-
-            //     if (isBranchProfile) {
-            //         const branchIcon = document.createElement('span');
-            //         branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
-            //         branchIcon.title = 'Applied to branch rule for this workspace';
-            //         indicatorContainer.appendChild(branchIcon);
-            //         console.log(`[Profile Indicators] Added branch icon for "${name}"`);
-            //     }
-            // }
-
-            nameContainer.appendChild(indicatorContainer);
-
             const nameSpan = document.createElement('span');
             nameSpan.className = 'profile-name';
             nameSpan.textContent = name;
@@ -7612,10 +7582,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Container for dropdown (and potentially fixed color picker)
                 const dropdownContainer = document.createElement('div');
-                dropdownContainer.style.flex = '1';
-                dropdownContainer.style.display = 'flex';
-                dropdownContainer.style.gap = '8px';
-                dropdownContainer.style.alignItems = 'center';
+                dropdownContainer.className = 'mapping-dropdown-container';
 
                 // Create custom dropdown with color swatches
                 const select = document.createElement('div');
@@ -7626,11 +7593,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 select.setAttribute('tabindex', '0');
                 select.setAttribute('role', 'combobox');
                 select.setAttribute('aria-expanded', 'false');
-                select.style.flex = '1';
-                select.style.minWidth = '200px';
-                select.style.minHeight = '28px';
-                select.style.position = 'relative';
-                select.style.cursor = 'pointer';
 
                 // Add drop event handlers
                 select.addEventListener('dragover', (e: DragEvent) => {
@@ -7672,36 +7634,16 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Selected value display
                 const selectedDisplay = document.createElement('div');
                 selectedDisplay.className = 'dropdown-selected';
-                selectedDisplay.style.background = 'var(--vscode-dropdown-background)';
-                selectedDisplay.style.color = 'var(--vscode-dropdown-foreground)';
-                selectedDisplay.style.border = '1px solid var(--vscode-dropdown-border)';
-                selectedDisplay.style.padding = '4px 20px 4px 4px';
-                selectedDisplay.style.fontSize = '12px';
-                selectedDisplay.style.display = 'flex';
-                selectedDisplay.style.alignItems = 'center';
-                selectedDisplay.style.gap = '6px';
-                selectedDisplay.style.position = 'relative';
 
                 // Arrow indicator
                 const arrow = document.createElement('span');
+                arrow.className = 'dropdown-arrow';
                 arrow.textContent = '▼';
-                arrow.style.position = 'absolute';
-                arrow.style.right = '4px';
-                arrow.style.fontSize = '8px';
-                arrow.style.pointerEvents = 'none';
                 selectedDisplay.appendChild(arrow);
 
                 // Dropdown options container (appended to body for proper z-index stacking)
                 const optionsContainer = document.createElement('div');
                 optionsContainer.className = 'dropdown-options mapping-dropdown-options';
-                optionsContainer.style.display = 'none';
-                optionsContainer.style.position = 'fixed';
-                optionsContainer.style.background = 'var(--vscode-dropdown-background)';
-                optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
-                optionsContainer.style.maxHeight = '200px';
-                optionsContainer.style.overflowY = 'auto';
-                optionsContainer.style.zIndex = '10000';
-                optionsContainer.style.marginTop = '2px';
 
                 // Build options
                 type DropdownOption = { value: string; label: string; color?: string; isSeparator?: boolean };
@@ -7737,66 +7679,27 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         const separatorDiv = document.createElement('div');
                         separatorDiv.textContent = opt.label;
                         separatorDiv.className = 'dropdown-separator';
-                        separatorDiv.style.padding = '4px 8px';
-                        separatorDiv.style.fontWeight = 'bold';
-                        separatorDiv.style.fontSize = '11px';
-                        // Use picker group colors for better visibility/theming
-                        separatorDiv.style.color = 'var(--vscode-pickerGroup-foreground)';
-                        separatorDiv.style.borderBottom = '1px solid var(--vscode-pickerGroup-border)';
-
-                        // Add margin for separation (except first item)
-                        separatorDiv.style.marginTop = index > 0 ? '8px' : '2px';
-                        separatorDiv.style.marginBottom = '2px';
-
-                        separatorDiv.style.textTransform = 'uppercase';
-                        separatorDiv.style.pointerEvents = 'none'; // Make unclickable
+                        if (index === 0) {
+                            separatorDiv.style.marginTop = '2px';
+                        }
                         return separatorDiv;
                     }
 
                     const optionDiv = document.createElement('div');
-                    optionDiv.className = 'dropdown-option';
+                    optionDiv.className = isSelected ? 'dropdown-option selected' : 'dropdown-option';
                     optionDiv.setAttribute('data-value', opt.value);
-                    optionDiv.style.padding = '4px 8px';
-                    optionDiv.style.cursor = 'pointer';
-                    optionDiv.style.display = 'flex';
-                    optionDiv.style.alignItems = 'center';
-                    optionDiv.style.gap = '8px';
-                    optionDiv.style.fontSize = '12px';
-                    optionDiv.style.whiteSpace = 'nowrap';
-
-                    if (isSelected) {
-                        optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
-                        optionDiv.style.color = 'var(--vscode-list-activeSelectionForeground)';
-                    }
 
                     // Add color swatch if available
                     if (opt.color) {
                         const swatch = document.createElement('div');
-                        swatch.style.width = '16px';
-                        swatch.style.height = '16px';
+                        swatch.className = 'dropdown-color-swatch';
                         swatch.style.background = opt.color;
-                        swatch.style.border = '1px solid var(--vscode-panel-border)';
-                        swatch.style.borderRadius = '2px';
-                        swatch.style.flexShrink = '0';
                         optionDiv.appendChild(swatch);
                     }
 
                     const text = document.createElement('span');
                     text.textContent = opt.label;
-                    text.style.whiteSpace = 'nowrap';
                     optionDiv.appendChild(text);
-
-                    // Hover effect
-                    optionDiv.addEventListener('mouseenter', () => {
-                        if (!isSelected) {
-                            optionDiv.style.background = 'var(--vscode-list-hoverBackground)';
-                        }
-                    });
-                    optionDiv.addEventListener('mouseleave', () => {
-                        if (!isSelected) {
-                            optionDiv.style.background = '';
-                        }
-                    });
 
                     return optionDiv;
                 };
@@ -7818,12 +7721,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     // Add color swatch if available
                     if (opt.color) {
                         const swatch = document.createElement('div');
-                        swatch.style.width = '16px';
-                        swatch.style.height = '16px';
+                        swatch.className = 'dropdown-color-swatch';
                         swatch.style.background = opt.color;
-                        swatch.style.border = '1px solid var(--vscode-panel-border)';
-                        swatch.style.borderRadius = '2px';
-                        swatch.style.flexShrink = '0';
                         selectedDisplay.insertBefore(swatch, arrow);
                     }
 
@@ -7945,10 +7844,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Create fixed color picker (hidden by default)
                 const fixedColorPicker = document.createElement('div');
-                fixedColorPicker.style.display = currentSlot === '__fixed__' ? 'flex' : 'none';
-                fixedColorPicker.style.alignItems = 'center';
-                fixedColorPicker.style.gap = '5px';
-                fixedColorPicker.style.flex = '1';
+                fixedColorPicker.className =
+                    currentSlot === '__fixed__' ? 'fixed-color-picker visible' : 'fixed-color-picker';
 
                 const colorInput = document.createElement('input');
                 colorInput.type = 'color';
@@ -7961,9 +7858,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 textInput.className = 'color-input text-input';
                 textInput.value = currentFixedColor || '#4A90E2';
                 textInput.placeholder = 'e.g., blue, #4A90E2';
-                textInput.style.flex = '1';
-                textInput.style.minWidth = '50px';
-                textInput.style.maxWidth = '90px';
 
                 fixedColorPicker.appendChild(colorInput);
                 fixedColorPicker.appendChild(textInput);
@@ -7971,32 +7865,19 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Update select width when fixed color is shown/hidden
                 const updateSelectWidth = () => {
                     if (select.getAttribute('data-value') === '__fixed__') {
-                        select.style.flex = '0 0 95px';
-                        select.style.width = '95px';
-                        fixedColorPicker.style.display = 'flex';
+                        select.classList.add('fixed-width');
+                        fixedColorPicker.classList.add('visible');
                     } else {
-                        select.style.flex = '1';
-                        select.style.minWidth = 'auto';
-                        fixedColorPicker.style.display = 'none';
+                        select.classList.remove('fixed-width');
+                        fixedColorPicker.classList.remove('visible');
                     }
                 };
                 updateSelectWidth();
 
                 // Create close icon to clear the mapping
                 const clearIcon = document.createElement('span');
-                clearIcon.className = 'codicon codicon-close';
-                clearIcon.style.cursor = 'pointer';
-                clearIcon.style.fontSize = '14px';
-                clearIcon.style.color = 'var(--vscode-icon-foreground)';
-                clearIcon.style.opacity = '0.6';
-                clearIcon.style.padding = '4px';
+                clearIcon.className = 'codicon codicon-close mapping-clear-icon';
                 clearIcon.title = 'Clear mapping (set to None)';
-                clearIcon.addEventListener('mouseenter', () => {
-                    clearIcon.style.opacity = '1';
-                });
-                clearIcon.addEventListener('mouseleave', () => {
-                    clearIcon.style.opacity = '0.6';
-                });
                 clearIcon.addEventListener('click', (e) => {
                     e.stopPropagation();
                     select.setAttribute('data-value', 'none');
@@ -8011,15 +7892,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Opacity control
                 const opacityContainer = document.createElement('div');
-                opacityContainer.style.display = 'flex';
-                opacityContainer.style.alignItems = 'center';
-                opacityContainer.style.gap = '6px';
-                opacityContainer.style.minWidth = '140px';
+                opacityContainer.className = 'opacity-controls';
 
                 const opacityLabel = document.createElement('span');
+                opacityLabel.className = 'opacity-label';
                 opacityLabel.textContent = 'α:';
-                opacityLabel.style.fontSize = '11px';
-                opacityLabel.style.color = 'var(--vscode-descriptionForeground)';
 
                 const opacitySlider = document.createElement('input');
                 opacitySlider.type = 'range';
@@ -8029,8 +7906,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 opacitySlider.step = '5';
                 const initialOpacity = currentOpacity !== undefined ? currentOpacity : 1;
                 opacitySlider.value = Math.round(initialOpacity * 100).toString();
-                opacitySlider.style.flex = '1';
-                opacitySlider.style.minWidth = '70px';
 
                 // Get the color from the selected palette slot to create gradient
                 const updateSliderGradient = () => {
@@ -8038,18 +7913,14 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     if (slotName === 'none') {
                         // Disable and gray out opacity controls when 'none' is selected
                         opacitySlider.disabled = true;
-                        opacitySlider.style.opacity = '0.4';
-                        opacitySlider.style.cursor = 'not-allowed';
                         opacitySlider.style.setProperty('--slider-color', '#808080');
-                        opacityValue.style.opacity = '0.4';
-                        opacityLabel.style.opacity = '0.4';
+                        opacityValue.classList.add('disabled');
+                        opacityLabel.classList.add('disabled');
                     } else {
                         // Enable opacity controls
                         opacitySlider.disabled = false;
-                        opacitySlider.style.opacity = '1';
-                        opacitySlider.style.cursor = 'pointer';
-                        opacityValue.style.opacity = '1';
-                        opacityLabel.style.opacity = '1';
+                        opacityValue.classList.remove('disabled');
+                        opacityLabel.classList.remove('disabled');
 
                         if (slotName === '__fixed__') {
                             // Use the fixed color - extract it first if it's a ThemedColor
@@ -8070,10 +7941,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 };
 
                 const opacityValue = document.createElement('span');
+                opacityValue.className = 'opacity-value';
                 opacityValue.textContent = Math.round(initialOpacity * 100) + '%';
-                opacityValue.style.fontSize = '11px';
-                opacityValue.style.minWidth = '35px';
-                opacityValue.style.color = 'var(--vscode-descriptionForeground)';
 
                 // Call after all elements are created
                 updateSliderGradient();

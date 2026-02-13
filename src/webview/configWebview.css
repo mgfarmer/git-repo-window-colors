@@ -1688,8 +1688,6 @@ button:focus {
 .profile-preview-control {
     margin-top: 12px;
     padding: 8px;
-    border: 1px solid var(--vscode-input-border);
-    border-radius: 2px;
     background-color: var(--vscode-editor-background);
 }
 
@@ -1752,26 +1750,6 @@ button:focus {
     font-weight: 600;
     line-height: 1;
     flex-shrink: 0;
-}
-
-.profile-indicators {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-right: 8px;
-    flex-shrink: 0;
-    min-width: 36px;
-    justify-content: flex-start;
-}
-
-.profile-indicator-icon {
-    font-size: 14px;
-    color: var(--vscode-foreground);
-    opacity: 0.8;
-}
-
-.profile-indicator-icon:hover {
-    opacity: 1;
 }
 
 .profile-usage-indicators {
@@ -2558,6 +2536,22 @@ button:focus {
     cursor: grabbing !important;
 }
 
+/* Custom Dropdown Styles */
+.mapping-dropdown-container {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.custom-dropdown {
+    flex: 1;
+    min-width: 200px;
+    min-height: 28px;
+    position: relative;
+    cursor: pointer;
+}
+
 .custom-dropdown.drag-compatible {
     box-shadow: 0 0 0 2px var(--vscode-focusBorder);
     animation: pulse-border 1s ease-in-out infinite;
@@ -2566,6 +2560,151 @@ button:focus {
 .custom-dropdown.drag-hover {
     box-shadow: 0 0 0 3px var(--vscode-focusBorder);
     background-color: var(--vscode-list-hoverBackground);
+}
+
+.custom-dropdown.fixed-width {
+    flex: 0 0 95px;
+    width: 95px;
+}
+
+.dropdown-selected {
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    border: 1px solid var(--vscode-dropdown-border);
+    padding: 4px 20px 4px 4px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    height: 28px;
+    box-sizing: border-box;
+}
+
+.dropdown-arrow {
+    position: absolute;
+    right: 4px;
+    font-size: 8px;
+    pointer-events: none;
+}
+
+.dropdown-options {
+    display: none;
+    position: fixed;
+    background: var(--vscode-dropdown-background);
+    border: 1px solid var(--vscode-dropdown-border);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10000;
+    margin-top: 2px;
+}
+
+.dropdown-separator {
+    padding: 4px 8px;
+    font-weight: bold;
+    font-size: 11px;
+    color: var(--vscode-pickerGroup-foreground);
+    border-bottom: 1px solid var(--vscode-pickerGroup-border);
+    text-transform: uppercase;
+    pointer-events: none;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}
+
+.dropdown-separator:first-child {
+    margin-top: 2px;
+}
+
+.dropdown-option {
+    padding: 4px 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.dropdown-option.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.dropdown-option:hover:not(.selected) {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.dropdown-color-swatch {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.mapping-clear-icon {
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--vscode-icon-foreground);
+    opacity: 0.6;
+    padding: 4px;
+}
+
+.mapping-clear-icon:hover {
+    opacity: 1;
+}
+
+.fixed-color-picker {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+}
+
+.fixed-color-picker.visible {
+    display: flex;
+}
+
+.fixed-color-picker .text-input {
+    flex: 1;
+    min-width: 50px;
+    max-width: 90px;
+}
+
+.opacity-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 140px;
+}
+
+.opacity-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.opacity-slider {
+    flex: 1;
+    min-width: 70px;
+}
+
+.opacity-slider:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.opacity-value {
+    font-size: 11px;
+    min-width: 35px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.opacity-value.disabled {
+    opacity: 0.4;
+}
+
+.opacity-label.disabled {
+    opacity: 0.4;
 }
 
 @keyframes pulse-border {
