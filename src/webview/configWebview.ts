@@ -446,7 +446,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _getRepoRules(): RepoRule[] {
         const config = vscode.workspace.getConfiguration('windowColors');
-        const repoConfigList = config.get<string[]>('repoConfigurationList', []);
+        const repoConfigList = config.get<any[]>('repoRules', []);
         const advancedProfiles = this._getAdvancedProfiles();
 
         const rules = repoConfigList
@@ -806,7 +806,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 if (repoRules[repoRuleIndex]) {
                     repoRules[repoRuleIndex].branchTableName = tableName;
                     const formattedRules = repoRules.map((rule) => this._formatRepoRule(rule));
-                    await config.update('repoConfigurationList', formattedRules, vscode.ConfigurationTarget.Global);
+                    await config.update('repoRules', formattedRules, vscode.ConfigurationTarget.Global);
                     console.log('[Backend] Repo rule updated successfully');
                 }
             }
@@ -1008,7 +1008,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     const formatted = this._formatRepoRule(rule);
                     return formatted;
                 });
-                updatePromises.push(Promise.resolve(config.update('repoConfigurationList', repoRulesArray, true)));
+                updatePromises.push(Promise.resolve(config.update('repoRules', repoRulesArray, true)));
             }
 
             // Update branch rules
@@ -1128,7 +1128,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     index,
                 );
                 // Deep clone to avoid mutating VS Code's internal data structure
-                const repoRules = JSON.parse(JSON.stringify(config.get<any[]>('repoConfigurationList', [])));
+                const repoRules = JSON.parse(JSON.stringify(config.get<any[]>('repoRules', [])));
                 if (index >= 0 && index < repoRules.length) {
                     const rule = repoRules[index];
                     console.log(
@@ -1153,7 +1153,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         '[_handleThemedColorUpdate] REPO: Set rule.primaryColor:',
                         JSON.stringify(rule.primaryColor),
                     );
-                    await config.update('repoConfigurationList', repoRules, true);
+                    await config.update('repoRules', repoRules, true);
                     console.log('[_handleThemedColorUpdate] REPO: Config update complete');
 
                     // Send updated config directly using our local repoRules to avoid stale read

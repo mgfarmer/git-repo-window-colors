@@ -362,7 +362,7 @@ function getCurrentConfigSchemaVersion(): number {
  */
 async function migrateConfigurationToJson(context: ExtensionContext): Promise<void> {
     const CURRENT_CONFIG_SCHEMA_VERSION = getCurrentConfigSchemaVersion();
-    const lastMigratedVersion = 0; //context.globalState.get<number>('configSchemaVersion', 0);
+    const lastMigratedVersion = context.globalState.get<number>('configSchemaVersion', 0);
 
     // Skip if already on current version
     if (lastMigratedVersion >= CURRENT_CONFIG_SCHEMA_VERSION) {
@@ -541,7 +541,7 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
             }
 
             // ===== STEP 4: Write migrated configuration =====
-            await config.update('repoConfigurationList', migratedRepoList, vscode.ConfigurationTarget.Global);
+            await config.update('repoRules', migratedRepoList, vscode.ConfigurationTarget.Global);
             await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
             await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
 
@@ -830,7 +830,7 @@ export async function activate(context: ExtensionContext) {
                     const newArray = newRepoConfigList.map((item) => repoConfigAsString(item));
                     workspace
                         .getConfiguration('windowColors')
-                        .update('repoConfigurationList', newArray, true)
+                        .update('repoRules', newArray, true)
                         .then(() => {
                             undoColors();
                             // Update the configuration webview if it's open
@@ -1128,7 +1128,7 @@ function extractRepoNameFromUrl(url: string): string {
  */
 function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undefined {
     const configProvider: RuleConfigProvider = {
-        getRepoConfigurationList: () => getObjectSetting('repoConfigurationList'),
+        getRepoConfigurationList: () => getObjectSetting('repoRules'),
         getBranchConfigurationList: () => getObjectSetting('branchConfigurationList'),
         getAdvancedProfiles: () =>
             (workspace.getConfiguration('windowColors').get('advancedProfiles', {}) as { [key: string]: any }) || {},
@@ -1156,7 +1156,7 @@ function getRepoConfigList(validate: boolean = false): Array<RepoConfig> | undef
  */
 function getBranchData(validate: boolean = false): Map<string, string | ThemedColor> {
     const configProvider: RuleConfigProvider = {
-        getRepoConfigurationList: () => getObjectSetting('repoConfigurationList'),
+        getRepoConfigurationList: () => getObjectSetting('repoRules'),
         getBranchConfigurationList: () => getObjectSetting('branchConfigurationList'),
         getAdvancedProfiles: () =>
             workspace.getConfiguration('windowColors').get<{ [key: string]: AdvancedProfile }>('advancedProfiles', {}),
@@ -1222,7 +1222,7 @@ function undoColors() {
  */
 function getBranchTableUsageCount(tableName: string): number {
     const config = workspace.getConfiguration('windowColors');
-    const repoRules = config.get<any[]>('repoConfigurationList', []);
+    const repoRules = config.get<any[]>('repoRules', []);
 
     let count = 0;
     for (const rule of repoRules) {
@@ -1269,7 +1269,7 @@ async function deleteBranchTable(tableName: string): Promise<boolean> {
     }
 
     // Migrate all repo rules using this table to Default Rules
-    const repoRules = config.get<any[]>('repoConfigurationList', []);
+    const repoRules = config.get<any[]>('repoRules', []);
     let migratedCount = 0;
 
     for (const rule of repoRules) {
@@ -1280,7 +1280,7 @@ async function deleteBranchTable(tableName: string): Promise<boolean> {
     }
 
     if (migratedCount > 0) {
-        await config.update('repoConfigurationList', repoRules, vscode.ConfigurationTarget.Global);
+        await config.update('repoRules', repoRules, vscode.ConfigurationTarget.Global);
         outputChannel.appendLine(`Migrated ${migratedCount} repo rules from "${tableName}" to "Default Rules"`);
     }
 
@@ -1312,7 +1312,7 @@ async function renameBranchTable(oldName: string, newName: string): Promise<bool
     }
 
     // Update all repo rules using this table
-    const repoRules = config.get<any[]>('repoConfigurationList', []);
+    const repoRules = config.get<any[]>('repoRules', []);
     let updatedCount = 0;
 
     for (const rule of repoRules) {
@@ -1330,7 +1330,7 @@ async function renameBranchTable(oldName: string, newName: string): Promise<bool
     await config.update('sharedBranchTables', updatedTables, vscode.ConfigurationTarget.Global);
 
     if (updatedCount > 0) {
-        await config.update('repoConfigurationList', repoRules, vscode.ConfigurationTarget.Global);
+        await config.update('repoRules', repoRules, vscode.ConfigurationTarget.Global);
     }
 
     outputChannel.appendLine(
@@ -1352,7 +1352,7 @@ function findBestTableForNewRepoRule(selectedRepoRuleIndex: number | undefined):
     }
     
     const config = workspace.getConfiguration('windowColors');
-    const repoRules = config.get<any[]>('repoConfigurationList', []);
+    const repoRules = config.get<any[]>('repoRules', []);
     
     if (selectedRepoRuleIndex < repoRules.length) {
         const selectedRule = repoRules[selectedRepoRuleIndex];
@@ -1893,8 +1893,10 @@ async function exportConfiguration(): Promise<void> {
         // Get current configuration
         const config = workspace.getConfiguration('windowColors');
         const exportData = {
-            repoConfigurationList: config.get('repoConfigurationList'),
+            repoRules: config.get('repoRules'),
+            repoConfigurationList: config.get('repoConfigurationList'), // For backward compatibility
             branchConfigurationList: config.get('branchConfigurationList'),
+            sharedBranchTables: config.get('sharedBranchTables'),
             removeManagedColors: config.get('removeManagedColors'),
             colorInactiveTitlebar: config.get('colorInactiveTitlebar'),
             colorEditorTabs: config.get('colorEditorTabs'),
@@ -1905,7 +1907,7 @@ async function exportConfiguration(): Promise<void> {
             askToColorizeRepoWhenOpened: config.get('askToColorizeRepoWhenOpened'),
             advancedProfiles: config.get('advancedProfiles'),
             exportedAt: new Date().toISOString(),
-            version: '1.5.0',
+            version: '1.5.21',
         };
 
         // Get last export path or default to home directory
@@ -1980,7 +1982,7 @@ async function importConfiguration(): Promise<void> {
         const importData = JSON.parse(fileContent);
 
         // Validate that this looks like a valid configuration file
-        if (!importData.repoConfigurationList && !importData.branchConfigurationList) {
+        if (!importData.repoRules && !importData.repoConfigurationList && !importData.branchConfigurationList) {
             vscode.window.showErrorMessage('Invalid configuration file: Missing required configuration data');
             return;
         }
@@ -2003,12 +2005,44 @@ async function importConfiguration(): Promise<void> {
 
         if (action === 'Import and Replace') {
             // Replace all configuration
-            if (importData.repoConfigurationList !== undefined) {
+            // Prefer repoRules over repoConfig urationList for imports
+            if (importData.repoRules !== undefined) {
+                configUpdates.push(
+                    Promise.resolve(
+                        config.update('repoRules', importData.repoRules, vscode.ConfigurationTarget.Global),
+                    ),
+                );
+            } else if (importData.repoConfigurationList !== undefined) {
+                // Handle old exports - convert to repoRules if they're JSON objects
+                const repoList = importData.repoConfigurationList;
+                const hasJsonObjects = repoList.some((item: any) => typeof item === 'object');
+                if (hasJsonObjects) {
+                    configUpdates.push(
+                        Promise.resolve(
+                            config.update(
+                                'repoRules',
+                                repoList.filter((item: any) => typeof item === 'object'),
+                                vscode.ConfigurationTarget.Global,
+                            ),
+                        ),
+                    );
+                }
+                // Keep strings in repoConfigurationList for migration
+                const strings = repoList.filter((item: any) => typeof item === 'string');
+                if (strings.length > 0) {
+                    configUpdates.push(
+                        Promise.resolve(
+                            config.update('repoConfigurationList', strings, vscode.ConfigurationTarget.Global),
+                        ),
+                    );
+                }
+            }
+            if (importData.sharedBranchTables !== undefined) {
                 configUpdates.push(
                     Promise.resolve(
                         config.update(
-                            'repoConfigurationList',
-                            importData.repoConfigurationList,
+                            'sharedBranchTables',
+                            importData.sharedBranchTables,
                             vscode.ConfigurationTarget.Global,
                         ),
                     ),
@@ -2027,19 +2061,18 @@ async function importConfiguration(): Promise<void> {
             }
         } else if (action === 'Merge with Current') {
             // Merge configurations
-            const currentRepoList = config.get<string[]>('repoConfigurationList') || [];
+            const currentRepoList = config.get<any[]>('repoRules') || [];
             const currentBranchList = config.get<string[]>('branchConfigurationList') || [];
 
-            const importRepoList = importData.repoConfigurationList || [];
+            const importRepoList = importData.repoRules || importData.repoConfigurationList || [];
             const importBranchList = importData.branchConfigurationList || [];
 
             // Merge repo configurations (avoid duplicates based on repo qualifier)
             const mergedRepoList = [...currentRepoList];
             for (const importItem of importRepoList) {
-                const repoQualifier = importItem.split(':')[0].split('|')[0].trim();
-                const existingIndex = mergedRepoList.findIndex(
-                    (item) => item.split(':')[0].split('|')[0].trim() === repoQualifier,
-                );
+                if (typeof importItem === 'string') continue; // Skip strings - they should be migrated
+                const repoQualifier = importItem.repoQualifier;
+                const existingIndex = mergedRepoList.findIndex((item: any) => item.repoQualifier === repoQualifier);
                 if (existingIndex >= 0) {
                     mergedRepoList[existingIndex] = importItem; // Replace existing
                 } else {
@@ -2060,9 +2093,7 @@ async function importConfiguration(): Promise<void> {
             }
 
             configUpdates.push(
-                Promise.resolve(
-                    config.update('repoConfigurationList', mergedRepoList, vscode.ConfigurationTarget.Global),
-                ),
+                Promise.resolve(config.update('repoRules', mergedRepoList, vscode.ConfigurationTarget.Global)),
             );
             configUpdates.push(
                 Promise.resolve(

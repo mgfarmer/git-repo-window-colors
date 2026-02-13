@@ -661,19 +661,7 @@ function getProfileUsageInfo(): {
                 result.profileNames.add(rule.branchColor);
                 ruleUsesProfile = true;
             }
-            // Check local branch rules
-            if (rule.branchRules) {
-                for (const branchRule of rule.branchRules) {
-                    if (branchRule.profileName && advancedProfiles[branchRule.profileName]) {
-                        result.profileNames.add(branchRule.profileName);
-                        ruleUsesProfile = true;
-                    }
-                    if (typeof branchRule.color === 'string' && advancedProfiles[branchRule.color]) {
-                        result.profileNames.add(branchRule.color);
-                        ruleUsesProfile = true;
-                    }
-                }
-            }
+            // Local branch rules have been removed - all branch rules are now in shared tables
 
             if (ruleUsesProfile) {
                 result.repoRuleCount++;
@@ -1014,33 +1002,7 @@ function handleConfigurationData(data: any) {
                 needsUpdate = true;
             }
 
-            // Check local branch rules
-            if (rule.branchRules) {
-                for (const branchRule of rule.branchRules) {
-                    if (
-                        typeof branchRule.color === 'string' &&
-                        !branchRule.profileName &&
-                        currentConfig.advancedProfiles[branchRule.color]
-                    ) {
-                        branchRule.profileName = branchRule.color;
-                        needsUpdate = true;
-                    }
-                }
-            }
-        }
-
-        // Check global branch rules
-        if (currentConfig.branchRules) {
-            for (const branchRule of currentConfig.branchRules) {
-                if (
-                    typeof branchRule.color === 'string' &&
-                    !branchRule.profileName &&
-                    currentConfig.advancedProfiles[branchRule.color]
-                ) {
-                    branchRule.profileName = branchRule.color;
-                    needsUpdate = true;
-                }
-            }
+            // Local branch rules have been removed - all branch rules are now in shared tables
         }
 
         // If we made changes, save the updated config
