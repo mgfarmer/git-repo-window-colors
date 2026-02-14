@@ -1,10 +1,12 @@
 import Color from 'color';
-import { AdvancedProfile } from './types/advancedModeTypes';
+import { AdvancedProfile, ThemeKind } from './types/advancedModeTypes';
+import { resolveThemedColor } from './colorDerivation';
 
 export function resolveProfile(
     profile: AdvancedProfile,
     repoColor: Color,
     branchColor: Color,
+    themeKind: ThemeKind = 'dark',
 ): { [key: string]: string | undefined } {
     const paletteResults: { [key: string]: Color } = {};
 
@@ -15,7 +17,12 @@ export function resolveProfile(
 
             try {
                 if (def.source === 'fixed' && def.value) {
-                    baseColor = Color(def.value);
+                    // Handle both string and ThemedColor
+                    const colorValue = resolveThemedColor(def.value, themeKind);
+                    if (!colorValue) {
+                        continue;
+                    }
+                    baseColor = Color(colorValue);
                 } else if (def.source === 'repoColor') {
                     baseColor = repoColor;
                 } else if (def.source === 'branchColor') {

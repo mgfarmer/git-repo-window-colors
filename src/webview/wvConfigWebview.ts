@@ -61,6 +61,7 @@ const vscode = acquireVsCodeApi();
 // Store vscode on window for other modules (e.g., hintUtils.ts) to access
 (window as any).vscode = vscode;
 let currentConfig: any = null;
+let currentThemeKind: 'dark' | 'light' | 'highContrast' = 'dark'; // Track current VS Code theme
 let starredKeys: string[] = [];
 let validationTimeout: any = null;
 let regexValidationTimeout: any = null;
@@ -74,11 +75,25 @@ let selectedMappingTab: string | null = null; // Track which mapping tab is acti
 let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for branch rules display
 let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
 let previewMode: boolean = false; // Track if preview mode is enabled
+let profilePreviewMode: boolean = false; // Track if profile preview mode is enabled
+let profileAddMenuButton: HTMLElement | null = null;
+let profileAddDropdown: HTMLElement | null = null;
 
 // Load checkbox states from localStorage with defaults
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
 let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
 let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') !== 'false'; // Default to true
+
+document.addEventListener('click', (event) => {
+    if (!profileAddDropdown || !profileAddMenuButton) {
+        return;
+    }
+    const target = event.target as Node;
+    if (profileAddDropdown.contains(target) || profileAddMenuButton.contains(target)) {
+        return;
+    }
+    hideProfileAddMenu();
+});
 
 // Help panel resize state
 const HELP_PANEL_MIN_WIDTH = 600;
@@ -496,6 +511,125 @@ function isThemeDark(): boolean {
     return true; // Default to dark mode assumption
 }
 
+/**
+ * Helper function to check if a value is a ThemedColor object
+ */
+function isThemedColor(value: any): boolean {
+    return value && typeof value === 'object' && 'dark' in value && 'light' in value && 'highContrast' in value;
+}
+
+/**
+ * Extracts the appropriate color string from a ThemedColor object
+ * @param colorValue - ThemedColor object
+ * @returns The color string for the current theme
+ */
+function extractColorForTheme(colorValue: any): string {
+    //console.log('[extractColorForTheme] Input:', colorValue, 'currentTheme:', currentThemeKind);
+
+    if (typeof colorValue === 'string') {
+        //console.log('[extractColorForTheme] Returning string as-is:', colorValue);
+        return colorValue;
+    }
+
+    if (isThemedColor(colorValue)) {
+        const themeValue = colorValue[currentThemeKind];
+        if (themeValue && themeValue.value) {
+            //console.log('[extractColorForTheme] Extracted for', currentThemeKind, ':', themeValue.value);
+            return themeValue.value;
+        }
+
+        // Fallback: return first defined color
+        for (const theme of ['dark', 'light', 'highContrast'] as const) {
+            if (colorValue[theme] && colorValue[theme].value) {
+                //console.log('[extractColorForTheme] Fallback to', theme, ':', colorValue[theme].value);
+                return colorValue[theme].value;
+            }
+        }
+    }
+
+    //console.log('[extractColorForTheme] No color found, returning empty string');
+    return ''; // Return empty string if no color found
+}
+
+const THEME_KINDS: Array<'dark' | 'light' | 'highContrast'> = ['dark', 'light', 'highContrast'];
+
+function deriveThemeVariantForWebview(
+    baseColor: string,
+    fromTheme: 'dark' | 'light' | 'highContrast',
+    toTheme: 'dark' | 'light' | 'highContrast',
+): string {
+    const baseHex = convertColorToHex(baseColor || '#4A90E2');
+    const [h, sPercent, lPercent] = hexToHsl(baseHex);
+    let normalizedLightness = lPercent / 100;
+
+    if (toTheme === 'light' && (fromTheme === 'dark' || fromTheme === 'highContrast')) {
+        normalizedLightness = 1 - normalizedLightness;
+        if (normalizedLightness > 0.85) {
+            normalizedLightness = 0.35 + (normalizedLightness - 0.85) * 0.5;
+        }
+    } else if (toTheme === 'dark' && fromTheme === 'light') {
+        normalizedLightness = 1 - normalizedLightness;
+        if (normalizedLightness > 0.75) {
+            normalizedLightness = 0.6 + (normalizedLightness - 0.75) * 0.3;
+        }
+    } else if (toTheme === 'highContrast') {
+        if (fromTheme === 'light') {
+            normalizedLightness = 1 - normalizedLightness;
+        } else {
+            normalizedLightness = Math.min(0.7, normalizedLightness + 0.1);
+        }
+    }
+
+    normalizedLightness = Math.max(0.1, Math.min(0.9, normalizedLightness));
+
+    return hslToHex(h, sPercent, normalizedLightness * 100).toUpperCase();
+}
+
+/**
+ * Creates a ThemedColor object from a single color string
+ * Derives colors for other themes using lightness inversion
+ * This is a simplified version for the webview context
+ */
+function createThemedColorInWebview(color: string): any {
+    if (color === 'none') {
+        return 'none';
+    }
+
+    const themedColor: Record<'dark' | 'light' | 'highContrast', { value: string | undefined; auto: boolean }> = {
+        dark: { value: undefined, auto: true },
+        light: { value: undefined, auto: true },
+        highContrast: { value: undefined, auto: true },
+    };
+
+    themedColor[currentThemeKind] = { value: color, auto: false };
+
+    for (const theme of THEME_KINDS) {
+        if (theme === currentThemeKind) {
+            continue;
+        }
+        const derived = deriveThemeVariantForWebview(color, currentThemeKind, theme);
+        themedColor[theme] = { value: derived, auto: true };
+    }
+
+    return themedColor;
+}
+
+/**
+ * Handles theme change notifications from the extension
+ */
+function handleThemeChanged(data: any) {
+    if (data && data.themeKind) {
+        currentThemeKind = data.themeKind;
+        //  Refresh the UI to show colors for the new theme by re-rendering config
+        // This will extract colors from ThemedColor objects for the new theme
+        if (currentConfig) {
+            // Update the stored config's themeKind to prevent it from being overwritten
+            currentConfig.themeKind = data.themeKind;
+            handleConfigurationData(currentConfig);
+        }
+    }
+}
+
 // Count how many profiles are in use and check if any are used
 function getProfileUsageInfo(): {
     inUse: boolean;
@@ -530,28 +664,16 @@ function getProfileUsageInfo(): {
                 ruleUsesProfile = true;
             }
             // Check if primaryColor is actually a profile name
-            if (rule.primaryColor && advancedProfiles[rule.primaryColor]) {
+            if (typeof rule.primaryColor === 'string' && advancedProfiles[rule.primaryColor]) {
                 result.profileNames.add(rule.primaryColor);
                 ruleUsesProfile = true;
             }
             // Check if branchColor is actually a profile name
-            if (rule.branchColor && advancedProfiles[rule.branchColor]) {
+            if (typeof rule.branchColor === 'string' && advancedProfiles[rule.branchColor]) {
                 result.profileNames.add(rule.branchColor);
                 ruleUsesProfile = true;
             }
-            // Check local branch rules
-            if (rule.branchRules) {
-                for (const branchRule of rule.branchRules) {
-                    if (branchRule.profileName && advancedProfiles[branchRule.profileName]) {
-                        result.profileNames.add(branchRule.profileName);
-                        ruleUsesProfile = true;
-                    }
-                    if (branchRule.color && advancedProfiles[branchRule.color]) {
-                        result.profileNames.add(branchRule.color);
-                        ruleUsesProfile = true;
-                    }
-                }
-            }
+            // Local branch rules have been removed - all branch rules are now in shared tables
 
             if (ruleUsesProfile) {
                 result.repoRuleCount++;
@@ -571,7 +693,7 @@ function getProfileUsageInfo(): {
                         result.profileNames.add(rule.profileName);
                         ruleUsesProfile = true;
                     }
-                    if (rule.color && advancedProfiles[rule.color]) {
+                    if (typeof rule.color === 'string' && advancedProfiles[rule.color]) {
                         result.profileNames.add(rule.color);
                         ruleUsesProfile = true;
                     }
@@ -586,6 +708,66 @@ function getProfileUsageInfo(): {
 
     result.count = result.profileNames.size;
     result.inUse = result.count > 0;
+    return result;
+}
+
+// Check if a specific profile is referenced in any rules
+function isProfileInUse(profileName: string): { inUse: boolean; repoRules: number; branchRules: number } {
+    const result = { inUse: false, repoRules: 0, branchRules: 0 };
+
+    if (!currentConfig || !profileName) return result;
+
+    const advancedProfiles = currentConfig.advancedProfiles || {};
+    if (!advancedProfiles[profileName]) return result;
+
+    // Check repo rules
+    if (currentConfig.repoRules) {
+        for (const rule of currentConfig.repoRules) {
+            let ruleUsesProfile = false;
+
+            // Check explicit profileName field
+            if (rule.profileName === profileName) {
+                ruleUsesProfile = true;
+            }
+            // Check if primaryColor is the profile name
+            if (typeof rule.primaryColor === 'string' && rule.primaryColor === profileName) {
+                ruleUsesProfile = true;
+            }
+            // Check if branchColor is the profile name
+            if (typeof rule.branchColor === 'string' && rule.branchColor === profileName) {
+                ruleUsesProfile = true;
+            }
+
+            if (ruleUsesProfile) {
+                result.repoRules++;
+            }
+        }
+    }
+
+    // Check shared branch tables
+    if (currentConfig.sharedBranchTables) {
+        for (const tableName in currentConfig.sharedBranchTables) {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table && table.rules) {
+                for (const rule of table.rules) {
+                    let ruleUsesProfile = false;
+
+                    if (rule.profileName === profileName) {
+                        ruleUsesProfile = true;
+                    }
+                    if (typeof rule.color === 'string' && rule.color === profileName) {
+                        ruleUsesProfile = true;
+                    }
+
+                    if (ruleUsesProfile) {
+                        result.branchRules++;
+                    }
+                }
+            }
+        }
+    }
+
+    result.inUse = result.repoRules > 0 || result.branchRules > 0;
     return result;
 }
 
@@ -619,16 +801,16 @@ function getThemeAppropriateColor(): string {
         let saturation;
 
         // Choose lightness based on base color luminance for maximum contrast
-        // For dark themes: make result 20% darker; for light themes: make result 20% brighter
+        // For dark themes: use deeper colors; for light themes: use brighter colors
         let lightness: number;
         if (isDark) {
-            // Base is dark (dark theme)
-            lightness = 0.2 + Math.random() * 0.2; // 36-72% (was 60-90%)
+            // Base is dark (dark theme) - use deeper, richer colors
+            lightness = 0.15 + Math.random() * 0.15; // 15-30%
             saturation = 0.8 + Math.random() * 0.2; // 80-100%
         } else {
             // Base is light (light theme)
-            lightness = 0.5 + Math.random() * 0.2; // 24-60% (was 20-50%)
-            saturation = 0.2 + Math.random() * 0.3; // 40-60%
+            lightness = 0.5 + Math.random() * 0.2; // 50-70%
+            saturation = 0.4 + Math.random() * 0.2; // 40-60%
         }
 
         // Convert HSL to RGB
@@ -700,11 +882,13 @@ function collectUniqueBranchPatterns(): string[] {
 // Message handler for extension communication
 window.addEventListener('message', (event) => {
     const message = event.data;
-    //console.log('[Message Listener] Received message:', message.command);
 
     switch (message.command) {
         case 'configData':
             handleConfigurationData(message.data);
+            break;
+        case 'themeChanged':
+            handleThemeChanged(message.data);
             break;
         case 'colorPickerResult':
             handleColorPickerResult(message.data);
@@ -739,6 +923,7 @@ window.addEventListener('message', (event) => {
         case 'starredKeysUpdated':
             if (message.data && message.data.starredKeys) {
                 starredKeys = message.data.starredKeys;
+                refreshProfileAddMenuOptions();
                 // Re-render profile editor to update star icons
                 const selectedProfileName = (document.getElementById('profileNameInput') as HTMLInputElement)?.value;
                 if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
@@ -771,7 +956,6 @@ window.addEventListener('message', (event) => {
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
-    // console.log('[handleConfigurationData] Received data from backend');
     // if (data?.repoRules) {
     //     console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
     //     data.repoRules.forEach((rule: any, index: number) => {
@@ -779,9 +963,34 @@ function handleConfigurationData(data: any) {
     //     });
     // }
 
+    // LOG: Check if workspaceInfo is being received correctly
+
+    // LOG: Check repo rules with detailed color info
+    if (data.repoRules) {
+        data.repoRules.forEach((rule: any, index: number) => {});
+    }
+
+    // LOG: Check branch tables
+    if (data.sharedBranchTables && data.sharedBranchTables['My Branches']) {
+        data.sharedBranchTables['My Branches'].rules.forEach((rule: any, index: number) => {});
+    }
+
+    // LOG: All shared branch tables
+    if (data.sharedBranchTables) {
+        Object.keys(data.sharedBranchTables).forEach((tableName) => {
+            const table = data.sharedBranchTables[tableName];
+            table.rules?.forEach((rule: any, index: number) => {});
+        });
+    }
+
     // Always use backend data to ensure rule order and matching indexes are consistent
     // The backend data represents the confirmed, persisted state
     currentConfig = data;
+
+    // Extract theme kind if present
+    if (data.themeKind) {
+        currentThemeKind = data.themeKind;
+    }
 
     // Extract starred keys if present
     if (data.starredKeys) {
@@ -838,34 +1047,16 @@ function handleConfigurationData(data: any) {
 
         for (const rule of currentConfig.repoRules) {
             // Check primaryColor
-            if (rule.primaryColor && !rule.profileName && currentConfig.advancedProfiles[rule.primaryColor]) {
+            if (
+                typeof rule.primaryColor === 'string' &&
+                !rule.profileName &&
+                currentConfig.advancedProfiles[rule.primaryColor]
+            ) {
                 rule.profileName = rule.primaryColor;
                 needsUpdate = true;
             }
 
-            // Check local branch rules
-            if (rule.branchRules) {
-                for (const branchRule of rule.branchRules) {
-                    if (
-                        branchRule.color &&
-                        !branchRule.profileName &&
-                        currentConfig.advancedProfiles[branchRule.color]
-                    ) {
-                        branchRule.profileName = branchRule.color;
-                        needsUpdate = true;
-                    }
-                }
-            }
-        }
-
-        // Check global branch rules
-        if (currentConfig.branchRules) {
-            for (const branchRule of currentConfig.branchRules) {
-                if (branchRule.color && !branchRule.profileName && currentConfig.advancedProfiles[branchRule.color]) {
-                    branchRule.profileName = branchRule.color;
-                    needsUpdate = true;
-                }
-            }
+            // Local branch rules have been removed - all branch rules are now in shared tables
         }
 
         // If we made changes, save the updated config
@@ -922,9 +1113,7 @@ function handleDeleteConfirmed(data: any) {
     // The configuration will be refreshed via the normal config update flow
     // We don't need to do anything here as the UI will be updated automatically
     if (data.success) {
-        console.log('Rule deleted successfully');
     } else {
-        console.log('Rule deletion was cancelled');
     }
 }
 
@@ -932,9 +1121,10 @@ function handlePathSimplified(data: any) {
     // Received simplified path from backend, complete addRepoRule action
     if (!currentConfig || !data.simplifiedPath) return;
 
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
-        primaryColor: getThemeAppropriateColor(),
+        primaryColor: createThemedColorInWebview(randomColor),
     };
 
     currentConfig.repoRules.push(newRule);
@@ -945,9 +1135,10 @@ function handlePathSimplifiedForPreview(data: any) {
     // Received simplified path from backend, complete addRepoRuleFromPreview action
     if (!currentConfig || !data.simplifiedPath) return;
 
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         repoQualifier: '!' + data.simplifiedPath, // Add ! prefix for local folder
-        primaryColor: getThemeAppropriateColor(),
+        primaryColor: createThemedColorInWebview(randomColor),
     };
 
     currentConfig.repoRules.push(newRule);
@@ -977,32 +1168,23 @@ function toggleStarredKey(mappingKey: string): void {
 }
 
 function handleGettingStartedHelpContent(data: { content: string }) {
-    console.log('[TOC Navigation] handleGettingStartedHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
-        console.log('[TOC Navigation] Getting started help content loaded');
     }
 }
 
 function handleProfileHelpContent(data: { content: string }) {
-    console.log('[TOC Navigation] handleProfileHelpContent called, content length:', data.content?.length);
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
-        console.log('[TOC Navigation] Profile help content loaded');
     }
 }
 
 function handleHelpContent(data: { helpType: string; content: string }) {
-    console.log(
-        `[TOC Navigation] handleHelpContent called for ${data.helpType}, content length:`,
-        data.content?.length,
-    );
     const contentDiv = document.getElementById('helpPanelContent');
     if (contentDiv && data.content) {
         contentDiv.innerHTML = data.content;
-        console.log(`[TOC Navigation] ${data.helpType} help content loaded`);
 
         // Update current help type to what was just loaded
         currentHelpType = data.helpType;
@@ -1015,8 +1197,6 @@ function handleHelpContent(data: { helpType: string; content: string }) {
 }
 
 function handleSwitchHelp(target: string) {
-    console.log('[TOC Navigation] handleSwitchHelp called with target:', target);
-
     // Save scroll position of current help before switching
     saveCurrentHelpScrollPosition();
 
@@ -1038,31 +1218,22 @@ function handleSwitchHelp(target: string) {
         } else if (target === 'colored') {
             titleElement.textContent = 'Colored Keys Guide';
         }
-        console.log('[TOC Navigation] Updated panel title to:', titleElement.textContent);
     }
 
     // Request the new content
     if (target === 'getting-started') {
-        console.log('[TOC Navigation] Requesting getting started help from extension');
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'profile') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'rules') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'branch-modes') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'report') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'starred') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     } else if (target === 'colored') {
-        console.log(`[TOC Navigation] Requesting ${target} help from extension`);
         vscode.postMessage({ command: 'requestHelp', data: { helpType: target } });
     }
 }
@@ -1076,7 +1247,6 @@ function saveCurrentHelpScrollPosition() {
         const contentDiv = document.getElementById('helpPanelContent');
         if (contentDiv) {
             helpScrollPositions[currentHelpType] = contentDiv.scrollTop;
-            console.log(`[Help] Saved scroll position for ${currentHelpType}: ${contentDiv.scrollTop}`);
         }
     }
 }
@@ -1087,11 +1257,9 @@ function restoreHelpScrollPosition(helpType: string) {
         const savedPosition = helpScrollPositions[helpType];
         if (savedPosition !== undefined) {
             contentDiv.scrollTop = savedPosition;
-            console.log(`[Help] Restored scroll position for ${helpType}: ${savedPosition}`);
         } else {
             // No saved position, reset to top
             contentDiv.scrollTop = 0;
-            console.log(`[Help] No saved scroll position for ${helpType}, resetting to top`);
         }
     }
 }
@@ -1121,7 +1289,6 @@ function openHelp(helpType: string) {
     }
 
     // Request help content from backend
-    console.log(`[Help] Requesting ${helpType} help content from extension`);
     currentHelpType = helpType;
     vscode.postMessage({ command: 'requestHelp', data: { helpType } });
 
@@ -1246,8 +1413,11 @@ function renderConfiguration(config: any) {
     // Show/hide preview toast based on preview mode and whether we're previewing a different rule
     // Also show "no workspace" toast if preview mode is on but there's no workspace open
     const hasWorkspace = config.workspaceInfo?.hasWorkspace ?? true;
-    const matchingRuleIndex = config.matchingIndexes?.repoRule ?? -1;
-    const isPreviewingDifferentRule = selectedRepoRuleIndex !== matchingRuleIndex;
+    const matchingRepoIndex = config.matchingIndexes?.repoRule ?? -1;
+    const matchingBranchIndex = config.matchingIndexes?.branchRule ?? -1;
+    const isPreviewingDifferentRule =
+        selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
+
     if (previewMode && (!hasWorkspace || isPreviewingDifferentRule)) {
         showPreviewToast();
     } else {
@@ -1413,7 +1583,10 @@ function handleDocumentClick(event: Event) {
         if (repoMatch) {
             const index = parseInt(repoMatch[1]);
             const rule = currentConfig?.repoRules?.[index];
-            const ruleDescription = rule ? `"${rule.repoQualifier}" -> ${rule.primaryColor}` : `#${index + 1}`;
+            const colorDisplay = rule ? rule.profileName || extractColorForTheme(rule.primaryColor) || '' : '';
+            const ruleDescription = rule
+                ? `"${rule.repoQualifier}" -> ${colorDisplay || '(no color)'}`
+                : `#${index + 1}`;
 
             // Send delete confirmation request to backend
             vscode.postMessage({
@@ -1434,14 +1607,6 @@ function handleDocumentClick(event: Event) {
             if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
                 tableName = currentConfig.repoRules[selectedRepoRuleIndex].branchTableName || '__none__';
             }
-            console.log(
-                '[DELETE BRANCH WEBVIEW] selectedRepoRuleIndex:',
-                selectedRepoRuleIndex,
-                'tableName:',
-                tableName,
-                'index:',
-                index,
-            );
 
             // Get the rule from the shared table
             let rule, ruleDescription;
@@ -2126,7 +2291,7 @@ function createBranchTableDropdown(
     }
 
     // Check if primaryColor is 'none' (excluded from coloring)
-    if (rule && rule.primaryColor === 'none') {
+    if (rule && typeof rule.primaryColor === 'string' && rule.primaryColor === 'none') {
         const icon = document.createElement('span');
         icon.textContent = '⊘';
         icon.style.marginRight = '4px';
@@ -2559,7 +2724,7 @@ function createRepoRuleRowHTML(rule: any, index: number, totalCount: number): st
                    data-action="updateRepoRule(${index}, 'repoQualifier', this.value)">
         </td>
         <td class="color-cell">
-            ${createColorInputHTML(rule.primaryColor || '', 'repo', index, 'primaryColor')}
+            ${createColorInputHTML(extractColorForTheme(rule.primaryColor) || '', 'repo', index, 'primaryColor')}
         </td>
         <td class="branch-table-cell" id="branch-table-cell-${index}">
             <!-- Custom dropdown will be inserted here -->
@@ -2686,7 +2851,7 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
                    data-action="updateBranchRule(${index}, 'pattern', this.value)">
         </td>
         <td class="color-cell">
-            ${createColorInputHTML(rule.color || '', 'branch', index, 'color')}
+            ${createColorInputHTML(rule.profileName || extractColorForTheme(rule.color) || '', 'branch', index, 'color')}
         </td>
     `;
 }
@@ -2699,7 +2864,7 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
     const isSpecialNone = color === 'none';
 
     if (USE_NATIVE_COLOR_PICKER) {
-        const hexColor = isSpecialNone ? '#808080' : convertColorToHex(color);
+        const hexColor = isSpecialNone ? '#808080' : getRepresentativeColor(color);
         const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
         const noneIndicator = isSpecialNone
             ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
@@ -2725,9 +2890,11 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
             </div>
         `;
     } else {
+        // For non-native picker, resolve profile names to colors
+        const resolvedColor = isSpecialNone ? 'transparent' : getRepresentativeColor(color);
         const swatchStyle = isSpecialNone
             ? 'background-color: transparent; display: flex; align-items: center; justify-content: center;'
-            : `background-color: ${convertColorToValidCSS(color) || '#4A90E2'}`;
+            : `background-color: ${convertColorToValidCSS(resolvedColor) || '#4A90E2'}`;
         const swatchContent = isSpecialNone ? '⊘' : '';
         return `
             <div class="color-input-container${isSpecialNone ? ' is-none' : ''}">
@@ -2807,7 +2974,7 @@ function renderOtherSettings(settings: any) {
     if (selectedRule?.profileName) {
         const profile = currentConfig?.advancedProfiles?.[selectedRule.profileName];
         isProfileRule = profile && !profile.virtual;
-    } else if (selectedRule?.primaryColor) {
+    } else if (typeof selectedRule?.primaryColor === 'string') {
         const profile = currentConfig?.advancedProfiles?.[selectedRule.primaryColor];
         isProfileRule = profile && !profile.virtual;
     }
@@ -3095,7 +3262,8 @@ function renderColorReport(config: any) {
                 };
             }
 
-            const color = escapeHtml(matchedBranchRule.color);
+            const branchColorDisplay = extractColorForTheme(matchedBranchRule.color);
+            const color = escapeHtml(branchColorDisplay || '(no color)');
             return {
                 description: `Branch Rule from "${escapeHtml(branchTableName)}": "<span class="goto-link" data-goto="${gotoData}">${pattern}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${color}</span>)`,
                 gotoData: gotoData,
@@ -3114,7 +3282,8 @@ function renderColorReport(config: any) {
                     gotoData: profileGotoData,
                 };
             }
-            const primaryColor = escapeHtml(matchedRepoRule.primaryColor);
+            const repoColorDisplay = extractColorForTheme(matchedRepoRule.primaryColor);
+            const primaryColor = escapeHtml(repoColorDisplay || '(no color)');
             return {
                 description: `Repository Rule: "<span class="goto-link" data-goto="${gotoData}">${qualifier}</span>" (base color: <span class="goto-link" data-goto="${gotoData}">${primaryColor}</span>)`,
                 gotoData: gotoData,
@@ -3157,11 +3326,11 @@ function renderColorReport(config: any) {
             let gotoTarget = '';
             if (isActivityBarKey && matchedBranchRule) {
                 // Check if branch rule uses a profile
+                const branchColorName =
+                    typeof matchedBranchRule.color === 'string' ? matchedBranchRule.color : undefined;
                 const branchProfileName =
                     matchedBranchRule.profileName ||
-                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
-                        ? matchedBranchRule.color
-                        : null);
+                    (branchColorName && currentConfig?.advancedProfiles?.[branchColorName] ? branchColorName : null);
                 if (branchProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
                 } else {
@@ -3174,10 +3343,12 @@ function renderColorReport(config: any) {
                 }
             } else if (matchedRepoRule) {
                 // Check if repo rule uses a profile (can be in profileName or primaryColor field)
+                const repoPrimaryColorName =
+                    typeof matchedRepoRule.primaryColor === 'string' ? matchedRepoRule.primaryColor : undefined;
                 const repoProfileName =
                     matchedRepoRule.profileName ||
-                    (matchedRepoRule.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
-                        ? matchedRepoRule.primaryColor
+                    (repoPrimaryColorName && currentConfig?.advancedProfiles?.[repoPrimaryColorName]
+                        ? repoPrimaryColorName
                         : null);
                 if (repoProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(repoProfileName)}" data-theme-key="${escapeHtml(key)}"`;
@@ -3186,11 +3357,11 @@ function renderColorReport(config: any) {
                 }
             } else if (matchedBranchRule) {
                 // Check if branch rule uses a profile
+                const branchColorName =
+                    typeof matchedBranchRule.color === 'string' ? matchedBranchRule.color : undefined;
                 const branchProfileName =
                     matchedBranchRule.profileName ||
-                    (matchedBranchRule.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
-                        ? matchedBranchRule.color
-                        : null);
+                    (branchColorName && currentConfig?.advancedProfiles?.[branchColorName] ? branchColorName : null);
                 if (branchProfileName) {
                     gotoTarget = `data-goto="profile" data-profile-name="${escapeHtml(branchProfileName)}" data-theme-key="${escapeHtml(key)}"`;
                 } else {
@@ -3365,6 +3536,8 @@ function handlePreviewModeChange() {
 function addRepoRule() {
     if (!currentConfig) return;
 
+    // LOG: Trace where the flow is going
+
     // Check if workspace is a git repo or local folder
     const isGitRepo = currentConfig.workspaceInfo?.isGitRepo !== false;
     let repoQualifier = '';
@@ -3386,9 +3559,10 @@ function addRepoRule() {
         }
     }
 
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         repoQualifier: repoQualifier,
-        primaryColor: getThemeAppropriateColor(),
+        primaryColor: createThemedColorInWebview(randomColor),
     };
 
     // Always append new rules to the end for predictable behavior
@@ -3418,9 +3592,10 @@ function addBranchRule() {
 
     // Get a random humorous defect name for the default pattern
     const randomDefectName = humorousDefectNames[Math.floor(Math.random() * humorousDefectNames.length)];
+    const randomColor = getThemeAppropriateColor();
     const newRule = {
         pattern: randomDefectName,
-        color: getThemeAppropriateColor(),
+        color: createThemedColorInWebview(randomColor),
         enabled: true,
     };
 
@@ -3484,17 +3659,12 @@ function updateBranchRule(index: number, field: string, value: string) {
 }
 
 function selectRepoRule(index: number) {
-    console.log(
-        `[selectRepoRule] Called with index: ${index}, current selectedRepoRuleIndex: ${selectedRepoRuleIndex}`,
-    );
     if (!currentConfig?.repoRules?.[index]) {
-        console.log(`[selectRepoRule] No rule found at index ${index}, returning`);
         return;
     }
 
     // Toggle: if clicking the already-selected rule, deselect it
     if (selectedRepoRuleIndex === index) {
-        console.log(`[selectRepoRule] Deselecting rule at index ${index}`);
         selectedRepoRuleIndex = -1;
         selectedBranchRuleIndex = -1;
 
@@ -3516,7 +3686,6 @@ function selectRepoRule(index: number) {
     }
 
     selectedRepoRuleIndex = index;
-    console.log(`[selectRepoRule] Set selectedRepoRuleIndex to ${index}`);
 
     // Reset branch rule selection when switching repos so it reinitializes
     selectedBranchRuleIndex = -1;
@@ -3593,11 +3762,12 @@ function selectBranchRule(index: number) {
 
     const branchRules = currentConfig?.sharedBranchTables?.[tableName]?.rules || [];
 
-    if (!branchRules?.[index]) return;
+    if (!branchRules?.[index]) {
+        return;
+    }
 
     // Toggle: if clicking the already-selected rule, deselect it
     if (selectedBranchRuleIndex === index) {
-        console.log(`[selectBranchRule] Deselecting rule at index ${index}`);
         selectedBranchRuleIndex = -1;
 
         // Clear branch preview when deselecting
@@ -3611,6 +3781,16 @@ function selectBranchRule(index: number) {
                     clearBranchPreview: true,
                 },
             });
+
+            // Update toast - still showing preview if repo rule differs from matching
+            const matchingRepoIndex = currentConfig?.matchingIndexes?.repoRule ?? -1;
+            const isPreviewingDifferentRepoRule = selectedRepoRuleIndex !== matchingRepoIndex;
+
+            if (isPreviewingDifferentRepoRule) {
+                showPreviewToast();
+            } else {
+                hidePreviewToast();
+            }
         }
 
         // Re-render to show deselected state
@@ -3633,6 +3813,20 @@ function selectBranchRule(index: number) {
                 repoIndex: selectedRepoRuleIndex,
             },
         });
+    } else {
+    }
+
+    // Update toast if preview mode is enabled
+    // Show toast only if the selected rules differ from the matching rules
+    const matchingRepoIndex = currentConfig?.matchingIndexes?.repoRule ?? -1;
+    const matchingBranchIndex = currentConfig?.matchingIndexes?.branchRule ?? -1;
+    const isPreviewingDifferentRule =
+        selectedRepoRuleIndex !== matchingRepoIndex || selectedBranchRuleIndex !== matchingBranchIndex;
+
+    if (previewMode && isPreviewingDifferentRule) {
+        showPreviewToast();
+    } else {
+        hidePreviewToast();
     }
 
     // Re-render branch rules to update selected state and preview styling
@@ -3666,19 +3860,8 @@ function changeBranchMode(index: number, useGlobal: boolean) {
 function changeBranchTable(index: number, tableName: string) {
     if (!currentConfig?.repoRules?.[index]) return;
 
-    console.log(
-        '[changeBranchTable] BEFORE - index:',
-        index,
-        'old value:',
-        currentConfig.repoRules[index].branchTableName,
-        'new value:',
-        tableName,
-    );
-
     // Store '__none__' for No Branch Table, table name string for specific table
     currentConfig.repoRules[index].branchTableName = tableName;
-
-    console.log('[changeBranchTable] AFTER - stored value:', currentConfig.repoRules[index].branchTableName);
 
     // Reset branch rule selection when changing tables so it reinitializes
     if (selectedRepoRuleIndex === index) {
@@ -3693,9 +3876,6 @@ function changeBranchTable(index: number, tableName: string) {
 }
 
 async function showCreateTableDialog(repoRuleIndex: number) {
-    console.log('[showCreateTableDialog] START - repoRuleIndex:', repoRuleIndex);
-    console.log('[showCreateTableDialog] selectedRepoRuleIndex before:', selectedRepoRuleIndex);
-
     const tableName = await showInputDialog({
         title: 'Create New Branch Table',
         inputLabel: 'Table Name:',
@@ -3715,7 +3895,6 @@ async function showCreateTableDialog(repoRuleIndex: number) {
     });
 
     if (!tableName) {
-        console.log('[showCreateTableDialog] User cancelled');
         return; // User cancelled
     }
 
@@ -3723,7 +3902,6 @@ async function showCreateTableDialog(repoRuleIndex: number) {
     const trimmedName = tableName.trim();
 
     // Create the new table via backend command
-    console.log('[showCreateTableDialog] Creating table via backend:', trimmedName, 'for repo rule:', repoRuleIndex);
     vscode.postMessage({
         command: 'createBranchTable',
         data: {
@@ -3735,7 +3913,6 @@ async function showCreateTableDialog(repoRuleIndex: number) {
     // The backend will send updated config back, which will trigger a refresh
     // For now, optimistically update the UI
     if (currentConfig && currentConfig.sharedBranchTables) {
-        console.log('[showCreateTableDialog] Optimistically updating UI');
         currentConfig.sharedBranchTables[trimmedName] = {
             rules: [],
         };
@@ -3755,25 +3932,14 @@ async function showCreateTableDialog(repoRuleIndex: number) {
 
         // Update the repo rule to use the new table
         if (currentConfig.repoRules?.[repoRuleIndex]) {
-            console.log(
-                '[showCreateTableDialog] BEFORE - branchTableName:',
-                currentConfig.repoRules[repoRuleIndex].branchTableName,
-            );
             currentConfig.repoRules[repoRuleIndex].branchTableName = trimmedName;
-            console.log(
-                '[showCreateTableDialog] AFTER - branchTableName:',
-                currentConfig.repoRules[repoRuleIndex].branchTableName,
-            );
         }
 
         // Select this repo rule so the Branch Rules section shows the new table
-        console.log('[showCreateTableDialog] Setting selectedRepoRuleIndex to:', repoRuleIndex);
         selectedRepoRuleIndex = repoRuleIndex;
 
         // Backend will update the repo rule and send back updated config
         // No need to call debounceValidateAndSend here - backend handles it atomically
-        console.log('[showCreateTableDialog] Waiting for backend to send updated config');
-        console.log('[showCreateTableDialog] END');
     }
 }
 
@@ -3864,20 +4030,14 @@ async function deleteBranchTableFromMgmt(tableName: string) {
 }
 
 function renderBranchRulesForSelectedRepo() {
-    console.log(`[renderBranchRulesForSelectedRepo] Called, selectedRepoRuleIndex: ${selectedRepoRuleIndex}`);
     if (!currentConfig || selectedRepoRuleIndex === -1) {
-        console.log(`[renderBranchRulesForSelectedRepo] Early return - no config or selectedRepoRuleIndex is -1`);
         return;
     }
 
     const selectedRule = currentConfig.repoRules?.[selectedRepoRuleIndex];
     if (!selectedRule) {
-        console.log(`[renderBranchRulesForSelectedRepo] No selectedRule at index ${selectedRepoRuleIndex}`);
         return;
     }
-    console.log(
-        `[renderBranchRulesForSelectedRepo] selectedRule.repoQualifier: ${selectedRule.repoQualifier}, branchTableName: ${selectedRule.branchTableName}`,
-    );
 
     // Check if this is a local folder rule
     const isLocalFolderRule = selectedRule.repoQualifier && selectedRule.repoQualifier.startsWith('!');
@@ -3928,11 +4088,9 @@ function renderBranchRulesForSelectedRepo() {
 
     // Get table name - default to '__none__' if not set
     const tableName = selectedRule.branchTableName || '__none__';
-    console.log(`[renderBranchRulesForSelectedRepo] tableName: ${tableName}`);
 
     // If no table selected, show empty message
     if (!tableName || tableName === '__none__') {
-        console.log(`[renderBranchRulesForSelectedRepo] No table selected, showing empty message`);
         const header = document.querySelector('#branch-rules-heading');
         if (header) {
             header.innerHTML = `<span class="codicon codicon-circle-slash"></span> No Branch Table`;
@@ -3946,7 +4104,6 @@ function renderBranchRulesForSelectedRepo() {
 
     const branchTable = currentConfig.sharedBranchTables?.[tableName];
     const branchRules = branchTable?.rules || [];
-    console.log(`[renderBranchRulesForSelectedRepo] Rendering table "${tableName}" with ${branchRules.length} rules`);
 
     // Update section header with editable table name
     const header = document.querySelector('#branch-rules-heading');
@@ -4126,64 +4283,6 @@ function showCopyFromMenu(event: Event) {
         }
     }
 
-    // Add Global option if there are global rules (legacy)
-    if (currentConfig?.branchRules && currentConfig.branchRules.length > 0) {
-        const globalHeader = document.createElement('button');
-        globalHeader.type = 'button';
-        globalHeader.className = 'copy-from-option copy-from-table-header';
-        globalHeader.innerHTML = `<span class="codicon codicon-globe"></span> Global Rules <span class="copy-from-count">(all ${currentConfig.branchRules.length})</span>`;
-        globalHeader.setAttribute('role', 'menuitem');
-        globalHeader.setAttribute('data-source-type', 'global');
-        menu.appendChild(globalHeader);
-
-        // Individual global rules
-        currentConfig.branchRules.forEach((rule: any, ruleIndex: number) => {
-            const ruleOption = document.createElement('button');
-            ruleOption.type = 'button';
-            ruleOption.className = 'copy-from-option copy-from-rule';
-            const patternDisplay = rule.pattern.length > 25 ? rule.pattern.substring(0, 22) + '...' : rule.pattern;
-            ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${rule.color || '#888'};"></span> ${patternDisplay}`;
-            ruleOption.setAttribute('role', 'menuitem');
-            ruleOption.setAttribute('data-source-type', 'global-rule');
-            ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
-            ruleOption.title = rule.pattern;
-            menu.appendChild(ruleOption);
-        });
-    }
-
-    // Add options for other repos with local rules (legacy)
-    if (currentConfig?.repoRules) {
-        currentConfig.repoRules.forEach((rule: any, index: number) => {
-            if (index === selectedRepoRuleIndex) return; // Skip current repo
-            if (!rule.branchRules || rule.branchRules.length === 0) return; // Skip empty
-
-            const repoHeader = document.createElement('button');
-            repoHeader.type = 'button';
-            repoHeader.className = 'copy-from-option copy-from-table-header';
-            repoHeader.innerHTML = `<span class="codicon codicon-repo"></span> ${rule.repoQualifier} <span class="copy-from-count">(all ${rule.branchRules.length})</span>`;
-            repoHeader.setAttribute('role', 'menuitem');
-            repoHeader.setAttribute('data-source-type', 'repo');
-            repoHeader.setAttribute('data-source-index', String(index));
-            menu.appendChild(repoHeader);
-
-            // Individual repo rules
-            rule.branchRules.forEach((branchRule: any, ruleIndex: number) => {
-                const ruleOption = document.createElement('button');
-                ruleOption.type = 'button';
-                ruleOption.className = 'copy-from-option copy-from-rule';
-                const patternDisplay =
-                    branchRule.pattern.length > 25 ? branchRule.pattern.substring(0, 22) + '...' : branchRule.pattern;
-                ruleOption.innerHTML = `<span class="copy-from-rule-color" style="background-color: ${branchRule.color || '#888'};"></span> ${patternDisplay}`;
-                ruleOption.setAttribute('role', 'menuitem');
-                ruleOption.setAttribute('data-source-type', 'repo-rule');
-                ruleOption.setAttribute('data-source-index', String(index));
-                ruleOption.setAttribute('data-source-rule-index', String(ruleIndex));
-                ruleOption.title = branchRule.pattern;
-                menu.appendChild(ruleOption);
-            });
-        });
-    }
-
     // If no options, show message
     if (menu.children.length === 0) {
         const noOptions = document.createElement('div');
@@ -4271,13 +4370,6 @@ function copyBranchRulesFrom(
         if (sourceTable?.rules?.[sourceIndex]) {
             sourceRules = [sourceTable.rules[sourceIndex]];
         }
-    } else if (sourceType === 'global') {
-        sourceRules = currentConfig.branchRules || [];
-    } else if (sourceType === 'global-rule') {
-        // Copy a single global rule
-        if (currentConfig.branchRules?.[sourceIndex]) {
-            sourceRules = [currentConfig.branchRules[sourceIndex]];
-        }
     } else if (sourceType === 'repo') {
         const sourceRepo = currentConfig.repoRules?.[sourceIndex];
         if (sourceRepo) {
@@ -4337,19 +4429,60 @@ function copyBranchRulesFrom(
 function updateColorRule(ruleType: string, index: number, field: string, value: string) {
     if (!currentConfig) return;
 
-    console.log(
-        '[updateColorRule] ruleType:',
-        ruleType,
-        'index:',
-        index,
-        'field:',
-        field,
-        'value:',
-        value,
-        'selectedRepoRuleIndex:',
-        selectedRepoRuleIndex,
-    );
+    // For color fields (primaryColor or color), send themed color update to extension
+    if ((field === 'primaryColor' || field === 'color') && value && !currentConfig.advancedProfiles?.[value]) {
+        //Send themed color update message
+        const messageData: any = {
+            type: ruleType,
+            index: index,
+            color: value,
+        };
 
+        let clearProfileName = false;
+        // For branch rules in shared tables, include table name
+        if (ruleType === 'branch' && selectedRepoRuleIndex >= 0) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            if (selectedRule?.branchTableName) {
+                messageData.tableName = selectedRule.branchTableName;
+            } else {
+                console.error('[updateColorRule] Branch rule but no branchTableName!', selectedRule);
+            }
+            const tableName = selectedRule.branchTableName;
+            if (tableName && currentConfig.sharedBranchTables?.[tableName]?.rules?.[index]) {
+                const branchRule = currentConfig.sharedBranchTables[tableName].rules[index];
+                branchRule[field] = value;
+                if (field === 'color' && branchRule.profileName) {
+                    delete branchRule.profileName;
+                    clearProfileName = true;
+                }
+            }
+        } else if (ruleType === 'repo') {
+            const rules = currentConfig.repoRules;
+            if (rules?.[index]) {
+                const repoRule = rules[index];
+                repoRule[field] = value;
+                if (field === 'primaryColor' && repoRule.profileName) {
+                    delete repoRule.profileName;
+                    clearProfileName = true;
+                }
+            }
+        }
+
+        if (clearProfileName) {
+            messageData.clearProfileName = true;
+        }
+
+        vscode.postMessage({
+            command: 'updateThemedColor',
+            data: messageData,
+        });
+
+        // Update color swatch
+        updateColorSwatch(ruleType, index, field, value);
+        return;
+    }
+
+    // For non-color fields or profile references, use existing logic
     if (ruleType === 'repo') {
         const rules = currentConfig.repoRules;
         if (!rules?.[index]) return;
@@ -4363,44 +4496,20 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
             delete rules[index].profileName;
         }
     } else if (ruleType === 'branch') {
-        // Determine if we're updating global or local branch rules
+        // Branch rules are now in shared tables
         if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = !selectedRule.branchRules;
+            const tableName = selectedRule.branchTableName;
 
-            if (useGlobal) {
-                // Update global branch rules
-                if (!currentConfig?.branchRules?.[index]) return;
-                currentConfig.branchRules[index][field] = value;
+            if (tableName && currentConfig.sharedBranchTables?.[tableName]?.rules?.[index]) {
+                currentConfig.sharedBranchTables[tableName].rules[index][field] = value;
 
                 // If updating color with a profile name, also set the profileName field
                 if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
-                    currentConfig.branchRules[index].profileName = value;
+                    currentConfig.sharedBranchTables[tableName].rules[index].profileName = value;
                 } else if (field === 'color') {
-                    delete currentConfig.branchRules[index].profileName;
+                    delete currentConfig.sharedBranchTables[tableName].rules[index].profileName;
                 }
-            } else {
-                // Update local branch rules
-                if (!selectedRule.branchRules?.[index]) return;
-                selectedRule.branchRules[index][field] = value;
-
-                // If updating color with a profile name, also set the profileName field
-                if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
-                    selectedRule.branchRules[index].profileName = value;
-                } else if (field === 'color') {
-                    delete selectedRule.branchRules[index].profileName;
-                }
-            }
-        } else {
-            // Fallback to global
-            if (!currentConfig?.branchRules?.[index]) return;
-            currentConfig.branchRules[index][field] = value;
-
-            // If updating color with a profile name, also set the profileName field
-            if (field === 'color' && value && currentConfig.advancedProfiles?.[value]) {
-                currentConfig.branchRules[index].profileName = value;
-            } else if (field === 'color') {
-                delete currentConfig.branchRules[index].profileName;
             }
         }
     }
@@ -4419,8 +4528,8 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
 function updateColorSwatch(ruleType: string, index: number, field: string, value: string) {
     const colorInput = document.getElementById(`${ruleType}-${field}-${index}`) as HTMLInputElement;
     if (colorInput && colorInput.type === 'color') {
-        // Convert any color format to hex for the native color input
-        const hexColor = convertColorToHex(value);
+        // Convert any color format to hex for the native color input (handles profile names)
+        const hexColor = getRepresentativeColor(value);
         colorInput.value = hexColor;
     }
 
@@ -4428,8 +4537,9 @@ function updateColorSwatch(ruleType: string, index: number, field: string, value
     const swatch = colorInput?.parentElement?.querySelector('.color-swatch') as HTMLElement;
 
     if (swatch) {
-        // For named colors and other formats, try to convert to a valid CSS color
-        const displayColor = convertColorToValidCSS(value) || '#4A90E2';
+        // For named colors and other formats, resolve profile names then convert to valid CSS color
+        const resolvedColor = getRepresentativeColor(value);
+        const displayColor = convertColorToValidCSS(resolvedColor) || '#4A90E2';
         swatch.style.backgroundColor = displayColor;
     } else {
         // No swatch element found - using native color picker`);
@@ -4471,7 +4581,8 @@ function handleColorInputClick(event: MouseEvent) {
                     const rule = rules?.[parseInt(index)];
                     if (rule) {
                         // Check if this rule uses a profile
-                        const colorValue = rule.profileName || rule.primaryColor;
+                        const primaryColorName = typeof rule.primaryColor === 'string' ? rule.primaryColor : undefined;
+                        const colorValue = rule.profileName || primaryColorName;
                         const advancedProfiles = currentConfig?.advancedProfiles || {};
 
                         // If the color value is a profile name, navigate to Profiles tab
@@ -4531,31 +4642,21 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
             delete rules[index].profileName;
         }
     } else if (ruleType === 'branch') {
-        // Determine if we're updating global or local branch rules
+        // Determine which table to update
+        let tableName = '__none__';
         if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const useGlobal = !selectedRule.branchRules;
-
-            if (useGlobal) {
-                // Update global branch rules
-                if (!currentConfig?.branchRules?.[index]) return;
-                currentConfig.branchRules[index][field] = randomColor;
-                // Clear profileName when generating a random color
-                delete currentConfig.branchRules[index].profileName;
-            } else {
-                // Update local branch rules
-                if (!selectedRule.branchRules?.[index]) return;
-                selectedRule.branchRules[index][field] = randomColor;
-                // Clear profileName when generating a random color
-                delete selectedRule.branchRules[index].profileName;
-            }
-        } else {
-            // Fallback to global
-            if (!currentConfig?.branchRules?.[index]) return;
-            currentConfig.branchRules[index][field] = randomColor;
-            // Clear profileName when generating a random color
-            delete currentConfig.branchRules[index].profileName;
+            tableName = selectedRule.branchTableName || '__none__';
         }
+
+        // Can't update if no table selected
+        if (tableName === '__none__') return;
+
+        // Update the rule in the shared branch table
+        if (!currentConfig?.sharedBranchTables?.[tableName]?.rules?.[index]) return;
+        currentConfig.sharedBranchTables[tableName].rules[index][field] = randomColor;
+        // Clear profileName when generating a random color
+        delete currentConfig.sharedBranchTables[tableName].rules[index].profileName;
     }
 
     // Update the UI elements
@@ -4806,7 +4907,6 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
             // If this is a branch rule with a repo index (local branch rule), select the repo first
             if (type === 'branch' && parts.length >= 3) {
                 const repoIndex = parseInt(parts[2]);
-                console.log(`[Navigation] Local branch rule detected, selecting repo ${repoIndex} first`);
 
                 // Select the repo rule to show its local branch rules
                 const repoContainer = document.getElementById('repoRulesContent');
@@ -4816,7 +4916,6 @@ function handleGotoSource(gotoData: string, linkText: string = '') {
                         const repoRadio = repoRows[repoIndex].querySelector('input[type="radio"]') as HTMLInputElement;
                         if (repoRadio) {
                             repoRadio.click();
-                            console.log(`[Navigation] Selected repo ${repoIndex}`);
                         }
                     }
                 }
@@ -4985,7 +5084,21 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
 
     if (!currentConfig) return;
 
-    const rules = targetType === 'repo' ? currentConfig.repoRules : currentConfig.branchRules;
+    let rules;
+    if (targetType === 'repo') {
+        rules = currentConfig.repoRules;
+    } else {
+        // For branch rules, get from the selected table
+        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+            const tableName = selectedRule.branchTableName || '__none__';
+
+            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
+                rules = currentConfig.sharedBranchTables[tableName].rules;
+            }
+        }
+    }
+
     if (!rules) return;
 
     // Remove the dragged item
@@ -5112,24 +5225,31 @@ function validateRules(): boolean {
                 markFieldAsError('repo-qualifier-' + index);
             }
 
-            if (!rule.primaryColor?.trim()) {
+            const primaryColorValue = extractColorForTheme(rule.primaryColor);
+            if (!primaryColorValue || !primaryColorValue.trim()) {
                 errors.push(`Repository rule ${index + 1}: Primary color is required`);
                 markFieldAsError('repo-primaryColor-' + index);
             }
         });
     }
 
-    // Validate branch rules
-    if (currentConfig?.branchRules) {
-        currentConfig.branchRules.forEach((rule: any, index: number) => {
-            if (!rule.pattern?.trim()) {
-                errors.push(`Branch rule ${index + 1}: Branch pattern is required`);
-                markFieldAsError('branch-pattern-' + index);
-            }
+    // Validate branch rules in shared tables
+    if (currentConfig?.sharedBranchTables) {
+        Object.keys(currentConfig.sharedBranchTables).forEach((tableName) => {
+            const table = currentConfig.sharedBranchTables[tableName];
+            if (table?.rules) {
+                table.rules.forEach((rule: any, index: number) => {
+                    if (!rule.pattern?.trim()) {
+                        errors.push(`Branch rule ${index + 1} in table "${tableName}": Branch pattern is required`);
+                        markFieldAsError('branch-pattern-' + index);
+                    }
 
-            if (!rule.color?.trim()) {
-                errors.push(`Branch rule ${index + 1}: Color is required`);
-                markFieldAsError('branch-color-' + index);
+                    const branchColorValue = extractColorForTheme(rule.color);
+                    if (!branchColorValue || !branchColorValue.trim()) {
+                        errors.push(`Branch rule ${index + 1} in table "${tableName}": Color is required`);
+                        markFieldAsError('branch-color-' + index);
+                    }
+                });
             }
         });
     }
@@ -5208,7 +5328,8 @@ function openColorPicker(ruleType: string, index: number, field: string) {
         const rule = rules?.[index];
         if (rule) {
             // Check if this rule uses a profile
-            const colorValue = rule.profileName || rule.primaryColor;
+            const primaryColorName = typeof rule.primaryColor === 'string' ? rule.primaryColor : undefined;
+            const colorValue = rule.profileName || primaryColorName;
             const advancedProfiles = currentConfig?.advancedProfiles || {};
 
             // If the color value is a profile name, navigate to Profiles tab
@@ -5322,19 +5443,14 @@ function convertColorToValidCSS(color: string): string {
     return '#4A90E2'; // Default fallback
 }
 
+/**
+ * Pure color format conversion utility - converts color strings to hex format.
+ * Does NOT handle profile name resolution.
+ * @param color - Color string (hex, named color, or rgb)
+ * @returns Hex color string
+ */
 function convertColorToHex(color: string): string {
     if (!color) return '#4A90E2'; // Default blue
-
-    // Check if it's a profile name (exists in current config)
-    if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[color]) {
-        // It's a profile, return a representative color from the profile
-        const profile = currentConfig.advancedProfiles[color];
-        if (profile.palette?.primaryActiveBg?.value) {
-            return convertColorToHex(profile.palette.primaryActiveBg.value);
-        }
-        // Fallback to a distinct color to indicate it's a profile
-        return '#9B59B6'; // Purple to indicate profile
-    }
 
     // If it's already a hex color, return it
     if (color.startsWith('#')) {
@@ -5360,20 +5476,39 @@ function convertColorToHex(color: string): string {
     return '#4A90E2';
 }
 
-function runConfigurationTests() {
-    console.log('Running configuration tests...');
+/**
+ * Resolves profile names to representative colors and converts to hex.
+ * For repo/branch rule color swatches that may reference profile names.
+ * Uses the profile's primaryActiveBg slot as the representative color.
+ * @param value - Color string or profile name
+ * @returns Hex color string
+ */
+function getRepresentativeColor(value: string): string {
+    if (!value) return '#4A90E2';
 
+    // Check if it's a profile name (exists in current config)
+    if (currentConfig?.advancedProfiles && currentConfig.advancedProfiles[value]) {
+        // It's a profile, return a representative color from the profile
+        const profile = currentConfig.advancedProfiles[value];
+        if (profile.palette?.primaryActiveBg?.value) {
+            // Extract the color string for the current theme before converting to hex
+            const colorValue = extractColorForTheme(profile.palette.primaryActiveBg.value);
+            return convertColorToHex(colorValue);
+        }
+        // Fallback to a distinct color to indicate it's a profile
+        return '#9B59B6'; // Purple to indicate profile
+    }
+
+    // Not a profile, just convert the color
+    return convertColorToHex(value);
+}
+
+function runConfigurationTests() {
     // Test color validation
-    console.log('Testing color validation...');
 
     // Test rule parsing
-    console.log('Testing rule parsing...');
 
     // Test smart defaults
-    console.log('Testing smart defaults...');
-    console.log('Theme is dark:', isThemeDark());
-    console.log('Suggested color:', getThemeAppropriateColor());
-    console.log('Smart branch defaults:', getSmartBranchDefaults());
 
     alert('Configuration tests completed. Check console for details.');
 }
@@ -5450,7 +5585,9 @@ function showPreviewToast() {
     const toast = document.getElementById('preview-toast');
     const resetBtn = toast?.querySelector('.preview-toast-reset-btn') as HTMLElement;
     const toastText = toast?.querySelector('.preview-toast-text') as HTMLElement;
-    if (!toast) return;
+    if (!toast) {
+        return;
+    }
 
     // Check if there's no open workspace
     const hasWorkspace = currentConfig?.workspaceInfo?.hasWorkspace ?? true;
@@ -5467,16 +5604,6 @@ function showPreviewToast() {
             'Color preview requires an open workspace. Open a folder or workspace to preview colors.',
         );
         toast.classList.add('visible');
-        return;
-    }
-
-    // Only show if actually previewing (selected indexes don't match the matching indexes)
-    const isActuallyPreviewing =
-        selectedRepoRuleIndex !== currentConfig?.matchingIndexes?.repoRule ||
-        selectedBranchRuleIndex !== currentConfig?.matchingIndexes?.branchRule;
-
-    if (!isActuallyPreviewing) {
-        hidePreviewToast();
         return;
     }
 
@@ -5522,15 +5649,18 @@ function showPreviewToast() {
 
     // Get the selected repo rule
     const selectedRule = currentConfig?.repoRules?.[selectedRepoRuleIndex];
-    if (!selectedRule) return;
+    if (!selectedRule) {
+        return;
+    }
 
     // Check if this rule uses a profile (not virtual)
-    const profileName = selectedRule.profileName || selectedRule.primaryColor;
-    const profile = currentConfig?.advancedProfiles?.[profileName];
+    const fallbackProfileName = typeof selectedRule.primaryColor === 'string' ? selectedRule.primaryColor : undefined;
+    const profileName = selectedRule.profileName || fallbackProfileName;
+    const profile = profileName ? currentConfig?.advancedProfiles?.[profileName] : undefined;
 
-    let primaryColor = selectedRule.primaryColor;
-    let secondaryBgColor = null;
-    let secondaryFgColor = null;
+    let primaryColor: string | undefined = undefined;
+    let secondaryBgColor: string | null = null;
+    let secondaryFgColor: string | null = null;
 
     if (profile && !profile.virtual && profile.palette) {
         // Resolve primary color from palette
@@ -5538,7 +5668,9 @@ function showPreviewToast() {
         if (primaryActiveBg) {
             const resolvedPrimary = resolveColorFromSlot(primaryActiveBg, selectedRule);
             if (resolvedPrimary) {
-                primaryColor = resolvedPrimary;
+                // resolveColorFromSlot might return a string or ThemedColor - extract if needed
+                primaryColor =
+                    typeof resolvedPrimary === 'string' ? resolvedPrimary : extractColorForTheme(resolvedPrimary);
             }
         }
 
@@ -5547,23 +5679,42 @@ function showPreviewToast() {
         const secondaryActiveFg = profile.palette.secondaryActiveFg;
 
         if (secondaryActiveBg) {
-            secondaryBgColor = resolveColorFromSlot(secondaryActiveBg, selectedRule);
+            const resolved = resolveColorFromSlot(secondaryActiveBg, selectedRule);
+            secondaryBgColor = resolved
+                ? typeof resolved === 'string'
+                    ? resolved
+                    : extractColorForTheme(resolved)
+                : null;
         }
         if (secondaryActiveFg) {
-            secondaryFgColor = resolveColorFromSlot(secondaryActiveFg, selectedRule);
+            const resolved = resolveColorFromSlot(secondaryActiveFg, selectedRule);
+            secondaryFgColor = resolved
+                ? typeof resolved === 'string'
+                    ? resolved
+                    : extractColorForTheme(resolved)
+                : null;
         }
+    } else {
+        // Not using a profile, use the primaryColor directly
+        primaryColor = extractColorForTheme(selectedRule.primaryColor) || undefined;
     }
 
     // Apply the primary color to toast
-    if (primaryColor) {
+    if (primaryColor && typeof primaryColor === 'string') {
         toast.style.backgroundColor = primaryColor;
         toast.style.borderColor = primaryColor;
         toast.style.color = getContrastingTextColor(primaryColor);
+    } else {
     }
 
     // Apply secondary colors to reset button if available
     if (resetBtn) {
-        if (secondaryBgColor && secondaryFgColor) {
+        if (
+            secondaryBgColor &&
+            secondaryFgColor &&
+            typeof secondaryBgColor === 'string' &&
+            typeof secondaryFgColor === 'string'
+        ) {
             resetBtn.style.backgroundColor = secondaryBgColor;
             resetBtn.style.color = secondaryFgColor;
             resetBtn.style.borderColor = secondaryFgColor;
@@ -5580,7 +5731,9 @@ function showPreviewToast() {
 
 function hidePreviewToast() {
     const toast = document.getElementById('preview-toast');
-    if (!toast) return;
+    if (!toast) {
+        return;
+    }
     toast.classList.remove('visible');
 }
 
@@ -6162,6 +6315,7 @@ const THEME_KEY_LABELS: Record<string, string> = {
     'titleBar.inactiveForeground': 'Title Bar: Inactive Foreground',
     'titleBar.border': 'Title Bar: Border',
     'sideBarTitle.background': 'Sidebar Title: Background',
+    'sideBarTitle.foreground': 'Sidebar Title: Foreground',
 
     // Activity Bar
     'activityBar.background': 'Activity Bar: Background',
@@ -6226,30 +6380,42 @@ const THEME_KEY_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_PALETTE: Palette = {
-    primaryActiveBg: { source: 'fixed', value: '#4A90E2' },
-    primaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-    primaryInactiveBg: { source: 'fixed', value: '#2E5C8A' },
-    primaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-    secondaryActiveBg: { source: 'fixed', value: '#5FA3E8' },
-    secondaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-    secondaryInactiveBg: { source: 'fixed', value: '#4278B0' },
-    secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-    tertiaryBg: { source: 'fixed', value: '#1E1E1E' },
-    tertiaryFg: { source: 'fixed', value: '#CCCCCC' },
-    quaternaryBg: { source: 'fixed', value: '#2D2D30' },
-    quaternaryFg: { source: 'fixed', value: '#D4D4D4' },
+    primaryActiveBg: { source: 'fixed', value: createThemedColorInWebview('#4A90E2') },
+    primaryActiveFg: { source: 'fixed', value: createThemedColorInWebview('#FFFFFF') },
+    primaryInactiveBg: { source: 'fixed', value: createThemedColorInWebview('#2E5C8A') },
+    primaryInactiveFg: { source: 'fixed', value: createThemedColorInWebview('#CCCCCC') },
+    secondaryActiveBg: { source: 'fixed', value: createThemedColorInWebview('#5FA3E8') },
+    secondaryActiveFg: { source: 'fixed', value: createThemedColorInWebview('#FFFFFF') },
+    secondaryInactiveBg: { source: 'fixed', value: createThemedColorInWebview('#4278B0') },
+    secondaryInactiveFg: { source: 'fixed', value: createThemedColorInWebview('#CCCCCC') },
+    tertiaryBg: { source: 'fixed', value: createThemedColorInWebview('#1E1E1E') },
+    tertiaryFg: { source: 'fixed', value: createThemedColorInWebview('#CCCCCC') },
+    quaternaryBg: { source: 'fixed', value: createThemedColorInWebview('#2D2D30') },
+    quaternaryFg: { source: 'fixed', value: createThemedColorInWebview('#D4D4D4') },
 };
 
 const DEFAULT_MAPPINGS: SectionMappings = {
-    'activityBar.background': 'primaryActiveBg',
+    'activityBar.background': { slot: 'primaryActiveBg', opacity: 0.7 },
     'activityBar.foreground': 'primaryActiveFg',
-    'activityBar.inactiveForeground': 'primaryInactiveFg',
+    'activityBar.inactiveForeground': { slot: 'primaryInactiveFg', opacity: 0.8 },
     'statusBar.background': 'primaryActiveBg',
     'statusBar.foreground': 'secondaryActiveFg',
     'titleBar.activeBackground': 'primaryActiveBg',
     'titleBar.activeForeground': 'primaryActiveFg',
-    'titleBar.inactiveBackground': 'primaryInactiveBg',
-    'titleBar.inactiveForeground': 'primaryInactiveFg',
+    'titleBar.inactiveBackground': { slot: 'primaryInactiveBg', opacity: 0.85 },
+    'titleBar.inactiveForeground': { slot: 'primaryInactiveFg', opacity: 0.7 },
+    'sideBarTitle.background': { slot: 'primaryActiveBg', opacity: 0.5 },
+    'sideBarTitle.foreground': { slot: 'primaryActiveFg', opacity: 1 },
+    'tab.inactiveBackground': { slot: 'primaryActiveBg', opacity: 0.5 },
+    'tab.activeBackground': 'primaryActiveBg',
+    'tab.activeForeground': 'primaryActiveFg',
+    'tab.inactiveForeground': { slot: 'primaryActiveFg', opacity: 0.75 },
+    'editorGroupHeader.tabsBackground': { slot: 'primaryActiveBg', opacity: 0.3 },
+};
+
+const DEFAULT_BRANCH_MAPPINGS: SectionMappings = {
+    'activityBar.background': { slot: 'primaryActiveBg', opacity: 0.7 },
+    'activityBar.foreground': 'primaryActiveFg',
 };
 
 const SECTION_DEFINITIONS: { [name: string]: string[] } = {
@@ -6279,6 +6445,7 @@ const SECTION_DEFINITIONS: { [name: string]: string[] } = {
         'breadcrumb.background',
         'breadcrumb.foreground',
         'sideBarTitle.background',
+        'sideBarTitle.foreground',
     ],
     'Command Center': [
         'commandCenter.background',
@@ -6310,7 +6477,13 @@ const SECTION_DEFINITIONS: { [name: string]: string[] } = {
         'input.placeholderForeground',
         'focusBorder',
     ],
-    'Side Bar': ['sideBar.background', 'sideBar.foreground', 'sideBar.border'],
+    'Side Bar': [
+        'sideBar.background',
+        'sideBar.foreground',
+        'sideBar.border',
+        'sideBarTitle.background',
+        'sideBarTitle.foreground',
+    ],
 };
 
 let selectedProfileName: string | null = (() => {
@@ -6398,22 +6571,29 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             currentConfig?.matchingIndexes?.repoRule >= 0
                 ? currentConfig.repoRules?.[currentConfig.matchingIndexes.repoRule]
                 : null;
-        const matchedBranchRule =
-            currentConfig?.matchingIndexes?.branchRule >= 0
-                ? currentConfig.branchRules?.[currentConfig.matchingIndexes.branchRule]
-                : null;
+
+        // Get matched branch rule from shared table
+        let matchedBranchRule = null;
+        if (currentConfig?.matchingIndexes?.branchRule >= 0 && matchedRepoRule?.branchTableName) {
+            const branchTableName = matchedRepoRule.branchTableName;
+            const branchRuleIndex = currentConfig.matchingIndexes.branchRule;
+            if (currentConfig.sharedBranchTables?.[branchTableName]) {
+                matchedBranchRule = currentConfig.sharedBranchTables[branchTableName].rules[branchRuleIndex];
+            }
+        }
 
         // Extract profile names from matched rules
+        const matchedRepoPrimaryColor =
+            typeof matchedRepoRule?.primaryColor === 'string' ? matchedRepoRule.primaryColor : undefined;
         const repoProfileName =
             matchedRepoRule?.profileName ||
-            (matchedRepoRule?.primaryColor && currentConfig?.advancedProfiles?.[matchedRepoRule.primaryColor]
-                ? matchedRepoRule.primaryColor
+            (matchedRepoPrimaryColor && currentConfig?.advancedProfiles?.[matchedRepoPrimaryColor]
+                ? matchedRepoPrimaryColor
                 : null);
+        const matchedBranchColor = typeof matchedBranchRule?.color === 'string' ? matchedBranchRule.color : undefined;
         const branchProfileName =
             matchedBranchRule?.profileName ||
-            (matchedBranchRule?.color && currentConfig?.advancedProfiles?.[matchedBranchRule.color]
-                ? matchedBranchRule.color
-                : null);
+            (matchedBranchColor && currentConfig?.advancedProfiles?.[matchedBranchColor] ? matchedBranchColor : null);
 
         // console.log('[Profile Indicators] matchingIndexes:', currentConfig?.matchingIndexes);
         // console.log('[Profile Indicators] matchedRepoRule:', matchedRepoRule);
@@ -6435,36 +6615,6 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             const isRepoProfile = name === repoProfileName;
             const isBranchProfile = name === branchProfileName;
 
-            // console.log(
-            //     `[Profile Indicators] Checking profile "${name}": isRepo=${isRepoProfile}, isBranch=${isBranchProfile}`,
-            // );
-
-            // Create indicator container (even if empty, to maintain alignment)
-            const indicatorContainer = document.createElement('span');
-            indicatorContainer.className = 'profile-indicators';
-
-            // if (isRepoProfile || isBranchProfile) {
-            //     console.log(`[Profile Indicators] Adding indicators for "${name}"`);
-
-            //     if (isRepoProfile) {
-            //         const repoIcon = document.createElement('span');
-            //         repoIcon.className = 'codicon codicon-repo profile-indicator-icon';
-            //         repoIcon.title = 'Applied to repository rule for this workspace';
-            //         indicatorContainer.appendChild(repoIcon);
-            //         console.log(`[Profile Indicators] Added repo icon for "${name}"`);
-            //     }
-
-            //     if (isBranchProfile) {
-            //         const branchIcon = document.createElement('span');
-            //         branchIcon.className = 'codicon codicon-git-branch profile-indicator-icon';
-            //         branchIcon.title = 'Applied to branch rule for this workspace';
-            //         indicatorContainer.appendChild(branchIcon);
-            //         console.log(`[Profile Indicators] Added branch icon for "${name}"`);
-            //     }
-            // }
-
-            nameContainer.appendChild(indicatorContainer);
-
             const nameSpan = document.createElement('span');
             nameSpan.className = 'profile-name';
             nameSpan.textContent = name;
@@ -6472,6 +6622,7 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
 
             // Count total active mappings for badge
             const profile = profiles[name];
+            const usageCounts = isProfileInUse(name);
             const totalActive = countTotalActiveMappings(profile);
 
             const badge = document.createElement('span');
@@ -6489,27 +6640,96 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             let fgColor = '#FFFFFF'; // Default
 
             if (profile?.palette?.primaryActiveBg?.value) {
-                bgColor = convertColorToHex(profile.palette.primaryActiveBg.value);
+                bgColor = convertColorToHex(extractColorForTheme(profile.palette.primaryActiveBg.value));
             }
             if (profile?.palette?.primaryActiveFg?.value) {
-                fgColor = convertColorToHex(profile.palette.primaryActiveFg.value);
+                fgColor = convertColorToHex(extractColorForTheme(profile.palette.primaryActiveFg.value));
             }
 
             swatch.style.backgroundColor = bgColor;
             swatch.style.color = fgColor;
             swatch.textContent = 'Sample';
 
+            const referenceIndicator = document.createElement('div');
+            referenceIndicator.className = 'profile-reference-count';
+            const totalReferences = usageCounts.repoRules + usageCounts.branchRules;
+            referenceIndicator.textContent = totalReferences.toString();
+
+            if (totalReferences === 0) {
+                referenceIndicator.title = 'No repository or branch rules reference this profile yet.';
+            } else {
+                const detailParts: string[] = [];
+                if (usageCounts.repoRules > 0) {
+                    detailParts.push(`${usageCounts.repoRules} repo ${usageCounts.repoRules === 1 ? 'rule' : 'rules'}`);
+                }
+                if (usageCounts.branchRules > 0) {
+                    detailParts.push(
+                        `${usageCounts.branchRules} branch ${usageCounts.branchRules === 1 ? 'rule' : 'rules'}`,
+                    );
+                }
+
+                const details = detailParts.join(', ');
+                const hasMixedUsage = usageCounts.repoRules > 0 && usageCounts.branchRules > 0;
+                if (hasMixedUsage) {
+                    referenceIndicator.classList.add('profile-reference-count-warning');
+
+                    const warningIcon = document.createElement('span');
+                    warningIcon.className = 'codicon codicon-warning';
+                    warningIcon.setAttribute('aria-hidden', 'true');
+
+                    const countText = document.createElement('span');
+                    countText.textContent = totalReferences.toString();
+
+                    referenceIndicator.textContent = '';
+                    referenceIndicator.appendChild(warningIcon);
+                    referenceIndicator.appendChild(countText);
+
+                    referenceIndicator.title = `Referenced by ${totalReferences} ${
+                        totalReferences === 1 ? 'rule' : 'rules'
+                    } (${details}). Repo and branch references detected.`;
+                } else {
+                    referenceIndicator.title = `Referenced by ${totalReferences} ${
+                        totalReferences === 1 ? 'rule' : 'rules'
+                    } (${details}).`;
+                }
+            }
+
+            referenceIndicator.setAttribute('aria-label', referenceIndicator.title);
+
+            // Create usage indicators column (right side)
+            const usageContainer = document.createElement('div');
+            usageContainer.className = 'profile-usage-indicators';
+
+            if (name === repoProfileName) {
+                const repoIcon = document.createElement('span');
+                repoIcon.className = 'codicon codicon-repo profile-usage-icon';
+                repoIcon.title = 'Matches workspace repository rule';
+                usageContainer.appendChild(repoIcon);
+            }
+
+            if (name === branchProfileName) {
+                const branchIcon = document.createElement('span');
+                branchIcon.className = 'codicon codicon-git-branch profile-usage-icon';
+                branchIcon.title = 'Matches workspace branch rule';
+                usageContainer.appendChild(branchIcon);
+            }
+
             el.appendChild(nameContainer);
             el.appendChild(swatch);
+            el.appendChild(referenceIndicator);
+            el.appendChild(usageContainer);
             el.onclick = () => selectProfile(name);
             listContainer.appendChild(el);
         });
     }
 
-    // Attach Add Handler
-    const addBtn = document.querySelector('[data-action="addProfile"]');
-    if (addBtn) {
-        (addBtn as HTMLElement).onclick = () => addNewProfile();
+    initializeProfileAddMenu();
+
+    // Attach Profile Preview Checkbox Handler
+    const profilePreviewCheckbox = document.getElementById('preview-selected-profile') as HTMLInputElement;
+    if (profilePreviewCheckbox) {
+        profilePreviewCheckbox.checked = profilePreviewMode;
+        profilePreviewCheckbox.onchange = handleProfilePreviewModeChange;
     }
 
     // Render the selected profile if one exists
@@ -6541,6 +6761,11 @@ function selectProfile(name: string) {
     const profile = currentConfig.advancedProfiles[name];
     renderProfileEditor(name, profile);
     initializeProfileEditorCheckboxListeners();
+
+    // If profile preview mode is enabled, apply the preview
+    if (profilePreviewMode) {
+        applyProfilePreview(name);
+    }
 }
 
 /**
@@ -6554,25 +6779,360 @@ function isHtmlColor(str: string): boolean {
     return s.color !== '';
 }
 
-function addNewProfile() {
-    let name = 'Profile ' + (Object.keys(currentConfig.advancedProfiles || {}).length + 1);
+type AddProfileTemplate = 'empty' | 'defaultRepo' | 'defaultBranch' | 'starred';
 
-    // Ensure the generated name is not a valid HTML color
-    let counter = Object.keys(currentConfig.advancedProfiles || {}).length + 1;
-    while (isHtmlColor(name)) {
-        counter++;
-        name = 'Profile ' + counter;
+function addNewProfile(template: AddProfileTemplate = 'defaultRepo') {
+    if (!currentConfig) return;
+
+    hideProfileAddMenu();
+
+    if (!currentConfig.advancedProfiles) {
+        currentConfig.advancedProfiles = {};
     }
 
-    if (!currentConfig.advancedProfiles) currentConfig.advancedProfiles = {};
+    if (template === 'starred' && starredKeys.length === 0) {
+        return;
+    }
 
-    currentConfig.advancedProfiles[name] = {
-        palette: JSON.parse(JSON.stringify(DEFAULT_PALETTE)),
-        mappings: JSON.parse(JSON.stringify(DEFAULT_MAPPINGS)),
+    const templateMeta: Record<AddProfileTemplate, { prefix: string; continueSequence?: boolean }> = {
+        empty: { prefix: 'Empty Profile', continueSequence: true },
+        defaultRepo: { prefix: 'Repo Profile', continueSequence: true },
+        defaultBranch: { prefix: 'Branch Profile', continueSequence: true },
+        starred: { prefix: 'Starred Profile', continueSequence: true },
     };
 
-    saveProfiles();
-    selectProfile(name);
+    const { prefix, continueSequence } = templateMeta[template];
+    const profileName = generateProfileName(prefix, Boolean(continueSequence));
+
+    const newProfile: AdvancedProfile = {
+        palette: createProfilePalette(),
+        mappings: getMappingsForTemplate(template),
+    };
+
+    currentConfig.advancedProfiles[profileName] = newProfile;
+
+    saveProfiles(profileName, 'monochromatic', true);
+    selectProfile(profileName);
+}
+
+function generateProfileName(prefix: string, continueSequence: boolean): string {
+    const profiles = currentConfig?.advancedProfiles ?? {};
+
+    const trimmedPrefix = prefix.trim();
+    if (!continueSequence) {
+        if (trimmedPrefix && !isHtmlColor(trimmedPrefix) && !profiles[trimmedPrefix]) {
+            return trimmedPrefix;
+        }
+    }
+
+    const existingProfiles = Object.keys(profiles);
+    let counter = continueSequence ? existingProfiles.length + 1 : 1;
+    let candidate = `${trimmedPrefix} ${counter}`.trim();
+
+    while (isHtmlColor(candidate) || profiles[candidate]) {
+        counter++;
+        candidate = `${trimmedPrefix} ${counter}`.trim();
+    }
+
+    return candidate;
+}
+
+function createProfilePalette(): Palette {
+    const randomColor = getThemeAppropriateColor();
+    const newPalette = JSON.parse(JSON.stringify(DEFAULT_PALETTE)) as Palette;
+    newPalette.primaryActiveBg.value = createThemedColorInWebview(randomColor);
+    return newPalette;
+}
+
+function getMappingsForTemplate(template: AddProfileTemplate): SectionMappings {
+    switch (template) {
+        case 'empty':
+            return {};
+        case 'defaultBranch':
+            return JSON.parse(JSON.stringify(DEFAULT_BRANCH_MAPPINGS));
+        case 'starred':
+            return buildStarredProfileMappings();
+        case 'defaultRepo':
+        default:
+            return JSON.parse(JSON.stringify(DEFAULT_MAPPINGS));
+    }
+}
+
+function buildStarredProfileMappings(): SectionMappings {
+    const mappings: SectionMappings = {};
+
+    if (!starredKeys || starredKeys.length === 0) {
+        return mappings;
+    }
+
+    starredKeys.forEach((key) => {
+        const slot = chooseSlotForStarredKey(key);
+        if (!slot) {
+            return;
+        }
+        mappings[key] = slot;
+    });
+
+    return mappings;
+}
+
+function chooseSlotForStarredKey(key: string): string | undefined {
+    const filteredSlots = getFilteredPaletteOptions(key, PALETTE_SLOT_ORDER, undefined, true);
+
+    if (isInactiveElement(key)) {
+        const inactiveSlot = filteredSlots.find((slot) => slot.includes('Inactive'));
+        if (inactiveSlot) {
+            return inactiveSlot;
+        }
+    }
+
+    if (isActiveElement(key)) {
+        const activeSlot = filteredSlots.find((slot) => slot.includes('Active') && !slot.includes('Inactive'));
+        if (activeSlot) {
+            return activeSlot;
+        }
+    }
+
+    if (isForegroundElement(key)) {
+        const fgSlot = filteredSlots.find((slot) => slot.endsWith('Fg'));
+        if (fgSlot) {
+            return fgSlot;
+        }
+    }
+
+    if (isBackgroundElement(key)) {
+        const bgSlot = filteredSlots.find((slot) => slot.endsWith('Bg'));
+        if (bgSlot) {
+            return bgSlot;
+        }
+    }
+
+    if (filteredSlots.length > 0) {
+        return filteredSlots[0];
+    }
+
+    return determineFallbackSlot(key);
+}
+
+function determineFallbackSlot(key: string): string {
+    if (isForegroundElement(key)) {
+        return isInactiveElement(key) ? 'primaryInactiveFg' : 'primaryActiveFg';
+    }
+
+    if (isBackgroundElement(key)) {
+        return isInactiveElement(key) ? 'primaryInactiveBg' : 'primaryActiveBg';
+    }
+
+    if (isInactiveElement(key)) {
+        return 'secondaryInactiveBg';
+    }
+
+    if (isActiveElement(key)) {
+        return 'secondaryActiveBg';
+    }
+
+    return 'tertiaryBg';
+}
+
+function initializeProfileAddMenu() {
+    profileAddMenuButton = document.getElementById('profileAddMenuButton') as HTMLElement | null;
+    profileAddDropdown = document.getElementById('profileAddMenuDropdown') as HTMLElement | null;
+
+    if (!profileAddMenuButton || !profileAddDropdown) {
+        return;
+    }
+
+    if (profileAddMenuButton.dataset.initialized !== 'true') {
+        profileAddMenuButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleProfileAddMenu();
+        });
+        profileAddMenuButton.addEventListener('keydown', handleProfileAddButtonKeydown);
+        profileAddMenuButton.dataset.initialized = 'true';
+    }
+
+    if (profileAddDropdown.dataset.initialized !== 'true') {
+        profileAddDropdown.addEventListener('keydown', handleProfileAddDropdownKeydown);
+        profileAddDropdown.dataset.initialized = 'true';
+    }
+
+    refreshProfileAddMenuOptions();
+    hideProfileAddMenu();
+}
+
+function refreshProfileAddMenuOptions() {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    profileAddDropdown.innerHTML = '';
+
+    const options: Array<{ template: AddProfileTemplate; label: string; description: string }> = [
+        {
+            template: 'empty',
+            label: 'Add empty profile',
+            description: 'Add an empty profile with no assigned mappings.',
+        },
+        {
+            template: 'defaultRepo',
+            label: 'Add default repository profile',
+            description: 'Add a profile with default repository mappings assigned.',
+        },
+        {
+            template: 'defaultBranch',
+            label: 'Add default branch profile',
+            description: 'Add a profile with default branch mappings assigned.',
+        },
+    ];
+
+    if (starredKeys.length > 0) {
+        options.push({
+            template: 'starred',
+            label: 'Add starred profile',
+            description: 'Add a profile with starred key mappings assigned.',
+        });
+    }
+
+    options.forEach((option) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'profile-add-option';
+        button.setAttribute('role', 'menuitem');
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            hideProfileAddMenu();
+            addNewProfile(option.template);
+        });
+        button.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                hideProfileAddMenu();
+                addNewProfile(option.template);
+            }
+        });
+
+        const label = document.createElement('div');
+        label.className = 'profile-add-option-label';
+        label.textContent = option.label;
+        button.appendChild(label);
+
+        const description = document.createElement('div');
+        description.className = 'profile-add-option-description';
+        description.textContent = option.description;
+        button.appendChild(description);
+
+        profileAddDropdown?.appendChild(button);
+    });
+
+    profileAddDropdown?.setAttribute(
+        'aria-hidden',
+        profileAddDropdown.classList.contains('visible') ? 'false' : 'true',
+    );
+}
+
+function toggleProfileAddMenu() {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    if (profileAddDropdown.classList.contains('visible')) {
+        hideProfileAddMenu();
+    } else {
+        showProfileAddMenu();
+    }
+}
+
+function showProfileAddMenu() {
+    if (!profileAddDropdown || !profileAddMenuButton) {
+        return;
+    }
+
+    refreshProfileAddMenuOptions();
+
+    if (!profileAddDropdown.children.length) {
+        return;
+    }
+
+    profileAddDropdown.classList.add('visible');
+    profileAddDropdown.setAttribute('aria-hidden', 'false');
+    profileAddMenuButton.setAttribute('aria-expanded', 'true');
+
+    const firstOption = profileAddDropdown.querySelector('.profile-add-option') as HTMLElement | null;
+    if (firstOption) {
+        firstOption.focus();
+    }
+}
+
+function hideProfileAddMenu() {
+    if (!profileAddDropdown || !profileAddMenuButton) {
+        return;
+    }
+
+    profileAddDropdown.classList.remove('visible');
+    profileAddDropdown.setAttribute('aria-hidden', 'true');
+    profileAddMenuButton.setAttribute('aria-expanded', 'false');
+}
+
+function handleProfileAddButtonKeydown(event: KeyboardEvent) {
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        showProfileAddMenu();
+    } else if (event.key === 'Escape') {
+        hideProfileAddMenu();
+    }
+}
+
+function handleProfileAddDropdownKeydown(event: KeyboardEvent) {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        hideProfileAddMenu();
+        profileAddMenuButton?.focus();
+        return;
+    }
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusNextProfileAddOption(1);
+        return;
+    }
+
+    if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusNextProfileAddOption(-1);
+        return;
+    }
+
+    if (event.key === 'Tab') {
+        hideProfileAddMenu();
+    }
+}
+
+function focusNextProfileAddOption(direction: number) {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    const options = Array.from(profileAddDropdown.querySelectorAll('.profile-add-option')) as HTMLElement[];
+    if (!options.length) {
+        return;
+    }
+
+    const activeElement = document.activeElement as HTMLElement | null;
+    const currentIndex = activeElement ? options.indexOf(activeElement) : -1;
+
+    let nextIndex = currentIndex + direction;
+
+    if (nextIndex < 0) {
+        nextIndex = options.length - 1;
+    } else if (nextIndex >= options.length) {
+        nextIndex = 0;
+    }
+
+    options[nextIndex].focus();
 }
 
 let paletteGeneratorInitialized = false;
@@ -6703,7 +7263,9 @@ function setupPaletteGenerator() {
             // Build/update cards with current primary color before showing
             let primaryColor: string | undefined;
             if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
-                primaryColor = currentConfig.advancedProfiles[selectedProfileName].palette.primaryActiveBg?.value;
+                const colorValue = currentConfig.advancedProfiles[selectedProfileName].palette.primaryActiveBg?.value;
+                // Extract string color from ThemedColor object
+                primaryColor = extractColorForTheme(colorValue);
             }
             buildPaletteAlgorithmCards(paletteGeneratorDropdown, primaryColor);
 
@@ -6759,14 +7321,20 @@ let previousPalette: any = null;
 
 /**
  * Generates a pleasing color palette and updates the current profile
+ * @param algorithm The palette generation algorithm to use
+ * @param profileName Optional profile name to generate palette for (defaults to currently selected profile)
  */
-function generatePalette(algorithm: string) {
-    if (!selectedProfileName || !currentConfig.advancedProfiles[selectedProfileName]) {
+function generatePalette(algorithm: string, profileName?: string) {
+    const targetProfileName = profileName || selectedProfileName;
+
+    if (!targetProfileName || !currentConfig.advancedProfiles[targetProfileName]) {
         return;
     }
 
-    const profile = currentConfig.advancedProfiles[selectedProfileName];
-    const primaryBg = profile.palette.primaryActiveBg?.value;
+    const profile = currentConfig.advancedProfiles[targetProfileName];
+    const primaryBgValue = profile.palette.primaryActiveBg?.value;
+    // Extract string color from ThemedColor object for current theme
+    const primaryBg = extractColorForTheme(primaryBgValue);
 
     if (!primaryBg) {
         console.warn('Cannot generate palette: No primary background color defined');
@@ -6783,7 +7351,7 @@ function generatePalette(algorithm: string) {
         command: 'generatePalette',
         data: {
             paletteData: {
-                profileName: selectedProfileName,
+                profileName: targetProfileName,
                 primaryBg: primaryBg,
                 algorithm: algorithm,
             },
@@ -6794,16 +7362,25 @@ function generatePalette(algorithm: string) {
 /**
  * Handles the paletteGenerated message from the extension
  */
-function handlePaletteGenerated(data: { advancedProfiles: any; generatedPalette: any; profileName: string }) {
+function handlePaletteGenerated(data: {
+    advancedProfiles: any;
+    generatedPalette: any;
+    profileName: string;
+    skipToast?: boolean;
+}) {
     // Update current config with the new profiles
     currentConfig.advancedProfiles = data.advancedProfiles;
-
-    // Show the toast with generated palette styling
-    showPaletteToast(data.generatedPalette);
 
     // Re-render the profile editor to show the new palette
     if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
         renderProfileEditor(selectedProfileName, currentConfig.advancedProfiles[selectedProfileName]);
+    }
+
+    // Show the toast after the layout has stabilized (unless skipToast is true)
+    if (!data.skipToast) {
+        requestAnimationFrame(() => {
+            showPaletteToast(data.generatedPalette);
+        });
     }
 }
 
@@ -6935,7 +7512,38 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
     // Wire up action buttons
     const deleteBtn = document.querySelector('[data-action="deleteProfile"]') as HTMLElement;
     if (deleteBtn) {
-        deleteBtn.onclick = () => deleteProfile(name);
+        // Check if profile is in use
+        const usage = isProfileInUse(name);
+
+        if (usage.inUse) {
+            // Disable button and show tooltip explaining why
+            deleteBtn.classList.add('disabled');
+            deleteBtn.style.opacity = '0.5';
+            deleteBtn.style.cursor = 'not-allowed';
+
+            const parts = [];
+            if (usage.repoRules > 0) {
+                parts.push(`${usage.repoRules} repo ${usage.repoRules === 1 ? 'rule' : 'rules'}`);
+            }
+            if (usage.branchRules > 0) {
+                parts.push(`${usage.branchRules} branch ${usage.branchRules === 1 ? 'rule' : 'rules'}`);
+            }
+            deleteBtn.setAttribute('data-tooltip', `Cannot delete: Profile is used by ${parts.join(' and ')}`);
+            deleteBtn.removeAttribute('title');
+
+            deleteBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            };
+        } else {
+            // Enable button with normal behavior
+            deleteBtn.classList.remove('disabled');
+            deleteBtn.style.opacity = '1';
+            deleteBtn.style.cursor = 'pointer';
+            deleteBtn.setAttribute('data-tooltip', 'Delete profile');
+            deleteBtn.removeAttribute('title');
+            deleteBtn.onclick = () => deleteProfile(name);
+        }
     }
 
     const duplicateBtn = document.querySelector('[data-action="duplicateProfile"]') as HTMLElement;
@@ -7015,7 +7623,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Create combined swatch showing Bg + Fg together
                 const swatch = document.createElement('div');
                 swatch.className = 'palette-pair-swatch';
-                updatePairSwatch(swatch, bgDef.value || '#000000', fgDef.value || '#FFFFFF');
+                updatePairSwatch(
+                    swatch,
+                    extractColorForTheme(bgDef.value) || '#000000',
+                    extractColorForTheme(fgDef.value) || '#FFFFFF',
+                );
 
                 // Create wrapper for Bg+Fg pair
                 const pairWrapper = document.createElement('div');
@@ -7027,7 +7639,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         currentConfig.advancedProfiles[selectedProfileName].palette[bgKey] = newDef;
                         saveProfiles();
                         // Update the combined swatch
-                        updatePairSwatch(swatch, newDef.value || '#000000', fgDef.value || '#FFFFFF');
+                        updatePairSwatch(
+                            swatch,
+                            extractColorForTheme(newDef.value) || '#000000',
+                            extractColorForTheme(fgDef.value) || '#FFFFFF',
+                        );
 
                         // Show palette generator hint when user manually sets primary background
                         const generatorBtn = document.getElementById('paletteGeneratorBtn');
@@ -7041,7 +7657,11 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         currentConfig.advancedProfiles[selectedProfileName].palette[fgKey] = newDef;
                         saveProfiles();
                         // Update the combined swatch
-                        updatePairSwatch(swatch, bgDef.value || '#000000', newDef.value || '#FFFFFF');
+                        updatePairSwatch(
+                            swatch,
+                            extractColorForTheme(bgDef.value) || '#000000',
+                            extractColorForTheme(newDef.value) || '#FFFFFF',
+                        );
                     }
                 });
 
@@ -7363,10 +7983,7 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Container for dropdown (and potentially fixed color picker)
                 const dropdownContainer = document.createElement('div');
-                dropdownContainer.style.flex = '1';
-                dropdownContainer.style.display = 'flex';
-                dropdownContainer.style.gap = '8px';
-                dropdownContainer.style.alignItems = 'center';
+                dropdownContainer.className = 'mapping-dropdown-container';
 
                 // Create custom dropdown with color swatches
                 const select = document.createElement('div');
@@ -7377,10 +7994,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 select.setAttribute('tabindex', '0');
                 select.setAttribute('role', 'combobox');
                 select.setAttribute('aria-expanded', 'false');
-                select.style.flex = '1';
-                select.style.minWidth = '200px';
-                select.style.position = 'relative';
-                select.style.cursor = 'pointer';
 
                 // Add drop event handlers
                 select.addEventListener('dragover', (e: DragEvent) => {
@@ -7422,36 +8035,16 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Selected value display
                 const selectedDisplay = document.createElement('div');
                 selectedDisplay.className = 'dropdown-selected';
-                selectedDisplay.style.background = 'var(--vscode-dropdown-background)';
-                selectedDisplay.style.color = 'var(--vscode-dropdown-foreground)';
-                selectedDisplay.style.border = '1px solid var(--vscode-dropdown-border)';
-                selectedDisplay.style.padding = '4px 20px 4px 4px';
-                selectedDisplay.style.fontSize = '12px';
-                selectedDisplay.style.display = 'flex';
-                selectedDisplay.style.alignItems = 'center';
-                selectedDisplay.style.gap = '6px';
-                selectedDisplay.style.position = 'relative';
 
                 // Arrow indicator
                 const arrow = document.createElement('span');
+                arrow.className = 'dropdown-arrow';
                 arrow.textContent = '▼';
-                arrow.style.position = 'absolute';
-                arrow.style.right = '4px';
-                arrow.style.fontSize = '8px';
-                arrow.style.pointerEvents = 'none';
                 selectedDisplay.appendChild(arrow);
 
                 // Dropdown options container (appended to body for proper z-index stacking)
                 const optionsContainer = document.createElement('div');
                 optionsContainer.className = 'dropdown-options mapping-dropdown-options';
-                optionsContainer.style.display = 'none';
-                optionsContainer.style.position = 'fixed';
-                optionsContainer.style.background = 'var(--vscode-dropdown-background)';
-                optionsContainer.style.border = '1px solid var(--vscode-dropdown-border)';
-                optionsContainer.style.maxHeight = '200px';
-                optionsContainer.style.overflowY = 'auto';
-                optionsContainer.style.zIndex = '10000';
-                optionsContainer.style.marginTop = '2px';
 
                 // Build options
                 type DropdownOption = { value: string; label: string; color?: string; isSeparator?: boolean };
@@ -7476,7 +8069,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 filteredPaletteOptions.forEach((opt) => {
                     const label = PALETTE_SLOT_LABELS[opt] || opt.charAt(0).toUpperCase() + opt.slice(1);
                     const slotDef = profile.palette[opt];
-                    const color = slotDef && slotDef.value ? convertColorToHex(slotDef.value) : undefined;
+                    const color =
+                        slotDef && slotDef.value ? convertColorToHex(extractColorForTheme(slotDef.value)) : undefined;
                     options.push({ value: opt, label, color });
                 });
 
@@ -7486,66 +8080,27 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                         const separatorDiv = document.createElement('div');
                         separatorDiv.textContent = opt.label;
                         separatorDiv.className = 'dropdown-separator';
-                        separatorDiv.style.padding = '4px 8px';
-                        separatorDiv.style.fontWeight = 'bold';
-                        separatorDiv.style.fontSize = '11px';
-                        // Use picker group colors for better visibility/theming
-                        separatorDiv.style.color = 'var(--vscode-pickerGroup-foreground)';
-                        separatorDiv.style.borderBottom = '1px solid var(--vscode-pickerGroup-border)';
-
-                        // Add margin for separation (except first item)
-                        separatorDiv.style.marginTop = index > 0 ? '8px' : '2px';
-                        separatorDiv.style.marginBottom = '2px';
-
-                        separatorDiv.style.textTransform = 'uppercase';
-                        separatorDiv.style.pointerEvents = 'none'; // Make unclickable
+                        if (index === 0) {
+                            separatorDiv.style.marginTop = '2px';
+                        }
                         return separatorDiv;
                     }
 
                     const optionDiv = document.createElement('div');
-                    optionDiv.className = 'dropdown-option';
+                    optionDiv.className = isSelected ? 'dropdown-option selected' : 'dropdown-option';
                     optionDiv.setAttribute('data-value', opt.value);
-                    optionDiv.style.padding = '4px 8px';
-                    optionDiv.style.cursor = 'pointer';
-                    optionDiv.style.display = 'flex';
-                    optionDiv.style.alignItems = 'center';
-                    optionDiv.style.gap = '8px';
-                    optionDiv.style.fontSize = '12px';
-                    optionDiv.style.whiteSpace = 'nowrap';
-
-                    if (isSelected) {
-                        optionDiv.style.background = 'var(--vscode-list-activeSelectionBackground)';
-                        optionDiv.style.color = 'var(--vscode-list-activeSelectionForeground)';
-                    }
 
                     // Add color swatch if available
                     if (opt.color) {
                         const swatch = document.createElement('div');
-                        swatch.style.width = '16px';
-                        swatch.style.height = '16px';
+                        swatch.className = 'dropdown-color-swatch';
                         swatch.style.background = opt.color;
-                        swatch.style.border = '1px solid var(--vscode-panel-border)';
-                        swatch.style.borderRadius = '2px';
-                        swatch.style.flexShrink = '0';
                         optionDiv.appendChild(swatch);
                     }
 
                     const text = document.createElement('span');
                     text.textContent = opt.label;
-                    text.style.whiteSpace = 'nowrap';
                     optionDiv.appendChild(text);
-
-                    // Hover effect
-                    optionDiv.addEventListener('mouseenter', () => {
-                        if (!isSelected) {
-                            optionDiv.style.background = 'var(--vscode-list-hoverBackground)';
-                        }
-                    });
-                    optionDiv.addEventListener('mouseleave', () => {
-                        if (!isSelected) {
-                            optionDiv.style.background = '';
-                        }
-                    });
 
                     return optionDiv;
                 };
@@ -7567,12 +8122,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     // Add color swatch if available
                     if (opt.color) {
                         const swatch = document.createElement('div');
-                        swatch.style.width = '16px';
-                        swatch.style.height = '16px';
+                        swatch.className = 'dropdown-color-swatch';
                         swatch.style.background = opt.color;
-                        swatch.style.border = '1px solid var(--vscode-panel-border)';
-                        swatch.style.borderRadius = '2px';
-                        swatch.style.flexShrink = '0';
                         selectedDisplay.insertBefore(swatch, arrow);
                     }
 
@@ -7694,10 +8245,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
 
                 // Create fixed color picker (hidden by default)
                 const fixedColorPicker = document.createElement('div');
-                fixedColorPicker.style.display = currentSlot === '__fixed__' ? 'flex' : 'none';
-                fixedColorPicker.style.alignItems = 'center';
-                fixedColorPicker.style.gap = '5px';
-                fixedColorPicker.style.flex = '1';
+                fixedColorPicker.className =
+                    currentSlot === '__fixed__' ? 'fixed-color-picker visible' : 'fixed-color-picker';
 
                 const colorInput = document.createElement('input');
                 colorInput.type = 'color';
@@ -7710,9 +8259,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 textInput.className = 'color-input text-input';
                 textInput.value = currentFixedColor || '#4A90E2';
                 textInput.placeholder = 'e.g., blue, #4A90E2';
-                textInput.style.flex = '1';
-                textInput.style.minWidth = '50px';
-                textInput.style.maxWidth = '90px';
 
                 fixedColorPicker.appendChild(colorInput);
                 fixedColorPicker.appendChild(textInput);
@@ -7720,31 +8266,38 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 // Update select width when fixed color is shown/hidden
                 const updateSelectWidth = () => {
                     if (select.getAttribute('data-value') === '__fixed__') {
-                        select.style.flex = '0 0 95px';
-                        select.style.width = '95px';
-                        fixedColorPicker.style.display = 'flex';
+                        select.classList.add('fixed-width');
+                        fixedColorPicker.classList.add('visible');
                     } else {
-                        select.style.flex = '1';
-                        select.style.minWidth = 'auto';
-                        fixedColorPicker.style.display = 'none';
+                        select.classList.remove('fixed-width');
+                        fixedColorPicker.classList.remove('visible');
                     }
                 };
                 updateSelectWidth();
 
+                // Create close icon to clear the mapping
+                const clearIcon = document.createElement('span');
+                clearIcon.className = 'codicon codicon-close mapping-clear-icon';
+                clearIcon.title = 'Clear mapping (set to None)';
+                clearIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.setAttribute('data-value', 'none');
+                    (select as any).value = 'none';
+                    const changeEvent = new Event('change', { bubbles: true });
+                    select.dispatchEvent(changeEvent);
+                });
+
+                dropdownContainer.appendChild(clearIcon);
                 dropdownContainer.appendChild(select);
                 dropdownContainer.appendChild(fixedColorPicker);
 
                 // Opacity control
                 const opacityContainer = document.createElement('div');
-                opacityContainer.style.display = 'flex';
-                opacityContainer.style.alignItems = 'center';
-                opacityContainer.style.gap = '6px';
-                opacityContainer.style.minWidth = '140px';
+                opacityContainer.className = 'opacity-controls';
 
                 const opacityLabel = document.createElement('span');
+                opacityLabel.className = 'opacity-label';
                 opacityLabel.textContent = 'α:';
-                opacityLabel.style.fontSize = '11px';
-                opacityLabel.style.color = 'var(--vscode-descriptionForeground)';
 
                 const opacitySlider = document.createElement('input');
                 opacitySlider.type = 'range';
@@ -7754,8 +8307,6 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 opacitySlider.step = '5';
                 const initialOpacity = currentOpacity !== undefined ? currentOpacity : 1;
                 opacitySlider.value = Math.round(initialOpacity * 100).toString();
-                opacitySlider.style.flex = '1';
-                opacitySlider.style.minWidth = '70px';
 
                 // Get the color from the selected palette slot to create gradient
                 const updateSliderGradient = () => {
@@ -7763,28 +8314,27 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                     if (slotName === 'none') {
                         // Disable and gray out opacity controls when 'none' is selected
                         opacitySlider.disabled = true;
-                        opacitySlider.style.opacity = '0.4';
-                        opacitySlider.style.cursor = 'not-allowed';
                         opacitySlider.style.setProperty('--slider-color', '#808080');
-                        opacityValue.style.opacity = '0.4';
-                        opacityLabel.style.opacity = '0.4';
+                        opacityValue.classList.add('disabled');
+                        opacityLabel.classList.add('disabled');
                     } else {
                         // Enable opacity controls
                         opacitySlider.disabled = false;
-                        opacitySlider.style.opacity = '1';
-                        opacitySlider.style.cursor = 'pointer';
-                        opacityValue.style.opacity = '1';
-                        opacityLabel.style.opacity = '1';
+                        opacityValue.classList.remove('disabled');
+                        opacityLabel.classList.remove('disabled');
 
                         if (slotName === '__fixed__') {
-                            // Use the fixed color
-                            const color = convertColorToHex(textInput.value);
+                            // Use the fixed color - extract it first if it's a ThemedColor
+                            const colorValue = extractColorForTheme(textInput.value);
+                            const color = convertColorToHex(colorValue);
                             opacitySlider.style.setProperty('--slider-color', color);
                         } else if (selectedProfileName && currentConfig.advancedProfiles[selectedProfileName]) {
                             const profile = currentConfig.advancedProfiles[selectedProfileName];
                             const slotDef = profile.palette[slotName];
                             if (slotDef && slotDef.value) {
-                                const color = convertColorToHex(slotDef.value);
+                                // Extract the color string for the current theme before converting to hex
+                                const colorValue = extractColorForTheme(slotDef.value);
+                                const color = convertColorToHex(colorValue);
                                 opacitySlider.style.setProperty('--slider-color', color);
                             }
                         }
@@ -7792,10 +8342,8 @@ function renderProfileEditor(name: string, profile: AdvancedProfile) {
                 };
 
                 const opacityValue = document.createElement('span');
+                opacityValue.className = 'opacity-value';
                 opacityValue.textContent = Math.round(initialOpacity * 100) + '%';
-                opacityValue.style.fontSize = '11px';
-                opacityValue.style.minWidth = '35px';
-                opacityValue.style.color = 'var(--vscode-descriptionForeground)';
 
                 // Call after all elements are created
                 updateSliderGradient();
@@ -8107,7 +8655,10 @@ function createPaletteSlotElement(
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('text/plain', key);
         e.dataTransfer.setData('application/x-palette-slot', key);
-        e.dataTransfer.setData('application/x-palette-color', convertColorToHex(def.value || '#000000'));
+        e.dataTransfer.setData(
+            'application/x-palette-color',
+            convertColorToHex(extractColorForTheme(def.value) || '#000000'),
+        );
 
         // Create drag preview
         const dragPreview = document.createElement('div');
@@ -8125,7 +8676,7 @@ function createPaletteSlotElement(
         const colorBox = document.createElement('div');
         colorBox.style.width = '20px';
         colorBox.style.height = '20px';
-        colorBox.style.backgroundColor = convertColorToHex(def.value || '#000000');
+        colorBox.style.backgroundColor = convertColorToHex(extractColorForTheme(def.value) || '#000000');
         colorBox.style.border = '1px solid var(--vscode-panel-border)';
         colorBox.style.borderRadius = '2px';
 
@@ -8164,10 +8715,10 @@ function createPaletteSlotElement(
     const colorPicker = document.createElement('input');
     colorPicker.type = 'color';
     colorPicker.className = 'native-color-input';
-    colorPicker.value = convertColorToHex(def.value || '#000000');
+    colorPicker.value = convertColorToHex(extractColorForTheme(def.value) || '#000000');
     colorPicker.title = 'Click to use a color picker, shift-click to choose a random color';
     colorPicker.onchange = () => {
-        def.value = colorPicker.value;
+        def.value = createThemedColorInWebview(colorPicker.value);
         def.source = 'fixed';
         textInput.value = colorPicker.value;
         onChange(def);
@@ -8177,7 +8728,7 @@ function createPaletteSlotElement(
     const textInput = document.createElement('input');
     textInput.type = 'text';
     textInput.className = 'color-input text-input';
-    textInput.value = def.value || '#000000';
+    textInput.value = extractColorForTheme(def.value) || '#000000';
     textInput.placeholder = 'e.g., blue, #4A90E2'; // No profile example here - palette slots are color definitions
     textInput.style.maxWidth = '90px';
     textInput.setAttribute('data-palette-slot', 'true'); // Mark as palette slot input
@@ -8190,7 +8741,7 @@ function createPaletteSlotElement(
     };
 
     textInput.onchange = () => {
-        def.value = textInput.value;
+        def.value = createThemedColorInWebview(textInput.value);
         def.source = 'fixed';
         onChange(def);
     };
@@ -8357,11 +8908,56 @@ function confirmDeleteProfile(profileName: string) {
     }
 }
 
-function saveProfiles() {
+function saveProfiles(profileName?: string, algorithm?: string, skipToast?: boolean) {
     vscode.postMessage({
         command: 'updateAdvancedProfiles',
         data: {
             advancedProfiles: currentConfig.advancedProfiles,
+            profileName: profileName,
+            algorithm: algorithm,
+            skipToast: skipToast,
+        },
+    });
+}
+/**
+ * Handles changes to the profile preview mode checkbox
+ */
+function handleProfilePreviewModeChange() {
+    const checkbox = document.getElementById('preview-selected-profile') as HTMLInputElement;
+    if (!checkbox) return;
+
+    profilePreviewMode = checkbox.checked;
+
+    if (profilePreviewMode && selectedProfileName) {
+        // Enable preview and apply selected profile
+        applyProfilePreview(selectedProfileName);
+    } else {
+        // Disable preview and revert to workspace colors
+        clearProfilePreview();
+    }
+}
+
+/**
+ * Applies a profile preview by sending a message to the extension
+ */
+function applyProfilePreview(profileName: string) {
+    vscode.postMessage({
+        command: 'previewProfile',
+        data: {
+            profileName,
+            previewEnabled: true,
+        },
+    });
+}
+
+/**
+ * Clears the profile preview and reverts to workspace colors
+ */
+function clearProfilePreview() {
+    vscode.postMessage({
+        command: 'clearProfilePreview',
+        data: {
+            previewEnabled: false,
         },
     });
 }

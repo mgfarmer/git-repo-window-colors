@@ -5,23 +5,24 @@
 import { expect } from 'chai';
 import { countActiveMappings, countTotalActiveMappings, resolveColorFromSlot } from '../../webview/paletteLogic';
 import { AdvancedProfile } from '../../types/advancedModeTypes';
+import { createThemedColor } from '../../colorDerivation';
 
 describe('paletteLogic', () => {
     describe('countActiveMappings', () => {
         const createProfile = (mappings: any): AdvancedProfile => ({
             palette: {
-                primaryActiveBg: { source: 'fixed', value: '#4A90E2' },
-                primaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-                primaryInactiveBg: { source: 'fixed', value: '#2E5C8A' },
-                primaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-                secondaryActiveBg: { source: 'fixed', value: '#5FA3E8' },
-                secondaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-                secondaryInactiveBg: { source: 'fixed', value: '#4278B0' },
-                secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-                tertiaryBg: { source: 'fixed', value: '#1E1E1E' },
-                tertiaryFg: { source: 'fixed', value: '#CCCCCC' },
-                quaternaryBg: { source: 'fixed', value: '#2D2D30' },
-                quaternaryFg: { source: 'fixed', value: '#D4D4D4' },
+                primaryActiveBg: { source: 'fixed', value: createThemedColor('#4A90E2', 'dark') },
+                primaryActiveFg: { source: 'fixed', value: createThemedColor('#FFFFFF', 'dark') },
+                primaryInactiveBg: { source: 'fixed', value: createThemedColor('#2E5C8A', 'dark') },
+                primaryInactiveFg: { source: 'fixed', value: createThemedColor('#CCCCCC', 'dark') },
+                secondaryActiveBg: { source: 'fixed', value: createThemedColor('#5FA3E8', 'dark') },
+                secondaryActiveFg: { source: 'fixed', value: createThemedColor('#FFFFFF', 'dark') },
+                secondaryInactiveBg: { source: 'fixed', value: createThemedColor('#4278B0', 'dark') },
+                secondaryInactiveFg: { source: 'fixed', value: createThemedColor('#CCCCCC', 'dark') },
+                tertiaryBg: { source: 'fixed', value: createThemedColor('#1E1E1E', 'dark') },
+                tertiaryFg: { source: 'fixed', value: createThemedColor('#CCCCCC', 'dark') },
+                quaternaryBg: { source: 'fixed', value: createThemedColor('#2D2D30', 'dark') },
+                quaternaryFg: { source: 'fixed', value: createThemedColor('#D4D4D4', 'dark') },
             },
             mappings,
         });
@@ -125,18 +126,18 @@ describe('paletteLogic', () => {
     describe('countTotalActiveMappings', () => {
         const createProfile = (mappings: any): AdvancedProfile => ({
             palette: {
-                primaryActiveBg: { source: 'fixed', value: '#4A90E2' },
-                primaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-                primaryInactiveBg: { source: 'fixed', value: '#2E5C8A' },
-                primaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-                secondaryActiveBg: { source: 'fixed', value: '#5FA3E8' },
-                secondaryActiveFg: { source: 'fixed', value: '#FFFFFF' },
-                secondaryInactiveBg: { source: 'fixed', value: '#4278B0' },
-                secondaryInactiveFg: { source: 'fixed', value: '#CCCCCC' },
-                tertiaryBg: { source: 'fixed', value: '#1E1E1E' },
-                tertiaryFg: { source: 'fixed', value: '#CCCCCC' },
-                quaternaryBg: { source: 'fixed', value: '#2D2D30' },
-                quaternaryFg: { source: 'fixed', value: '#D4D4D4' },
+                primaryActiveBg: { source: 'fixed', value: createThemedColor('#4A90E2', 'dark') },
+                primaryActiveFg: { source: 'fixed', value: createThemedColor('#FFFFFF', 'dark') },
+                primaryInactiveBg: { source: 'fixed', value: createThemedColor('#2E5C8A', 'dark') },
+                primaryInactiveFg: { source: 'fixed', value: createThemedColor('#CCCCCC', 'dark') },
+                secondaryActiveBg: { source: 'fixed', value: createThemedColor('#5FA3E8', 'dark') },
+                secondaryActiveFg: { source: 'fixed', value: createThemedColor('#FFFFFF', 'dark') },
+                secondaryInactiveBg: { source: 'fixed', value: createThemedColor('#4278B0', 'dark') },
+                secondaryInactiveFg: { source: 'fixed', value: createThemedColor('#CCCCCC', 'dark') },
+                tertiaryBg: { source: 'fixed', value: createThemedColor('#1E1E1E', 'dark') },
+                tertiaryFg: { source: 'fixed', value: createThemedColor('#CCCCCC', 'dark') },
+                quaternaryBg: { source: 'fixed', value: createThemedColor('#2D2D30', 'dark') },
+                quaternaryFg: { source: 'fixed', value: createThemedColor('#D4D4D4', 'dark') },
             },
             mappings,
         });

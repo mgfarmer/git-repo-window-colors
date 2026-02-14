@@ -1,4 +1,4 @@
-import { AdvancedProfileMap } from './advancedModeTypes';
+import { AdvancedProfileMap, ThemedColor } from './advancedModeTypes';
 
 export interface BranchTable {
     fixed: boolean;
@@ -11,7 +11,7 @@ export interface SharedBranchTables {
 
 export interface RepoRule {
     repoQualifier: string;
-    primaryColor: string;
+    primaryColor: ThemedColor | 'none';
     profileName?: string;
     enabled?: boolean;
     branchTableName?: string;
@@ -21,7 +21,7 @@ export interface RepoRule {
 
 export interface BranchRule {
     pattern: string;
-    color: string;
+    color: ThemedColor | 'none';
     profileName?: string;
     enabled?: boolean;
 }
@@ -41,6 +41,7 @@ export interface OtherSettings {
 export interface WebviewMessage {
     command:
         | 'updateConfig'
+        | 'updateThemedColor'
         | 'requestConfig'
         | 'openColorPicker'
         | 'addRepoRule'
@@ -53,6 +54,8 @@ export interface WebviewMessage {
         | 'previewBranchRule'
         | 'clearPreview'
         | 'clearBranchPreview'
+        | 'previewProfile'
+        | 'clearProfilePreview'
         | 'generatePalette'
         | 'requestPalettePreviews'
         | 'toggleStarredKey'
@@ -73,6 +76,10 @@ export interface WebviewMessage {
         sharedBranchTables?: SharedBranchTables;
         otherSettings?: OtherSettings;
         advancedProfiles?: AdvancedProfileMap;
+        type?: 'repo' | 'branch';
+        color?: string;
+        clearProfileName?: boolean;
+        tableName?: string;
         workspaceInfo?: {
             repositoryUrl: string;
             currentBranch: string;
@@ -100,7 +107,6 @@ export interface WebviewMessage {
         primaryBg?: string;
         mappingKey?: string;
         // Branch table management data
-        tableName?: string;
         repoRuleIndex?: number;
         newTableName?: string;
         oldTableName?: string;
@@ -117,5 +123,9 @@ export interface WebviewMessage {
         commandTitle?: string;
         // Help panel width
         width?: number;
+        // Profile palette generation on save
+        profileName?: string;
+        algorithm?: string;
+        skipToast?: boolean;
     };
 }

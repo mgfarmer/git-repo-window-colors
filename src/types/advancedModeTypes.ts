@@ -1,8 +1,35 @@
+/**
+ * Theme kind enum matching VS Code's ColorThemeKind
+ */
+export type ThemeKind = 'dark' | 'light' | 'highContrast';
+
+/**
+ * A single color value for a specific theme
+ */
+export interface ThemedColorValue {
+    /** The color value (hex string or CSS color name) */
+    value?: string;
+    /** If true, this color was auto-derived and will update when the source theme changes */
+    auto: boolean;
+}
+
+/**
+ * A color value that adapts to different theme types
+ */
+export interface ThemedColor {
+    /** Color for dark themes */
+    dark: ThemedColorValue;
+    /** Color for light themes */
+    light: ThemedColorValue;
+    /** Color for high contrast themes */
+    highContrast: ThemedColorValue;
+}
+
 export type PaletteSlotSource = 'fixed' | 'repoColor' | 'branchColor' | 'transparent';
 
 export interface PaletteSlotDefinition {
     source: PaletteSlotSource;
-    value?: string; // Hex color for 'fixed'
+    value?: ThemedColor; // Themed color for 'fixed'
     opacity?: number; // 0-1
     lighten?: number; // 0-1
     darken?: number; // 0-1

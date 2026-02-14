@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { resolveProfile } from '../../profileResolver';
 import { AdvancedProfile } from '../../types/advancedModeTypes';
 import Color from 'color';
+import { createThemedColor } from '../../colorDerivation';
 
 describe('ProfileResolver', () => {
     describe('resolveProfile', () => {
@@ -11,7 +12,7 @@ describe('ProfileResolver', () => {
                 palette: {
                     primaryActiveBg: {
                         source: 'fixed',
-                        value: '#ff0000',
+                        value: createThemedColor('#ff0000', 'dark'),
                     },
                     primaryActiveFg: { source: 'transparent' },
                     primaryInactiveBg: { source: 'transparent' },

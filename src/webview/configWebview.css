@@ -679,6 +679,74 @@ h2 {
     background: var(--vscode-button-hoverBackground);
 }
 
+.profile-add-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.profile-add-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.profile-add-button-text {
+    display: inline-flex;
+    align-items: center;
+}
+
+.profile-add-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--vscode-menu-background);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    min-width: 260px;
+    max-width: 320px;
+    z-index: 1200;
+    padding: 4px 0;
+}
+
+.profile-add-dropdown.visible {
+    display: block;
+}
+
+.profile-add-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    background: transparent;
+    color: var(--vscode-menu-foreground);
+    border: none;
+    padding: 8px 12px;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+}
+
+.profile-add-option:hover,
+.profile-add-option:focus {
+    background: var(--vscode-menu-selectionBackground);
+    color: var(--vscode-menu-selectionForeground);
+    outline: none;
+}
+
+.profile-add-option-label {
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.profile-add-option-description {
+    font-size: 11px;
+    opacity: 0.75;
+}
+
 /* Copy From button */
 .copy-from-button {
     background: var(--vscode-button-background);
@@ -1176,6 +1244,7 @@ input[type='range'] {
     margin-bottom: 0px;
     padding: 0;
     padding-bottom: 10px;
+    min-height: 30px;
 }
 
 /* Align section-help with h2 labels in panels that have panel-header padding */
@@ -1318,14 +1387,14 @@ button:focus {
     border: 1px solid var(--vscode-button-border);
     border-radius: 3px;
     cursor: pointer;
-    padding: 4px 6px;
+    padding: 6px 6px;
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 10;
     font-size: 14px;
     width: 24px;
-    height: 24px;
+    height: 26px;
 }
 
 .branch-collapse-btn:hover,
@@ -1362,7 +1431,6 @@ button:focus {
 .branch-panel.collapsed .branch-expand-btn {
     display: flex !important;
     position: absolute;
-    top: 15px;
     left: 50%;
     transform: translateX(-50%);
 }
@@ -1671,7 +1739,7 @@ button:focus {
 }
 
 .profiles-list-section {
-    width: 350px;
+    width: 400px;
     border-right: 1px solid var(--vscode-panel-border);
     padding-right: 20px;
     display: flex;
@@ -1679,10 +1747,28 @@ button:focus {
 }
 
 .profiles-list {
-    flex: 1;
+    height: calc(100% - 60px);
     overflow-y: auto;
     border: 1px solid var(--vscode-input-border);
     border-radius: 2px;
+}
+
+.profile-preview-control {
+    margin-top: 12px;
+    padding: 8px;
+    background-color: var(--vscode-editor-background);
+}
+
+.profile-preview-control label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.profile-preview-control input[type='checkbox'] {
+    cursor: pointer;
 }
 
 .profile-item {
@@ -1734,23 +1820,22 @@ button:focus {
     flex-shrink: 0;
 }
 
-.profile-indicators {
+.profile-usage-indicators {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    margin-right: 8px;
     flex-shrink: 0;
-    min-width: 36px;
-    justify-content: flex-start;
+    min-width: 40px;
+    justify-content: flex-end;
 }
 
-.profile-indicator-icon {
+.profile-usage-icon {
     font-size: 14px;
     color: var(--vscode-foreground);
-    opacity: 0.8;
+    opacity: 0.6;
 }
 
-.profile-indicator-icon:hover {
+.profile-usage-icon:hover {
     opacity: 1;
 }
 
@@ -1768,12 +1853,33 @@ button:focus {
     justify-content: center;
 }
 
+.profile-reference-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--vscode-foreground);
+    flex-shrink: 0;
+    width: 30px;
+    justify-content: center;
+}
+
+.profile-reference-count .codicon {
+    font-size: 14px;
+}
+
+.profile-reference-count-warning {
+    color: var(--vscode-inputValidation-warningForeground);
+}
+
 .profile-editor-top {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 20px;
     overflow-y: auto;
+    position: relative; /* For absolute positioning of palette toast */
 }
 
 .profiles-bottom-section {
@@ -1942,8 +2048,9 @@ button:focus {
 /* Palette Toast */
 .palette-toast {
     position: absolute;
-    right: 100%;
-    top: -12px;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1951,20 +2058,14 @@ button:focus {
     background: var(--vscode-editor-background);
     border: 1px solid;
     border-radius: 3px;
-    margin-right: 12px;
-    animation: slideIn 0.3s ease-out;
     white-space: nowrap;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
 }
 
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateX(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
+.palette-toast[style*='display: flex'] {
+    opacity: 1;
 }
 
 .palette-toast-message {
@@ -2523,6 +2624,22 @@ button:focus {
     cursor: grabbing !important;
 }
 
+/* Custom Dropdown Styles */
+.mapping-dropdown-container {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.custom-dropdown {
+    flex: 1;
+    min-width: 200px;
+    min-height: 28px;
+    position: relative;
+    cursor: pointer;
+}
+
 .custom-dropdown.drag-compatible {
     box-shadow: 0 0 0 2px var(--vscode-focusBorder);
     animation: pulse-border 1s ease-in-out infinite;
@@ -2531,6 +2648,151 @@ button:focus {
 .custom-dropdown.drag-hover {
     box-shadow: 0 0 0 3px var(--vscode-focusBorder);
     background-color: var(--vscode-list-hoverBackground);
+}
+
+.custom-dropdown.fixed-width {
+    flex: 0 0 95px;
+    width: 95px;
+}
+
+.dropdown-selected {
+    background: var(--vscode-dropdown-background);
+    color: var(--vscode-dropdown-foreground);
+    border: 1px solid var(--vscode-dropdown-border);
+    padding: 4px 20px 4px 4px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    height: 28px;
+    box-sizing: border-box;
+}
+
+.dropdown-arrow {
+    position: absolute;
+    right: 4px;
+    font-size: 8px;
+    pointer-events: none;
+}
+
+.dropdown-options {
+    display: none;
+    position: fixed;
+    background: var(--vscode-dropdown-background);
+    border: 1px solid var(--vscode-dropdown-border);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10000;
+    margin-top: 2px;
+}
+
+.dropdown-separator {
+    padding: 4px 8px;
+    font-weight: bold;
+    font-size: 11px;
+    color: var(--vscode-pickerGroup-foreground);
+    border-bottom: 1px solid var(--vscode-pickerGroup-border);
+    text-transform: uppercase;
+    pointer-events: none;
+    margin-top: 8px;
+    margin-bottom: 2px;
+}
+
+.dropdown-separator:first-child {
+    margin-top: 2px;
+}
+
+.dropdown-option {
+    padding: 4px 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.dropdown-option.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.dropdown-option:hover:not(.selected) {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.dropdown-color-swatch {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.mapping-clear-icon {
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--vscode-icon-foreground);
+    opacity: 0.6;
+    padding: 4px;
+}
+
+.mapping-clear-icon:hover {
+    opacity: 1;
+}
+
+.fixed-color-picker {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+}
+
+.fixed-color-picker.visible {
+    display: flex;
+}
+
+.fixed-color-picker .text-input {
+    flex: 1;
+    min-width: 50px;
+    max-width: 90px;
+}
+
+.opacity-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 140px;
+}
+
+.opacity-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.opacity-slider {
+    flex: 1;
+    min-width: 70px;
+}
+
+.opacity-slider:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.opacity-value {
+    font-size: 11px;
+    min-width: 35px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.opacity-value.disabled {
+    opacity: 0.4;
+}
+
+.opacity-label.disabled {
+    opacity: 0.4;
 }
 
 @keyframes pulse-border {

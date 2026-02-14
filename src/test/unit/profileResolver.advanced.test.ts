@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import { resolveProfile } from '../../profileResolver';
 import { AdvancedProfile } from '../../types/advancedModeTypes';
 import Color from 'color';
+import { createThemedColor } from '../../colorDerivation';
 
 describe('ProfileResolver - Advanced Features', () => {
     // Helper to create minimal valid palette
@@ -27,7 +28,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     customSlot: {
                         source: 'fixed',
-                        value: '#800000', // Dark red
+                        value: createThemedColor('#800000', 'dark'), // Dark red
                         lighten: 0.2,
                     },
                 },
@@ -51,7 +52,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     customSlot: {
                         source: 'fixed',
-                        value: '#FF6B6B', // Light red
+                        value: createThemedColor('#FF6B6B', 'dark'), // Light red
                         darken: 0.2,
                     },
                 },
@@ -75,7 +76,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     customSlot: {
                         source: 'fixed',
-                        value: '#FF0000',
+                        value: createThemedColor('#FF0000', 'dark'),
                         opacity: 0.5,
                     },
                 },
@@ -97,7 +98,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     customSlot: {
                         source: 'fixed',
-                        value: '#0000FF', // Blue
+                        value: createThemedColor('#0000FF', 'dark'), // Blue
                         lighten: 0.3,
                         opacity: 0.7,
                     },
@@ -125,7 +126,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     darkSlot: {
                         source: 'fixed',
-                        value: '#1a1a1a', // Very dark
+                        value: createThemedColor('#1a1a1a', 'dark'), // Very dark
                         highContrast: true,
                     },
                 },
@@ -146,7 +147,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     lightSlot: {
                         source: 'fixed',
-                        value: '#f0f0f0', // Very light
+                        value: createThemedColor('#f0f0f0', 'dark'), // Very light
                         highContrast: true,
                     },
                 },
@@ -167,7 +168,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     contrastSlot: {
                         source: 'fixed',
-                        value: '#1a1a1a',
+                        value: createThemedColor('#1a1a1a', 'dark'),
                         highContrast: true,
                         lighten: 0.5, // Should be ignored
                         opacity: 0.3, // Should be ignored
@@ -192,7 +193,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     solidSlot: {
                         source: 'fixed',
-                        value: '#00FF00', // Green
+                        value: createThemedColor('#00FF00', 'dark'), // Green
                     },
                 },
                 mappings: {
@@ -215,7 +216,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     opaqueSlot: {
                         source: 'fixed',
-                        value: '#FF0000',
+                        value: createThemedColor('#FF0000', 'dark'),
                         opacity: 0.3, // Slot level
                     },
                 },
@@ -336,7 +337,7 @@ describe('ProfileResolver - Advanced Features', () => {
                     ...createMinimalPalette(),
                     badSlot: {
                         source: 'fixed',
-                        value: 'not-a-color',
+                        value: createThemedColor('not-a-color', 'dark'),
                     },
                 },
                 mappings: {

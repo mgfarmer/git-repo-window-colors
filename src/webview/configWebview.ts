@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import { AdvancedProfile } from '../types/advancedModeTypes';
+import { AdvancedProfile, ThemeKind, ThemedColor } from '../types/advancedModeTypes';
 import { RepoRule, BranchRule, OtherSettings, WebviewMessage } from '../types/webviewTypes';
 import { generatePalette, generateAllPalettePreviews, PaletteAlgorithm } from '../paletteGenerator';
+import { createThemedColor, updateThemedColor } from '../colorDerivation';
 import {
     getRepoRuleErrors,
     getBranchRuleErrors,
@@ -62,14 +63,30 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Set up configuration listener once
         this._configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration('windowColors')) {
+                // Note: We don't refresh for themed color updates because
+                // _handleThemedColorUpdate sends the data directly
                 this._sendConfigurationToWebview();
+            } else if (event.affectsConfiguration('workbench.colorTheme')) {
+                // Notify webview of theme change
+                this._sendThemeToWebview();
             }
         });
         this._disposables.push(this._configurationListener);
+
+        // Listen for theme changes
+        const themeListener = vscode.window.onDidChangeActiveColorTheme(() => {
+            this._sendThemeToWebview();
+        });
+        this._disposables.push(themeListener);
     }
 
     public setWorkspaceInfo(repositoryUrl: string, currentBranch: string, isGitRepo: boolean = true): void {
+        console.log('[ConfigWebviewProvider.setWorkspaceInfo] Called with:');
+        console.log('  repositoryUrl:', repositoryUrl);
+        console.log('  currentBranch:', currentBranch);
+        console.log('  isGitRepo:', isGitRepo);
         this._workspaceInfo = { repositoryUrl, currentBranch, isGitRepo };
+        console.log('[ConfigWebviewProvider.setWorkspaceInfo] Stored _workspaceInfo:', this._workspaceInfo);
         // Refresh the webview if it's open
         if (this._panel) {
             this._sendConfigurationToWebview();
@@ -181,6 +198,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'updateConfig':
                 await this._updateConfiguration(message.data);
                 break;
+            case 'updateThemedColor':
+                await this._handleThemedColorUpdate(message.data);
+                break;
             case 'openColorPicker':
                 this._openColorPicker(message.data.colorPickerData!);
                 break;
@@ -198,7 +218,33 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 await vscode.commands.executeCommand('windowColors.importConfig');
                 break;
             case 'updateAdvancedProfiles':
-                await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                // If profileName and algorithm are provided, generate palette before saving
+                if (message.data.profileName && message.data.algorithm) {
+                    // Get the profile's primary color to use for palette generation
+                    const profile = message.data.advancedProfiles![message.data.profileName];
+                    if (profile) {
+                        const primaryBg =
+                            profile.palette.primaryActiveBg?.value?.dark?.value ||
+                            profile.palette.primaryActiveBg?.value?.light?.value ||
+                            '#336699';
+
+                        await this._handlePaletteGeneration(
+                            {
+                                profileName: message.data.profileName,
+                                primaryBg: primaryBg,
+                                algorithm: message.data.algorithm,
+                                skipToast: message.data.skipToast,
+                            },
+                            message.data.advancedProfiles,
+                        );
+                    } else {
+                        // Profile not found, just save without palette generation
+                        await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                    }
+                } else {
+                    // No palette generation requested, just save
+                    await this._updateConfiguration({ advancedProfiles: message.data.advancedProfiles });
+                }
                 break;
             case 'requestHelp':
                 await this._sendHelpContent(message.data.helpType || 'getting-started');
@@ -234,6 +280,27 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
                 // Pass preview mode as false to use matching rules
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview', false);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
+            case 'previewProfile':
+                // Apply a profile preview without matching - just use the profile directly
+                this._previewRepoRuleIndex = -1; // Special marker for profile preview
+                this._previewBranchRuleContext = { index: -1, tableName: (message.data as any).profileName }; // Store profile name in tableName
+                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
+                // Pass preview mode as true
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview profile', true);
+                // Wait for colorCustomizations to update before refreshing
+                await this._waitForColorCustomizationsUpdate();
+                this._sendConfigurationToWebview();
+                break;
+            case 'clearProfilePreview':
+                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
+                this._previewRepoRuleIndex = null;
+                this._previewBranchRuleContext = null;
+                // Pass preview mode as false to use matching rules
+                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared profile preview', false);
                 // Wait for colorCustomizations to update before refreshing
                 await this._waitForColorCustomizationsUpdate();
                 this._sendConfigurationToWebview();
@@ -297,6 +364,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         if (!this._panel) {
             return;
         }
+
+        console.log('[_sendConfigurationToWebview] Called from:', new Error().stack?.split('\n')[2]?.trim());
 
         const repoRules = this._getRepoRules();
         const sharedBranchTables = this._getSharedBranchTables();
@@ -396,6 +465,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             starredKeys,
             hintFlags,
             tourFlags,
+            themeKind: this._getThemeKind(),
             tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
             helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
             validationErrors: {
@@ -413,6 +483,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             previewBranchRuleContext: this._previewBranchRuleContext,
         };
 
+        console.log('[_sendConfigurationToWebview] Sending workspaceInfo to webview:', workspaceInfo);
+
         this._panel.webview.postMessage({
             command: 'configData',
             data: msgData,
@@ -421,7 +493,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _getRepoRules(): RepoRule[] {
         const config = vscode.workspace.getConfiguration('windowColors');
-        const repoConfigList = config.get<string[]>('repoConfigurationList', []);
+        const repoConfigList = config.get<any[]>('repoRules', []);
         const advancedProfiles = this._getAdvancedProfiles();
 
         const rules = repoConfigList
@@ -430,7 +502,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Migrate old configs: if primaryColor matches a profile but profileName is not set, set it
         for (const rule of rules) {
-            if (rule.primaryColor && !rule.profileName && advancedProfiles[rule.primaryColor]) {
+            if (
+                typeof rule.primaryColor === 'string' &&
+                rule.primaryColor &&
+                !rule.profileName &&
+                advancedProfiles[rule.primaryColor]
+            ) {
                 rule.profileName = rule.primaryColor;
             }
         }
@@ -440,13 +517,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     private _parseRepoRule(rule: string | any): RepoRule | null {
         try {
+            const themeKind = this._getThemeKind();
+
             // Handle JSON object format (new format)
             if (typeof rule === 'object' && rule !== null) {
+                // If profileName is set, primaryColor is the profile name (keep as string)
+                // Otherwise, normalize to ThemedColor
+                const primaryColor = rule.profileName
+                    ? rule.primaryColor
+                    : this._normalizeColorToThemedColor(rule.primaryColor || '#4A90E2', themeKind);
+
                 return {
                     repoQualifier: rule.repoQualifier || '',
                     defaultBranch: rule.defaultBranch,
-                    primaryColor: rule.primaryColor || '',
-                    branchColor: rule.branchColor,
+                    primaryColor,
+                    branchColor: rule.branchColor
+                        ? this._normalizeColorToThemedColor(rule.branchColor, themeKind)
+                        : undefined,
                     profileName: rule.profileName,
                     enabled: rule.enabled !== undefined ? rule.enabled : true,
                     branchTableName: rule.branchTableName,
@@ -463,11 +550,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // Try parsing as JSON string (for backward compatibility)
             if (ruleString.trim().startsWith('{')) {
                 const obj = JSON.parse(ruleString);
+                const primaryColor = obj.profileName
+                    ? obj.primaryColor
+                    : this._normalizeColorToThemedColor(obj.primaryColor || '#4A90E2', themeKind);
+
                 return {
                     repoQualifier: obj.repoQualifier || '',
                     defaultBranch: obj.defaultBranch,
-                    primaryColor: obj.primaryColor || '',
-                    branchColor: obj.branchColor,
+                    primaryColor,
+                    branchColor: obj.branchColor
+                        ? this._normalizeColorToThemedColor(obj.branchColor, themeKind)
+                        : undefined,
                     profileName: obj.profileName,
                     enabled: obj.enabled !== undefined ? obj.enabled : true,
                     branchTableName: obj.branchTableName,
@@ -497,7 +590,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             return {
                 repoQualifier: repoQualifier.trim(),
-                primaryColor: primaryColor,
+                primaryColor: createThemedColor(primaryColor, themeKind),
                 enabled: true,
             };
         } catch (error) {
@@ -679,7 +772,48 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             };
         }
 
-        return sharedTables;
+        // Normalize all branch rule colors to ThemedColor objects
+        const themeKind = this._getThemeKind();
+        const normalizedTables: { [key: string]: { rules: BranchRule[] } } = {};
+
+        for (const [tableName, table] of Object.entries(sharedTables)) {
+            normalizedTables[tableName] = {
+                rules: table.rules.map((rule) => ({
+                    ...rule,
+                    color:
+                        rule.color === 'none' || rule.profileName
+                            ? rule.color
+                            : this._normalizeColorToThemedColor(rule.color, themeKind),
+                })),
+            };
+        }
+
+        return normalizedTables;
+    }
+
+    /**
+     * Normalize a color value to ThemedColor format.
+     * If already a ThemedColor object, return as-is.
+     * If a string, convert to ThemedColor.
+     */
+    private _normalizeColorToThemedColor(color: any, themeKind: ThemeKind): ThemedColor | 'none' {
+        // Handle 'none' special value
+        if (color === 'none') {
+            return 'none';
+        }
+
+        // If it's already looks like a ThemedColor, return as-is
+        if (typeof color === 'object' && color !== null && 'dark' in color) {
+            return color as ThemedColor;
+        }
+
+        // If it's a string, convert to ThemedColor
+        if (typeof color === 'string') {
+            return createThemedColor(color, themeKind);
+        }
+
+        // Fallback: convert undefined/null to a default ThemedColor
+        return createThemedColor('#4A90E2', themeKind);
     }
 
     private async _handleToggleStarredKey(mappingKey: string): Promise<void> {
@@ -719,7 +853,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 if (repoRules[repoRuleIndex]) {
                     repoRules[repoRuleIndex].branchTableName = tableName;
                     const formattedRules = repoRules.map((rule) => this._formatRepoRule(rule));
-                    await config.update('repoConfigurationList', formattedRules, vscode.ConfigurationTarget.Global);
+                    await config.update('repoRules', formattedRules, vscode.ConfigurationTarget.Global);
                     console.log('[Backend] Repo rule updated successfully');
                 }
             }
@@ -921,7 +1055,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     const formatted = this._formatRepoRule(rule);
                     return formatted;
                 });
-                updatePromises.push(Promise.resolve(config.update('repoConfigurationList', repoRulesArray, true)));
+                updatePromises.push(Promise.resolve(config.update('repoRules', repoRulesArray, true)));
             }
 
             // Update branch rules
@@ -939,6 +1073,16 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
             // Update shared branch tables
             if (data.sharedBranchTables) {
+                // Log any rules with profileName set
+                Object.entries(data.sharedBranchTables).forEach(([tableName, table]: [string, any]) => {
+                    table.rules?.forEach((rule: any, index: number) => {
+                        if (rule.profileName) {
+                            console.log(
+                                `[_updateConfiguration] Saving branch rule ${index} in table '${tableName}' with profileName='${rule.profileName}'`,
+                            );
+                        }
+                    });
+                });
                 updatePromises.push(
                     Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
                 );
@@ -971,6 +1115,301 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);
+        }
+    }
+
+    /**
+     * Converts VS Code ColorThemeKind to our ThemeKind
+     */
+    private _getThemeKind(): ThemeKind {
+        const kind = vscode.window.activeColorTheme.kind;
+        switch (kind) {
+            case vscode.ColorThemeKind.Light:
+                return 'light';
+            case vscode.ColorThemeKind.Dark:
+                return 'dark';
+            case vscode.ColorThemeKind.HighContrast:
+                return 'highContrast';
+            default:
+                return 'dark';
+        }
+    }
+
+    /**
+     * Sends current theme kind to webview
+     */
+    private _sendThemeToWebview(): void {
+        if (!this._panel) {
+            return;
+        }
+
+        const themeKind = this._getThemeKind();
+        console.log('[ConfigWebviewProvider] Sending theme change to webview:', themeKind);
+        this._panel.webview.postMessage({
+            command: 'themeChanged',
+            data: { themeKind },
+        });
+    }
+
+    /**
+     * Handles themed color update from webview
+     * The webview sends a new color value for the current theme, and we derive colors for other themes
+     */
+    private async _handleThemedColorUpdate(data: any): Promise<void> {
+        const { type, index, color, tableName, clearProfileName } = data;
+        const themeKind = this._getThemeKind();
+
+        console.log('[_handleThemedColorUpdate] Received:', { type, index, color, tableName, themeKind });
+
+        try {
+            const config = vscode.workspace.getConfiguration('windowColors');
+
+            if (type === 'repo') {
+                // Update repo rule
+                console.log(
+                    '[_handleThemedColorUpdate] REPO: Incoming color:',
+                    color,
+                    'themeKind:',
+                    themeKind,
+                    'index:',
+                    index,
+                );
+                // Deep clone to avoid mutating VS Code's internal data structure
+                const repoRules = JSON.parse(JSON.stringify(config.get<any[]>('repoRules', [])));
+                if (index >= 0 && index < repoRules.length) {
+                    const rule = repoRules[index];
+                    console.log(
+                        '[_handleThemedColorUpdate] REPO: Current rule.primaryColor:',
+                        JSON.stringify(rule.primaryColor),
+                    );
+
+                    // If current value is a string or undefined, create new ThemedColor
+                    // If it's already a ThemedColor, update it
+                    let themedColor: ThemedColor;
+                    if (typeof rule.primaryColor === 'string' || !rule.primaryColor) {
+                        console.log('[_handleThemedColorUpdate] REPO: Creating new ThemedColor');
+                        themedColor = createThemedColor(color, themeKind);
+                    } else {
+                        console.log('[_handleThemedColorUpdate] REPO: Updating existing ThemedColor');
+                        themedColor = updateThemedColor(rule.primaryColor, color, themeKind);
+                    }
+                    console.log('[_handleThemedColorUpdate] REPO: Created themedColor:', JSON.stringify(themedColor));
+
+                    rule.primaryColor = themedColor;
+                    if (clearProfileName && rule.profileName) {
+                        delete rule.profileName;
+                    }
+                    console.log(
+                        '[_handleThemedColorUpdate] REPO: Set rule.primaryColor:',
+                        JSON.stringify(rule.primaryColor),
+                    );
+                    await config.update('repoRules', repoRules, true);
+                    console.log('[_handleThemedColorUpdate] REPO: Config update complete');
+
+                    // Send updated config directly using our local repoRules to avoid stale read
+                    if (this._panel) {
+                        const parsedRepoRules = repoRules
+                            .map((r: any) => this._parseRepoRule(r))
+                            .filter((r: any) => r !== null) as RepoRule[];
+                        console.log(
+                            '[_handleThemedColorUpdate] REPO: Parsed rule [' + index + '] primaryColor:',
+                            JSON.stringify(parsedRepoRules[index]?.primaryColor),
+                        );
+                        const sharedBranchTables = this._getSharedBranchTables();
+                        const otherSettings = this._getOtherSettings();
+                        const advancedProfiles = this._getAdvancedProfiles();
+                        const workspaceInfo = this._getWorkspaceInfo();
+                        const starredKeys = this._getStarredKeys();
+                        const hintFlags = this._getHintFlags();
+                        const tourFlags = this._getTourFlags();
+
+                        const msgData = {
+                            repoRules: parsedRepoRules, // Use local updated version
+                            sharedBranchTables,
+                            otherSettings,
+                            advancedProfiles,
+                            workspaceInfo,
+                            colorCustomizations: vscode.workspace
+                                .getConfiguration('workbench')
+                                .get('colorCustomizations', {}),
+                            starredKeys,
+                            hintFlags,
+                            tourFlags,
+                            themeKind: this._getThemeKind(),
+                            tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
+                            helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
+                            validationErrors: { repoRules: {}, branchRules: {} },
+                            localFolderPathValidation: {},
+                            expandedPaths: {},
+                            matchingIndexes: {
+                                repoRule: this._getMatchingRepoRuleIndex(parsedRepoRules, workspaceInfo.repositoryUrl),
+                                branchRule: -1,
+                                repoIndexForBranchRule: -1,
+                            },
+                            previewRepoRuleIndex: this._previewRepoRuleIndex,
+                            previewBranchRuleContext: this._previewBranchRuleContext,
+                        };
+
+                        console.log(
+                            '[_handleThemedColorUpdate] REPO: About to send msgData.repoRules[' +
+                                index +
+                                '].primaryColor:',
+                            JSON.stringify(msgData.repoRules[index]?.primaryColor),
+                        );
+                        this._panel.webview.postMessage({
+                            command: 'configData',
+                            data: msgData,
+                        });
+                        console.log('[_handleThemedColorUpdate] REPO: Message sent to webview');
+                    }
+                    return; // Skip the normal refresh below
+                }
+            } else if (type === 'branch') {
+                // Update branch rule in shared table
+                console.log(
+                    '[_handleThemedColorUpdate] BRANCH: Incoming color:',
+                    color,
+                    'themeKind:',
+                    themeKind,
+                    'tableName:',
+                    tableName,
+                    'index:',
+                    index,
+                );
+                // Deep clone to avoid mutating VS Code's internal data structure
+                const sharedTables = JSON.parse(JSON.stringify(config.get<any>('sharedBranchTables', {})));
+                console.log('[_handleThemedColorUpdate] BRANCH: sharedTables keys:', Object.keys(sharedTables));
+                if (tableName && sharedTables[tableName]) {
+                    const rules = sharedTables[tableName].rules;
+                    console.log('[_handleThemedColorUpdate] BRANCH: Found table with', rules.length, 'rules');
+                    if (index >= 0 && index < rules.length) {
+                        const rule = rules[index];
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Current rule.color:',
+                            JSON.stringify(rule.color),
+                        );
+
+                        // If current value is a string or undefined, create new ThemedColor
+                        // If it's already a ThemedColor, update it
+                        let themedColor: ThemedColor;
+                        if (typeof rule.color === 'string' || !rule.color) {
+                            console.log('[_handleThemedColorUpdate] BRANCH: Creating new ThemedColor');
+                            themedColor = createThemedColor(color, themeKind);
+                        } else {
+                            console.log('[_handleThemedColorUpdate] BRANCH: Updating existing ThemedColor');
+                            themedColor = updateThemedColor(rule.color, color, themeKind);
+                        }
+
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Created themedColor:',
+                            JSON.stringify(themedColor),
+                        );
+                        rule.color = themedColor;
+                        if (clearProfileName && rule.profileName) {
+                            delete rule.profileName;
+                        }
+                        console.log('[_handleThemedColorUpdate] BRANCH: Set rule.color:', JSON.stringify(rule.color));
+
+                        await config.update('sharedBranchTables', sharedTables, true);
+                        console.log('[_handleThemedColorUpdate] BRANCH: Config update complete');
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Checking sharedTables after config.update:',
+                            JSON.stringify(sharedTables[tableName]?.rules[index]?.color),
+                        );
+
+                        // Double-check by reading config fresh
+                        const freshConfig = vscode.workspace.getConfiguration('windowColors');
+                        const freshTables = freshConfig.get<any>('sharedBranchTables', {});
+                        console.log(
+                            '[_handleThemedColorUpdate] BRANCH: Fresh read from config:',
+                            JSON.stringify(freshTables[tableName]?.rules[index]?.color),
+                        );
+                    } else {
+                        console.error(
+                            '[_handleThemedColorUpdate] Index out of range:',
+                            index,
+                            'rules.length:',
+                            rules.length,
+                        );
+                    }
+                } else {
+                    console.error('[_handleThemedColorUpdate] Table not found or no tableName provided');
+                }
+
+                // Send updated config directly using our local sharedTables to avoid stale read
+                if (this._panel) {
+                    const repoRules = this._getRepoRules();
+                    const otherSettings = this._getOtherSettings();
+                    const advancedProfiles = this._getAdvancedProfiles();
+                    const workspaceInfo = this._getWorkspaceInfo();
+                    const starredKeys = this._getStarredKeys();
+                    const hintFlags = this._getHintFlags();
+                    const tourFlags = this._getTourFlags();
+
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: Checking sharedTables before msgData:',
+                        JSON.stringify(sharedTables[tableName]?.rules[index]?.color),
+                    );
+                    console.log('[_handleThemedColorUpdate] BRANCH: sharedTables object ID:', sharedTables);
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: sharedTables[' + tableName + '] object ID:',
+                        sharedTables[tableName],
+                    );
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: sharedTables[' + tableName + '].rules object ID:',
+                        sharedTables[tableName]?.rules,
+                    );
+
+                    // Use our updated sharedTables instead of reading from config
+                    const msgData = {
+                        repoRules,
+                        sharedBranchTables: sharedTables, // Use local updated version
+                        otherSettings,
+                        advancedProfiles,
+                        workspaceInfo,
+                        colorCustomizations: vscode.workspace
+                            .getConfiguration('workbench')
+                            .get('colorCustomizations', {}),
+                        starredKeys,
+                        hintFlags,
+                        tourFlags,
+                        themeKind: this._getThemeKind(),
+                        tourLinkDismissed: this._context.globalState.get<boolean>('grwc.tourLinkDismissed', false),
+                        helpPanelWidth: this._context.globalState.get<number>('grwc.helpPanelWidth', 600),
+                        validationErrors: { repoRules: {}, branchRules: {} },
+                        localFolderPathValidation: {},
+                        expandedPaths: {},
+                        matchingIndexes: {
+                            repoRule: this._getMatchingRepoRuleIndex(repoRules, workspaceInfo.repositoryUrl),
+                            branchRule: -1,
+                            repoIndexForBranchRule: -1,
+                        },
+                        previewRepoRuleIndex: this._previewRepoRuleIndex,
+                        previewBranchRuleContext: this._previewBranchRuleContext,
+                    };
+
+                    console.log(
+                        '[_handleThemedColorUpdate] BRANCH: About to send msgData.sharedBranchTables[' +
+                            tableName +
+                            '].rules[' +
+                            index +
+                            '].color:',
+                        JSON.stringify(msgData.sharedBranchTables[tableName]?.rules[index]?.color),
+                    );
+
+                    this._panel.webview.postMessage({
+                        command: 'configData',
+                        data: msgData,
+                    });
+                    console.log('[_handleThemedColorUpdate] BRANCH: Message sent to webview');
+                }
+                return; // Skip the normal refresh below
+            }
+
+            // Should not reach here
+        } catch (error) {
+            console.error('Failed to update themed color:', error);
+            vscode.window.showErrorMessage('Failed to update themed color: ' + (error as Error).message);
         }
     }
 
@@ -1131,11 +1570,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private async _handlePaletteGeneration(paletteData: {
-        profileName: string;
-        primaryBg: string;
-        algorithm: string;
-    }): Promise<void> {
+    private async _handlePaletteGeneration(
+        paletteData: {
+            profileName: string;
+            primaryBg: string;
+            algorithm: string;
+            skipToast?: boolean;
+        },
+        providedProfiles?: { [key: string]: AdvancedProfile },
+    ): Promise<void> {
         if (!this._panel) {
             return;
         }
@@ -1146,8 +1589,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             // Generate the palette using the palette generator
             const generatedPalette = generatePalette(primaryBg, algorithm as PaletteAlgorithm);
 
-            // Get the current profiles
-            const profiles = this._getAdvancedProfiles();
+            // Get the current profiles (use provided profiles if available, otherwise load from config)
+            const profiles = providedProfiles || this._getAdvancedProfiles();
             const profile = profiles[profileName];
 
             if (!profile) {
@@ -1156,37 +1599,68 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             }
 
             // Update the profile's palette with the generated colors
-            profile.palette.primaryActiveBg = { source: 'fixed', value: generatedPalette.primaryActiveBg, opacity: 1 };
-            profile.palette.primaryActiveFg = { source: 'fixed', value: generatedPalette.primaryActiveFg, opacity: 1 };
-            profile.palette.primaryInactiveBg = {
+            const themeKind = this._getThemeKind();
+            profile.palette.primaryActiveBg = {
                 source: 'fixed',
-                value: generatedPalette.primaryInactiveBg,
+                value: createThemedColor(generatedPalette.primaryActiveBg, themeKind),
                 opacity: 1,
             };
-            profile.palette.primaryInactiveFg = { source: 'fixed', value: generatedPalette.primaryInactiveFg };
+            profile.palette.primaryActiveFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.primaryActiveFg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.primaryInactiveBg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.primaryInactiveBg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.primaryInactiveFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.primaryInactiveFg, themeKind),
+            };
 
             profile.palette.secondaryActiveBg = {
                 source: 'fixed',
-                value: generatedPalette.secondaryActiveBg,
+                value: createThemedColor(generatedPalette.secondaryActiveBg, themeKind),
                 opacity: 1,
             };
             profile.palette.secondaryActiveFg = {
                 source: 'fixed',
-                value: generatedPalette.secondaryActiveFg,
+                value: createThemedColor(generatedPalette.secondaryActiveFg, themeKind),
                 opacity: 1,
             };
             profile.palette.secondaryInactiveBg = {
                 source: 'fixed',
-                value: generatedPalette.secondaryInactiveBg,
+                value: createThemedColor(generatedPalette.secondaryInactiveBg, themeKind),
                 opacity: 1,
             };
-            profile.palette.secondaryInactiveFg = { source: 'fixed', value: generatedPalette.secondaryInactiveFg };
+            profile.palette.secondaryInactiveFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.secondaryInactiveFg, themeKind),
+            };
 
-            profile.palette.tertiaryBg = { source: 'fixed', value: generatedPalette.tertiaryActiveBg, opacity: 1 };
-            profile.palette.tertiaryFg = { source: 'fixed', value: generatedPalette.tertiaryActiveFg, opacity: 1 };
+            profile.palette.tertiaryBg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.tertiaryActiveBg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.tertiaryFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.tertiaryActiveFg, themeKind),
+                opacity: 1,
+            };
 
-            profile.palette.quaternaryBg = { source: 'fixed', value: generatedPalette.quaternaryActiveBg, opacity: 1 };
-            profile.palette.quaternaryFg = { source: 'fixed', value: generatedPalette.quaternaryActiveFg, opacity: 1 };
+            profile.palette.quaternaryBg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.quaternaryActiveBg, themeKind),
+                opacity: 1,
+            };
+            profile.palette.quaternaryFg = {
+                source: 'fixed',
+                value: createThemedColor(generatedPalette.quaternaryActiveFg, themeKind),
+                opacity: 1,
+            };
 
             // Save the updated profiles
             profiles[profileName] = profile;
@@ -1199,6 +1673,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     advancedProfiles: profiles,
                     generatedPalette: generatedPalette,
                     profileName: profileName,
+                    skipToast: paletteData.skipToast,
                 },
             });
         } catch (error) {
@@ -1470,23 +1945,43 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                           data-tooltip-html="<strong>Profiles</strong><br>Define reusable color schemes (profiles) that can be applied to repository rules."
                                           data-tooltip-max-width="350"><span class="codicon codicon-info"></span></span>
                                 </h2>
-                                <button type="button" class="header-add-button" data-action="addProfile" data-tooltip="Add a new color profile">+ Add</button>
+                                <div class="profile-add-menu" id="profileAddMenu">
+                                    <button
+                                        type="button"
+                                        class="header-add-button profile-add-button"
+                                        id="profileAddMenuButton"
+                                        data-tooltip="Add a new color profile"
+                                        aria-haspopup="true"
+                                        aria-expanded="false"
+                                        aria-label="Add profile options"
+                                    >
+                                        <span class="profile-add-button-text">+ Add</span>
+                                        <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
+                                    </button>
+                                    <div class="profile-add-dropdown" id="profileAddMenuDropdown" role="menu" aria-hidden="true"></div>
+                                </div>
                            </div>
                            <div id="profilesList" class="profiles-list"></div>
+                           <div class="profile-preview-control">
+                               <label>
+                                   <input type="checkbox" id="preview-selected-profile" />
+                                   Preview Selected Profile
+                               </label>
+                           </div>
                         </section>
                         
                         <div class="profile-editor-top" id="profileEditorTop">
+                            <div id="paletteToast" class="palette-toast" style="display: none;">
+                                <span class="palette-toast-message">Palette generated</span>
+                                <div class="palette-toast-actions">
+                                    <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
+                                    <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
+                                </div>
+                            </div>
                             <div class="profile-header">
                                 <input type="text" id="profileNameInput" placeholder="Profile Name">
                                 <div class="profile-actions">
                                    <div class="palette-generator-container">
-                                        <div id="paletteToast" class="palette-toast" style="display: none;">
-                                            <span class="palette-toast-message">Palette generated</span>
-                                            <div class="palette-toast-actions">
-                                                <button type="button" class="palette-toast-btn palette-toast-accept" id="paletteToastAccept">Accept</button>
-                                                <button type="button" class="palette-toast-btn palette-toast-undo" id="paletteToastUndo">Undo</button>
-                                            </div>
-                                        </div>
                                         <button type="button" class="palette-generator-btn" id="paletteGeneratorBtn" data-tooltip="First select a Primary Active Background color, then use this to generate a harmonious palette using a selection of color theory algorithms" data-tooltip-position="bottom" aria-label="Generate Pleasing Palette from Primary Active Background">
                                             <span class="codicon codicon-wand"></span>
                                             <span class="codicon codicon-chevron-down"></span>

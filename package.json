@@ -87,57 +87,107 @@
                 "type": "object",
                 "title": "Git Repo Window Colors",
                 "properties": {
-                    "windowColors.repoConfigurationList": {
+                    "windowColors.repoRules": {
                         "order": 1,
-                        "markdownDescription": "Repository-specific color rules. Each rule can be defined as a JSON object with properties `repoQualifier` (required), `primaryColor` (required), `profileName`, and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"repoQualifier\": \"myrepo\",\n  \"primaryColor\": \"blue\",\n  \"enabled\": true,\n  \"branchRules\": [\n    {\"pattern\": \"^main$\", \"color\": \"green\"}\n  ]\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<repo-qualifier>:<primary-color>` (e.g., `myrepo:blue`)\n\nThe `repoQualifier` is matched against the repository URL from `git config --get remote.origin.url`. The first matching rule is used. Colors can be CSS color names, hex values, or profile names. See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).",
+                        "markdownDescription": "Repository-specific color rules. Each rule is a JSON object with properties `repoQualifier` (required), `primaryColor` (required), `profileName`, `branchTableName`, and `enabled` (default: true).\n\n**Format:**\n```json\n{\n  \"repoQualifier\": \"myrepo\",\n  \"primaryColor\": \"blue\",\n  \"enabled\": true,\n  \"branchTableName\": \"My Branches\"\n}\n```\n\nThe `repoQualifier` is matched against the repository URL from `git config --get remote.origin.url`. The first matching rule is used. Colors can be CSS color names, hex values, or profile names. See: [Colors Tutorial](https://www.w3schools.com/colors/default.asp).",
                         "type": "array",
                         "items": {
-                            "anyOf": [
-                                {
+                            "type": "object",
+                            "properties": {
+                                "repoQualifier": {
                                     "type": "string",
-                                    "description": "Legacy format: <repo-qualifier>:<primary-color>"
+                                    "description": "Repository identifier (matched against git remote URL)"
                                 },
-                                {
+                                "primaryColor": {
                                     "type": "object",
+                                    "description": "Theme-aware color configuration",
                                     "properties": {
-                                        "repoQualifier": {
-                                            "type": "string",
-                                            "description": "Repository identifier (matched against git remote URL)"
+                                        "dark": {
+                                            "type": "object",
+                                            "properties": {
+                                                "value": {
+                                                    "type": "string"
+                                                },
+                                                "auto": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "required": [
+                                                "auto"
+                                            ]
                                         },
-                                        "primaryColor": {
-                                            "type": "string",
-                                            "description": "Primary color for title bar and activity bar (CSS color or profile name)"
+                                        "light": {
+                                            "type": "object",
+                                            "properties": {
+                                                "value": {
+                                                    "type": "string"
+                                                },
+                                                "auto": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "required": [
+                                                "auto"
+                                            ]
                                         },
-                                        "profileName": {
-                                            "type": "string",
-                                            "description": "Advanced profile name to use"
-                                        },
-                                        "enabled": {
-                                            "type": "boolean",
-                                            "default": true,
-                                            "description": "Whether this rule is enabled"
-                                        },
-                                        "branchTableName": {
-                                            "type": "string",
-                                            "description": "Name of the shared branch table to use for this repository"
-                                        },
-                                        "branchRules": {
-                                            "type": "array",
-                                            "description": "Legacy local branch rules for this repository (deprecated, use branchTableName instead)"
+                                        "highContrast": {
+                                            "type": "object",
+                                            "properties": {
+                                                "value": {
+                                                    "type": "string"
+                                                },
+                                                "auto": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "required": [
+                                                "auto"
+                                            ]
                                         }
                                     },
                                     "required": [
-                                        "repoQualifier",
-                                        "primaryColor"
+                                        "dark",
+                                        "light",
+                                        "highContrast"
                                     ]
+                                },
+                                "profileName": {
+                                    "type": "string",
+                                    "description": "Advanced profile name to use"
+                                },
+                                "enabled": {
+                                    "type": "boolean",
+                                    "default": true,
+                                    "description": "Whether this rule is enabled"
+                                },
+                                "branchTableName": {
+                                    "type": "string",
+                                    "description": "Name of the shared branch table to use for this repository"
                                 }
+                            },
+                            "required": [
+                                "repoQualifier",
+                                "primaryColor"
                             ]
                         },
+                        "default": [],
+                        "scope": "window",
+                        "uniqueItems": true
+                    },
+                    "windowColors.repoConfigurationList": {
+                        "order": 2,
+                        "markdownDescription": "**Deprecated - Use `repoRules` instead.** This setting is maintained for backward compatibility during migration. Repository rules are now managed through the `repoRules` array.\n\nLegacy string format: `<repo-qualifier>:<primary-color>` (e.g., `myrepo:blue`)",
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "description": "Legacy format: <repo-qualifier>:<primary-color>"
+                        },
+                        "default": [],
                         "scope": "window",
                         "uniqueItems": true
                     },
                     "windowColors.removeManagedColors": {
-                        "order": 2,
+                        "order": 3,
                         "type": "boolean",
                         "default": "true",
                         "description": "When no rules match, remove any colors that were set by this extension.  This is useful if you want to use the default colors for a repo that is not in the list. If this is unchecked, then you will need to remove any managed colors manually.",
@@ -145,7 +195,7 @@
                     },
                     "windowColors.branchConfigurationList": {
                         "order": 4,
-                        "markdownDescription": "Branch-specific color rules that override repository rules. Each rule can be defined as a JSON object with properties `pattern` (required, regex), `color` (required), and `enabled` (default: true).\n\n**JSON Object Format (Recommended):**\n```json\n{\n  \"pattern\": \"^feature/.*\",\n  \"color\": \"green\",\n  \"enabled\": true\n}\n```\n\n**Legacy String Format (Deprecated):**\n`<branch-pattern>:<branch-color>` (e.g., `feature-.*:blue` or `bug-.*:red`)\n\nBranch patterns are regex expressions matched against the current branch name. The first matching rule is used. These rules apply to all repositories.",
+                        "markdownDescription": "**Deprecated - Use sharedBranchTables instead.** This setting is maintained for backward compatibility during migration. Branch rules are now managed through shared branch tables.\n\nLegacy branch-specific color rules. Each rule can be defined as a JSON object with properties `pattern` (required, regex), `color` (required), and `enabled` (default: true).",
                         "type": "array",
                         "items": {
                             "anyOf": [
@@ -161,8 +211,57 @@
                                             "description": "Regex pattern to match branch name"
                                         },
                                         "color": {
-                                            "type": "string",
-                                            "description": "Branch color (CSS color or profile name)"
+                                            "type": "object",
+                                            "description": "Theme-aware color configuration",
+                                            "properties": {
+                                                "dark": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                },
+                                                "light": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                },
+                                                "highContrast": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {
+                                                            "type": "string"
+                                                        },
+                                                        "auto": {
+                                                            "type": "boolean"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "auto"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "dark",
+                                                "light",
+                                                "highContrast"
+                                            ]
                                         },
                                         "enabled": {
                                             "type": "boolean",
@@ -203,8 +302,61 @@
                                                 "description": "Regex pattern to match branch name"
                                             },
                                             "color": {
+                                                "type": "object",
+                                                "description": "Theme-aware color configuration",
+                                                "properties": {
+                                                    "dark": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "value": {
+                                                                "type": "string"
+                                                            },
+                                                            "auto": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "auto"
+                                                        ]
+                                                    },
+                                                    "light": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "value": {
+                                                                "type": "string"
+                                                            },
+                                                            "auto": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "auto"
+                                                        ]
+                                                    },
+                                                    "highContrast": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "value": {
+                                                                "type": "string"
+                                                            },
+                                                            "auto": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "auto"
+                                                        ]
+                                                    }
+                                                },
+                                                "required": [
+                                                    "dark",
+                                                    "light",
+                                                    "highContrast"
+                                                ]
+                                            },
+                                            "profileName": {
                                                 "type": "string",
-                                                "description": "Branch color (CSS color or profile name)"
+                                                "description": "Advanced profile name to use"
                                             },
                                             "enabled": {
                                                 "type": "boolean",
@@ -327,8 +479,57 @@
                                                 ]
                                             },
                                             "value": {
-                                                "type": "string",
-                                                "description": "Hex color value (for source='fixed')"
+                                                "type": "object",
+                                                "description": "Theme-aware color configuration",
+                                                "properties": {
+                                                    "dark": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "value": {
+                                                                "type": "string"
+                                                            },
+                                                            "auto": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "auto"
+                                                        ]
+                                                    },
+                                                    "light": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "value": {
+                                                                "type": "string"
+                                                            },
+                                                            "auto": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "auto"
+                                                        ]
+                                                    },
+                                                    "highContrast": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "value": {
+                                                                "type": "string"
+                                                            },
+                                                            "auto": {
+                                                                "type": "boolean"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "auto"
+                                                        ]
+                                                    }
+                                                },
+                                                "required": [
+                                                    "dark",
+                                                    "light",
+                                                    "highContrast"
+                                                ]
                                             }
                                         },
                                         "required": [
