@@ -4438,6 +4438,7 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
             color: value,
         };
 
+        let clearProfileName = false;
         // For branch rules in shared tables, include table name
         if (ruleType === 'branch' && selectedRepoRuleIndex >= 0) {
             const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
@@ -4446,28 +4447,35 @@ function updateColorRule(ruleType: string, index: number, field: string, value: 
             } else {
                 console.error('[updateColorRule] Branch rule but no branchTableName!', selectedRule);
             }
+            const tableName = selectedRule.branchTableName;
+            if (tableName && currentConfig.sharedBranchTables?.[tableName]?.rules?.[index]) {
+                const branchRule = currentConfig.sharedBranchTables[tableName].rules[index];
+                branchRule[field] = value;
+                if (field === 'color' && branchRule.profileName) {
+                    delete branchRule.profileName;
+                    clearProfileName = true;
+                }
+            }
+        } else if (ruleType === 'repo') {
+            const rules = currentConfig.repoRules;
+            if (rules?.[index]) {
+                const repoRule = rules[index];
+                repoRule[field] = value;
+                if (field === 'primaryColor' && repoRule.profileName) {
+                    delete repoRule.profileName;
+                    clearProfileName = true;
+                }
+            }
+        }
+
+        if (clearProfileName) {
+            messageData.clearProfileName = true;
         }
 
         vscode.postMessage({
             command: 'updateThemedColor',
             data: messageData,
         });
-
-        // Update local config with string value for immediate UI feedback
-        if (ruleType === 'repo') {
-            const rules = currentConfig.repoRules;
-            if (rules?.[index]) {
-                rules[index][field] = value;
-            }
-        } else if (ruleType === 'branch') {
-            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
-                const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-                const tableName = selectedRule.branchTableName;
-                if (tableName && currentConfig.sharedBranchTables?.[tableName]?.rules?.[index]) {
-                    currentConfig.sharedBranchTables[tableName].rules[index][field] = value;
-                }
-            }
-        }
 
         // Update color swatch
         updateColorSwatch(ruleType, index, field, value);

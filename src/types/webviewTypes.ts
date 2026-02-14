@@ -76,6 +76,10 @@ export interface WebviewMessage {
         sharedBranchTables?: SharedBranchTables;
         otherSettings?: OtherSettings;
         advancedProfiles?: AdvancedProfileMap;
+        type?: 'repo' | 'branch';
+        color?: string;
+        clearProfileName?: boolean;
+        tableName?: string;
         workspaceInfo?: {
             repositoryUrl: string;
             currentBranch: string;

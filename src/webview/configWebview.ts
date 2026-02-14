@@ -1156,7 +1156,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
      * The webview sends a new color value for the current theme, and we derive colors for other themes
      */
     private async _handleThemedColorUpdate(data: any): Promise<void> {
-        const { type, index, color, tableName } = data;
+        const { type, index, color, tableName, clearProfileName } = data;
         const themeKind = this._getThemeKind();
 
         console.log('[_handleThemedColorUpdate] Received:', { type, index, color, tableName, themeKind });
@@ -1196,6 +1196,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                     console.log('[_handleThemedColorUpdate] REPO: Created themedColor:', JSON.stringify(themedColor));
 
                     rule.primaryColor = themedColor;
+                    if (clearProfileName && rule.profileName) {
+                        delete rule.profileName;
+                    }
                     console.log(
                         '[_handleThemedColorUpdate] REPO: Set rule.primaryColor:',
                         JSON.stringify(rule.primaryColor),
@@ -1302,6 +1305,9 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                             JSON.stringify(themedColor),
                         );
                         rule.color = themedColor;
+                        if (clearProfileName && rule.profileName) {
+                            delete rule.profileName;
+                        }
                         console.log('[_handleThemedColorUpdate] BRANCH: Set rule.color:', JSON.stringify(rule.color));
 
                         await config.update('sharedBranchTables', sharedTables, true);
