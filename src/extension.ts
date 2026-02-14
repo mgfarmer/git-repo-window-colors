@@ -2130,12 +2130,28 @@ async function importConfiguration(): Promise<void> {
         }
 
         // Apply other settings (always replace, not merge)
+        // Helper to coerce boolean values (handle string "true"/"false")
+        const toBool = (value: any): boolean => {
+            if (typeof value === 'string') {
+                return value === 'true';
+            }
+            return Boolean(value);
+        };
+
+        // Helper to coerce number values
+        const toNum = (value: any): number => {
+            if (typeof value === 'string') {
+                return parseInt(value, 10);
+            }
+            return Number(value);
+        };
+
         if (importData.removeManagedColors !== undefined) {
             configUpdates.push(
                 Promise.resolve(
                     config.update(
                         'removeManagedColors',
-                        importData.removeManagedColors,
+                        toBool(importData.removeManagedColors),
                         vscode.ConfigurationTarget.Global,
                     ),
                 ),
@@ -2146,7 +2162,7 @@ async function importConfiguration(): Promise<void> {
                 Promise.resolve(
                     config.update(
                         'colorInactiveTitlebar',
-                        importData.colorInactiveTitlebar,
+                        toBool(importData.colorInactiveTitlebar),
                         vscode.ConfigurationTarget.Global,
                     ),
                 ),
@@ -2155,14 +2171,22 @@ async function importConfiguration(): Promise<void> {
         if (importData.colorEditorTabs !== undefined) {
             configUpdates.push(
                 Promise.resolve(
-                    config.update('colorEditorTabs', importData.colorEditorTabs, vscode.ConfigurationTarget.Global),
+                    config.update(
+                        'colorEditorTabs',
+                        toBool(importData.colorEditorTabs),
+                        vscode.ConfigurationTarget.Global,
+                    ),
                 ),
             );
         }
         if (importData.colorStatusBar !== undefined) {
             configUpdates.push(
                 Promise.resolve(
-                    config.update('colorStatusBar', importData.colorStatusBar, vscode.ConfigurationTarget.Global),
+                    config.update(
+                        'colorStatusBar',
+                        toBool(importData.colorStatusBar),
+                        vscode.ConfigurationTarget.Global,
+                    ),
                 ),
             );
         }
@@ -2171,7 +2195,7 @@ async function importConfiguration(): Promise<void> {
                 Promise.resolve(
                     config.update(
                         'activityBarColorKnob',
-                        importData.activityBarColorKnob,
+                        toNum(importData.activityBarColorKnob),
                         vscode.ConfigurationTarget.Global,
                     ),
                 ),
@@ -2182,7 +2206,7 @@ async function importConfiguration(): Promise<void> {
                 Promise.resolve(
                     config.update(
                         'applyBranchColorToTabsAndStatusBar',
-                        importData.applyBranchColorToTabsAndStatusBar,
+                        toBool(importData.applyBranchColorToTabsAndStatusBar),
                         vscode.ConfigurationTarget.Global,
                     ),
                 ),
@@ -2193,7 +2217,7 @@ async function importConfiguration(): Promise<void> {
                 Promise.resolve(
                     config.update(
                         'showStatusIconWhenNoRuleMatches',
-                        importData.showStatusIconWhenNoRuleMatches,
+                        toBool(importData.showStatusIconWhenNoRuleMatches),
                         vscode.ConfigurationTarget.Global,
                     ),
                 ),
@@ -2204,7 +2228,7 @@ async function importConfiguration(): Promise<void> {
                 Promise.resolve(
                     config.update(
                         'askToColorizeRepoWhenOpened',
-                        importData.askToColorizeRepoWhenOpened,
+                        toBool(importData.askToColorizeRepoWhenOpened),
                         vscode.ConfigurationTarget.Global,
                     ),
                 ),

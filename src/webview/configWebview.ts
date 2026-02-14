@@ -602,16 +602,34 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _getOtherSettings(): OtherSettings {
         const config = vscode.workspace.getConfiguration('windowColors');
 
+        // Helper to ensure proper boolean coercion (handles string "true"/"false")
+        const getBool = (key: string, defaultValue: boolean): boolean => {
+            const value = config.get(key, defaultValue);
+            if (typeof value === 'string') {
+                return value === 'true';
+            }
+            return Boolean(value);
+        };
+
+        // Helper to ensure proper number coercion
+        const getNum = (key: string, defaultValue: number): number => {
+            const value = config.get(key, defaultValue);
+            if (typeof value === 'string') {
+                return parseInt(value, 10);
+            }
+            return Number(value);
+        };
+
         return {
-            removeManagedColors: config.get<boolean>('removeManagedColors', true),
-            colorInactiveTitlebar: config.get<boolean>('colorInactiveTitlebar', true),
-            colorEditorTabs: config.get<boolean>('colorEditorTabs', false),
-            colorStatusBar: config.get<boolean>('colorStatusBar', false),
-            applyBranchColorToTabsAndStatusBar: config.get<boolean>('applyBranchColorToTabsAndStatusBar', false),
-            activityBarColorKnob: config.get<number>('activityBarColorKnob', 0),
-            showStatusIconWhenNoRuleMatches: config.get<boolean>('showStatusIconWhenNoRuleMatches', true),
-            askToColorizeRepoWhenOpened: config.get<boolean>('askToColorizeRepoWhenOpened', true),
-            previewSelectedRepoRule: config.get<boolean>('previewSelectedRepoRule', false),
+            removeManagedColors: getBool('removeManagedColors', true),
+            colorInactiveTitlebar: getBool('colorInactiveTitlebar', true),
+            colorEditorTabs: getBool('colorEditorTabs', false),
+            colorStatusBar: getBool('colorStatusBar', false),
+            applyBranchColorToTabsAndStatusBar: getBool('applyBranchColorToTabsAndStatusBar', false),
+            activityBarColorKnob: getNum('activityBarColorKnob', 0),
+            showStatusIconWhenNoRuleMatches: getBool('showStatusIconWhenNoRuleMatches', true),
+            askToColorizeRepoWhenOpened: getBool('askToColorizeRepoWhenOpened', true),
+            previewSelectedRepoRule: getBool('previewSelectedRepoRule', false),
         };
     }
 
@@ -1097,9 +1115,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             if (data.otherSettings) {
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
-                    updatePromises.push(
-                        Promise.resolve(config.update(key, settings[key as keyof OtherSettings], true)),
-                    );
+                    let value = settings[key as keyof OtherSettings];
+
+                    // Ensure proper type coercion to prevent writing "true"/"false" strings
+                    // instead of actual boolean values
+                    if (key === 'activityBarColorKnob') {
+                        // Ensure number type
+                        value = typeof value === 'string' ? parseInt(value, 10) : value;
+                    } else {
+                        // All other settings are booleans - ensure boolean type
+                        if (typeof value === 'string') {
+                            value = value === 'true';
+                        } else {
+                            value = Boolean(value);
+                        }
+                    }
+
+                    updatePromises.push(Promise.resolve(config.update(key, value, true)));
                 });
             }
 
