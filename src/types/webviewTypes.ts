@@ -107,7 +107,6 @@ export interface WebviewMessage {
         primaryBg?: string;
         mappingKey?: string;
         // Branch table management data
-        tableName?: string;
         repoRuleIndex?: number;
         newTableName?: string;
         oldTableName?: string;
