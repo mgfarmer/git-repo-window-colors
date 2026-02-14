@@ -1853,6 +1853,26 @@ button:focus {
     justify-content: center;
 }
 
+.profile-reference-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--vscode-foreground);
+    flex-shrink: 0;
+    width: 30px;
+    justify-content: center;
+}
+
+.profile-reference-count .codicon {
+    font-size: 14px;
+}
+
+.profile-reference-count-warning {
+    color: var(--vscode-inputValidation-warningForeground);
+}
+
 .profile-editor-top {
     flex: 1;
     display: flex;

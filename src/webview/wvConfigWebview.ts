@@ -6614,6 +6614,7 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
 
             // Count total active mappings for badge
             const profile = profiles[name];
+            const usageCounts = isProfileInUse(name);
             const totalActive = countTotalActiveMappings(profile);
 
             const badge = document.createElement('span');
@@ -6641,6 +6642,52 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
             swatch.style.color = fgColor;
             swatch.textContent = 'Sample';
 
+            const referenceIndicator = document.createElement('div');
+            referenceIndicator.className = 'profile-reference-count';
+            const totalReferences = usageCounts.repoRules + usageCounts.branchRules;
+            referenceIndicator.textContent = totalReferences.toString();
+
+            if (totalReferences === 0) {
+                referenceIndicator.title = 'No repository or branch rules reference this profile yet.';
+            } else {
+                const detailParts: string[] = [];
+                if (usageCounts.repoRules > 0) {
+                    detailParts.push(`${usageCounts.repoRules} repo ${usageCounts.repoRules === 1 ? 'rule' : 'rules'}`);
+                }
+                if (usageCounts.branchRules > 0) {
+                    detailParts.push(
+                        `${usageCounts.branchRules} branch ${usageCounts.branchRules === 1 ? 'rule' : 'rules'}`,
+                    );
+                }
+
+                const details = detailParts.join(', ');
+                const hasMixedUsage = usageCounts.repoRules > 0 && usageCounts.branchRules > 0;
+                if (hasMixedUsage) {
+                    referenceIndicator.classList.add('profile-reference-count-warning');
+
+                    const warningIcon = document.createElement('span');
+                    warningIcon.className = 'codicon codicon-warning';
+                    warningIcon.setAttribute('aria-hidden', 'true');
+
+                    const countText = document.createElement('span');
+                    countText.textContent = totalReferences.toString();
+
+                    referenceIndicator.textContent = '';
+                    referenceIndicator.appendChild(warningIcon);
+                    referenceIndicator.appendChild(countText);
+
+                    referenceIndicator.title = `Referenced by ${totalReferences} ${
+                        totalReferences === 1 ? 'rule' : 'rules'
+                    } (${details}). Repo and branch references detected.`;
+                } else {
+                    referenceIndicator.title = `Referenced by ${totalReferences} ${
+                        totalReferences === 1 ? 'rule' : 'rules'
+                    } (${details}).`;
+                }
+            }
+
+            referenceIndicator.setAttribute('aria-label', referenceIndicator.title);
+
             // Create usage indicators column (right side)
             const usageContainer = document.createElement('div');
             usageContainer.className = 'profile-usage-indicators';
@@ -6661,6 +6708,7 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
 
             el.appendChild(nameContainer);
             el.appendChild(swatch);
+            el.appendChild(referenceIndicator);
             el.appendChild(usageContainer);
             el.onclick = () => selectProfile(name);
             listContainer.appendChild(el);
