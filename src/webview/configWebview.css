@@ -572,6 +572,12 @@ h2 {
 .rule-row.drag-over-bottom {
     border-bottom: 2px solid var(--vscode-focusBorder);
 }
+.rule-row.drag-over td {
+    box-shadow: inset 0 3px 0 var(--vscode-focusBorder);
+}
+.rule-row.drag-over-bottom td {
+    box-shadow: inset 0 -3px 0 var(--vscode-focusBorder);
+}
 .rule-row.disabled-rule {
     opacity: 0.4;
 }

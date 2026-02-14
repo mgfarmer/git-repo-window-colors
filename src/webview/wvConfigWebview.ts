@@ -2086,9 +2086,14 @@ function handleDocumentDrop(event: DragEvent) {
             if (index && ruleType) {
                 let targetIndex = parseInt(index);
 
+                // Ignore drops between repo/branch tables
+                if (draggedType && draggedType !== ruleType) {
+                    return;
+                }
+
                 // Check if we're dropping in the bottom half of the last row
                 // If so, treat it as "insert after this row" (i.e., at the very bottom)
-                const rules = ruleType === 'repo' ? currentConfig?.repoRules : currentConfig?.branchRules;
+                const rules = getRulesForDrag(ruleType);
                 if (rules && targetIndex === rules.length - 1) {
                     const rect = ruleRow.getBoundingClientRect();
                     const mouseY = event.clientY;
@@ -5020,6 +5025,31 @@ function updateOtherSetting(setting: string, value: any) {
 let draggedIndex: number = -1;
 let draggedType: string = '';
 
+function getRulesForDrag(ruleType: string) {
+    if (!currentConfig) return null;
+
+    if (ruleType === 'repo') {
+        return currentConfig.repoRules || null;
+    }
+
+    // Legacy single branch rules array
+    if (currentConfig.branchRules) {
+        return currentConfig.branchRules;
+    }
+
+    // Branch table rules scoped to the selected repo rule
+    if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        const tableName = selectedRule.branchTableName || '__none__';
+
+        if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
+            return currentConfig.sharedBranchTables[tableName].rules;
+        }
+    }
+
+    return null;
+}
+
 function handleDragStart(event: DragEvent, index: number, ruleType: string) {
     draggedIndex = index;
     draggedType = ruleType;
@@ -5051,8 +5081,12 @@ function handleDragOver(event: DragEvent) {
         const dragHandle = targetRow.querySelector('.drag-handle') as HTMLElement;
         if (dragHandle) {
             const ruleType = dragHandle.getAttribute('data-drag-type');
+            if (!ruleType || (draggedType && draggedType !== ruleType)) {
+                return;
+            }
+
             const targetIndex = parseInt(dragHandle.getAttribute('data-drag-index') || '0');
-            const rules = ruleType === 'repo' ? currentConfig?.repoRules : currentConfig?.branchRules;
+            const rules = getRulesForDrag(ruleType);
 
             // Check if this is the last row and we're in the bottom half
             if (rules && targetIndex === rules.length - 1) {
@@ -5082,23 +5116,7 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
         return;
     }
 
-    if (!currentConfig) return;
-
-    let rules;
-    if (targetType === 'repo') {
-        rules = currentConfig.repoRules;
-    } else {
-        // For branch rules, get from the selected table
-        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
-            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const tableName = selectedRule.branchTableName || '__none__';
-
-            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
-                rules = currentConfig.sharedBranchTables[tableName].rules;
-            }
-        }
-    }
-
+    const rules = getRulesForDrag(targetType);
     if (!rules) return;
 
     // Remove the dragged item
