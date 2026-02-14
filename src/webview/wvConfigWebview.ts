@@ -3663,13 +3663,13 @@ function updateBranchRule(index: number, field: string, value: string) {
     debounceValidateAndSend();
 }
 
-function selectRepoRule(index: number) {
+function selectRepoRule(index: number, options?: { force?: boolean }) {
     if (!currentConfig?.repoRules?.[index]) {
         return;
     }
 
     // Toggle: if clicking the already-selected rule, deselect it
-    if (selectedRepoRuleIndex === index) {
+    if (!options?.force && selectedRepoRuleIndex === index) {
         selectedRepoRuleIndex = -1;
         selectedBranchRuleIndex = -1;
 
@@ -3690,10 +3690,13 @@ function selectRepoRule(index: number) {
         return;
     }
 
+    const previousRepoIndex = selectedRepoRuleIndex;
     selectedRepoRuleIndex = index;
 
-    // Reset branch rule selection when switching repos so it reinitializes
-    selectedBranchRuleIndex = -1;
+    // Reset branch rule selection only when switching repos so it reinitializes
+    if (previousRepoIndex !== index) {
+        selectedBranchRuleIndex = -1;
+    }
 
     // Clear any regex validation errors when switching rules
     clearRegexValidationError();
@@ -3752,7 +3755,7 @@ function navigateToRepoRule(index: number) {
     selectRepoRule(index);
 }
 
-function selectBranchRule(index: number) {
+function selectBranchRule(index: number, options?: { force?: boolean }) {
     // Determine which table we're selecting from
     let tableName = '__none__'; // Default
     if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
@@ -3772,7 +3775,7 @@ function selectBranchRule(index: number) {
     }
 
     // Toggle: if clicking the already-selected rule, deselect it
-    if (selectedBranchRuleIndex === index) {
+    if (!options?.force && selectedBranchRuleIndex === index) {
         selectedBranchRuleIndex = -1;
 
         // Clear branch preview when deselecting
@@ -5025,6 +5028,23 @@ function updateOtherSetting(setting: string, value: any) {
 let draggedIndex: number = -1;
 let draggedType: string = '';
 
+function adjustIndexAfterMove(selectedIndex: number, from: number, to: number): number {
+    if (selectedIndex === -1) return selectedIndex;
+    if (selectedIndex === from) return to;
+
+    // Moving downwards (from < to): items between (from, to] shift up by 1
+    if (from < to && selectedIndex > from && selectedIndex <= to) {
+        return selectedIndex - 1;
+    }
+
+    // Moving upwards (to < from): items between [to, from) shift down by 1
+    if (to < from && selectedIndex >= to && selectedIndex < from) {
+        return selectedIndex + 1;
+    }
+
+    return selectedIndex;
+}
+
 function getRulesForDrag(ruleType: string) {
     if (!currentConfig) return null;
 
@@ -5136,6 +5156,30 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
     }
 
     rules.splice(insertIndex, 0, draggedItem);
+
+    // Keep the same rule selected after reordering
+    if (draggedType === 'repo') {
+        selectedRepoRuleIndex = adjustIndexAfterMove(selectedRepoRuleIndex, draggedIndex, insertIndex);
+    } else if (draggedType === 'branch') {
+        selectedBranchRuleIndex = adjustIndexAfterMove(selectedBranchRuleIndex, draggedIndex, insertIndex);
+    }
+
+    // Re-render locally so visual order and previews refresh immediately
+    if (draggedType === 'repo' && currentConfig?.repoRules) {
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+        renderBranchRulesForSelectedRepo();
+        if (selectedRepoRuleIndex >= 0) {
+            selectRepoRule(selectedRepoRuleIndex, { force: true });
+        }
+    } else if (draggedType === 'branch') {
+        renderBranchRulesForSelectedRepo();
+        if (selectedBranchRuleIndex >= 0) {
+            selectBranchRule(selectedBranchRuleIndex, { force: true });
+        } else if (selectedRepoRuleIndex >= 0) {
+            // Ensure repo preview is refreshed when no branch is selected
+            selectRepoRule(selectedRepoRuleIndex, { force: true });
+        }
+    }
 
     sendConfiguration();
 
