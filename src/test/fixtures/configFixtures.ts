@@ -9,7 +9,7 @@ import { createThemedColor } from '../../colorDerivation';
  * Default extension configuration (matches package.json defaults)
  */
 export const DEFAULT_CONFIG = {
-    repoConfigurationList: [],
+    repoRules: [],
     branchConfigurationList: ['^(bug/|bug-.*):red', '^(feature/|feature-).*:green', '^(?!(main|master)$).*:purple'],
     sharedBranchTables: {
         'Default Rules': {
@@ -184,20 +184,20 @@ export const SCENARIOS = {
     /** Simple mode with single repo, no branches */
     simpleRepoOnly: {
         ...DEFAULT_CONFIG,
-        repoConfigurationList: [REPO_CONFIGS.github],
+        repoRules: [REPO_CONFIGS.github],
     },
 
     /** Simple mode with repo and branch rules */
     simpleWithBranches: {
         ...DEFAULT_CONFIG,
-        repoConfigurationList: [REPO_CONFIGS.github],
+        repoRules: [REPO_CONFIGS.github],
         sharedBranchTables: BRANCH_TABLES.default,
     },
 
     /** Advanced mode with custom profile */
     advancedWithProfile: {
         ...DEFAULT_CONFIG,
-        repoConfigurationList: [
+        repoRules: [
             {
                 repoQualifier: 'github.com/testorg/testrepo',
                 profileName: 'Blue Theme',
@@ -212,7 +212,7 @@ export const SCENARIOS = {
     /** Multiple repos with priorities */
     multipleRepos: {
         ...DEFAULT_CONFIG,
-        repoConfigurationList: [
+        repoRules: [
             {
                 repoQualifier: 'github.com/org',
                 primaryColor: createThemedColor('#3B82F6', 'dark'),
@@ -230,7 +230,7 @@ export const SCENARIOS = {
     /** Branch override scenario */
     branchOverride: {
         ...DEFAULT_CONFIG,
-        repoConfigurationList: [
+        repoRules: [
             {
                 repoQualifier: 'github.com/testorg/testrepo',
                 primaryColor: createThemedColor('#3B82F6', 'dark'),
@@ -244,7 +244,7 @@ export const SCENARIOS = {
     /** Mixed: some profiles, some colors */
     mixedMode: {
         ...DEFAULT_CONFIG,
-        repoConfigurationList: [
+        repoRules: [
             {
                 repoQualifier: 'github.com/simple',
                 primaryColor: createThemedColor('#3B82F6', 'dark'),
