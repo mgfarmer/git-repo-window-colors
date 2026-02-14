@@ -1939,7 +1939,21 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                                           data-tooltip-html="<strong>Profiles</strong><br>Define reusable color schemes (profiles) that can be applied to repository rules."
                                           data-tooltip-max-width="350"><span class="codicon codicon-info"></span></span>
                                 </h2>
-                                <button type="button" class="header-add-button" data-action="addProfile" data-tooltip="Add a new color profile">+ Add</button>
+                                <div class="profile-add-menu" id="profileAddMenu">
+                                    <button
+                                        type="button"
+                                        class="header-add-button profile-add-button"
+                                        id="profileAddMenuButton"
+                                        data-tooltip="Add a new color profile"
+                                        aria-haspopup="true"
+                                        aria-expanded="false"
+                                        aria-label="Add profile options"
+                                    >
+                                        <span class="profile-add-button-text">+ Add</span>
+                                        <span class="codicon codicon-chevron-down" aria-hidden="true"></span>
+                                    </button>
+                                    <div class="profile-add-dropdown" id="profileAddMenuDropdown" role="menu" aria-hidden="true"></div>
+                                </div>
                            </div>
                            <div id="profilesList" class="profiles-list"></div>
                            <div class="profile-preview-control">

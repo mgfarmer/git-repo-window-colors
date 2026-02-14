@@ -76,11 +76,24 @@ let selectedRepoRuleIndex: number = -1; // Track which repo rule is selected for
 let selectedBranchRuleIndex: number = -1; // Track which branch rule is selected for preview
 let previewMode: boolean = false; // Track if preview mode is enabled
 let profilePreviewMode: boolean = false; // Track if profile preview mode is enabled
+let profileAddMenuButton: HTMLElement | null = null;
+let profileAddDropdown: HTMLElement | null = null;
 
 // Load checkbox states from localStorage with defaults
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
 let syncActiveInactiveEnabled = localStorage.getItem('syncActiveInactiveEnabled') !== 'false'; // Default to true
 let limitOptionsEnabled = localStorage.getItem('limitOptionsEnabled') !== 'false'; // Default to true
+
+document.addEventListener('click', (event) => {
+    if (!profileAddDropdown || !profileAddMenuButton) {
+        return;
+    }
+    const target = event.target as Node;
+    if (profileAddDropdown.contains(target) || profileAddMenuButton.contains(target)) {
+        return;
+    }
+    hideProfileAddMenu();
+});
 
 // Help panel resize state
 const HELP_PANEL_MIN_WIDTH = 600;
@@ -910,6 +923,7 @@ window.addEventListener('message', (event) => {
         case 'starredKeysUpdated':
             if (message.data && message.data.starredKeys) {
                 starredKeys = message.data.starredKeys;
+                refreshProfileAddMenuOptions();
                 // Re-render profile editor to update star icons
                 const selectedProfileName = (document.getElementById('profileNameInput') as HTMLInputElement)?.value;
                 if (selectedProfileName && currentConfig?.advancedProfiles?.[selectedProfileName]) {
@@ -6391,6 +6405,11 @@ const DEFAULT_MAPPINGS: SectionMappings = {
     'editorGroupHeader.tabsBackground': { slot: 'primaryActiveBg', opacity: 0.3 },
 };
 
+const DEFAULT_BRANCH_MAPPINGS: SectionMappings = {
+    'activityBar.background': { slot: 'primaryActiveBg', opacity: 0.7 },
+    'activityBar.foreground': 'primaryActiveFg',
+};
+
 const SECTION_DEFINITIONS: { [name: string]: string[] } = {
     'Title Bar': [
         'titleBar.activeBackground',
@@ -6648,11 +6667,7 @@ function renderProfiles(profiles: AdvancedProfileMap | undefined) {
         });
     }
 
-    // Attach Add Handler
-    const addBtn = document.querySelector('[data-action="addProfile"]');
-    if (addBtn) {
-        (addBtn as HTMLElement).onclick = () => addNewProfile();
-    }
+    initializeProfileAddMenu();
 
     // Attach Profile Preview Checkbox Handler
     const profilePreviewCheckbox = document.getElementById('preview-selected-profile') as HTMLInputElement;
@@ -6708,30 +6723,360 @@ function isHtmlColor(str: string): boolean {
     return s.color !== '';
 }
 
-function addNewProfile() {
-    let name = 'Profile ' + (Object.keys(currentConfig.advancedProfiles || {}).length + 1);
+type AddProfileTemplate = 'empty' | 'defaultRepo' | 'defaultBranch' | 'starred';
 
-    // Ensure the generated name is unique and not a valid HTML color
-    let counter = Object.keys(currentConfig.advancedProfiles || {}).length + 1;
-    while (isHtmlColor(name) || (currentConfig.advancedProfiles && currentConfig.advancedProfiles[name])) {
-        counter++;
-        name = 'Profile ' + counter;
+function addNewProfile(template: AddProfileTemplate = 'defaultRepo') {
+    if (!currentConfig) return;
+
+    hideProfileAddMenu();
+
+    if (!currentConfig.advancedProfiles) {
+        currentConfig.advancedProfiles = {};
     }
 
-    if (!currentConfig.advancedProfiles) currentConfig.advancedProfiles = {};
+    if (template === 'starred' && starredKeys.length === 0) {
+        return;
+    }
 
-    // Generate a random color for the new profile
-    const randomColor = getThemeAppropriateColor();
-    const newPalette = JSON.parse(JSON.stringify(DEFAULT_PALETTE));
-    newPalette.primaryActiveBg.value = createThemedColorInWebview(randomColor);
-
-    currentConfig.advancedProfiles[name] = {
-        palette: newPalette,
-        mappings: JSON.parse(JSON.stringify(DEFAULT_MAPPINGS)),
+    const templateMeta: Record<AddProfileTemplate, { prefix: string; continueSequence?: boolean }> = {
+        empty: { prefix: 'Empty Profile', continueSequence: true },
+        defaultRepo: { prefix: 'Repo Profile', continueSequence: true },
+        defaultBranch: { prefix: 'Branch Profile', continueSequence: true },
+        starred: { prefix: 'Starred Profile', continueSequence: true },
     };
 
-    saveProfiles(name, 'monochromatic', true);
-    selectProfile(name);
+    const { prefix, continueSequence } = templateMeta[template];
+    const profileName = generateProfileName(prefix, Boolean(continueSequence));
+
+    const newProfile: AdvancedProfile = {
+        palette: createProfilePalette(),
+        mappings: getMappingsForTemplate(template),
+    };
+
+    currentConfig.advancedProfiles[profileName] = newProfile;
+
+    saveProfiles(profileName, 'monochromatic', true);
+    selectProfile(profileName);
+}
+
+function generateProfileName(prefix: string, continueSequence: boolean): string {
+    const profiles = currentConfig?.advancedProfiles ?? {};
+
+    const trimmedPrefix = prefix.trim();
+    if (!continueSequence) {
+        if (trimmedPrefix && !isHtmlColor(trimmedPrefix) && !profiles[trimmedPrefix]) {
+            return trimmedPrefix;
+        }
+    }
+
+    const existingProfiles = Object.keys(profiles);
+    let counter = continueSequence ? existingProfiles.length + 1 : 1;
+    let candidate = `${trimmedPrefix} ${counter}`.trim();
+
+    while (isHtmlColor(candidate) || profiles[candidate]) {
+        counter++;
+        candidate = `${trimmedPrefix} ${counter}`.trim();
+    }
+
+    return candidate;
+}
+
+function createProfilePalette(): Palette {
+    const randomColor = getThemeAppropriateColor();
+    const newPalette = JSON.parse(JSON.stringify(DEFAULT_PALETTE)) as Palette;
+    newPalette.primaryActiveBg.value = createThemedColorInWebview(randomColor);
+    return newPalette;
+}
+
+function getMappingsForTemplate(template: AddProfileTemplate): SectionMappings {
+    switch (template) {
+        case 'empty':
+            return {};
+        case 'defaultBranch':
+            return JSON.parse(JSON.stringify(DEFAULT_BRANCH_MAPPINGS));
+        case 'starred':
+            return buildStarredProfileMappings();
+        case 'defaultRepo':
+        default:
+            return JSON.parse(JSON.stringify(DEFAULT_MAPPINGS));
+    }
+}
+
+function buildStarredProfileMappings(): SectionMappings {
+    const mappings: SectionMappings = {};
+
+    if (!starredKeys || starredKeys.length === 0) {
+        return mappings;
+    }
+
+    starredKeys.forEach((key) => {
+        const slot = chooseSlotForStarredKey(key);
+        if (!slot) {
+            return;
+        }
+        mappings[key] = slot;
+    });
+
+    return mappings;
+}
+
+function chooseSlotForStarredKey(key: string): string | undefined {
+    const filteredSlots = getFilteredPaletteOptions(key, PALETTE_SLOT_ORDER, undefined, true);
+
+    if (isInactiveElement(key)) {
+        const inactiveSlot = filteredSlots.find((slot) => slot.includes('Inactive'));
+        if (inactiveSlot) {
+            return inactiveSlot;
+        }
+    }
+
+    if (isActiveElement(key)) {
+        const activeSlot = filteredSlots.find((slot) => slot.includes('Active') && !slot.includes('Inactive'));
+        if (activeSlot) {
+            return activeSlot;
+        }
+    }
+
+    if (isForegroundElement(key)) {
+        const fgSlot = filteredSlots.find((slot) => slot.endsWith('Fg'));
+        if (fgSlot) {
+            return fgSlot;
+        }
+    }
+
+    if (isBackgroundElement(key)) {
+        const bgSlot = filteredSlots.find((slot) => slot.endsWith('Bg'));
+        if (bgSlot) {
+            return bgSlot;
+        }
+    }
+
+    if (filteredSlots.length > 0) {
+        return filteredSlots[0];
+    }
+
+    return determineFallbackSlot(key);
+}
+
+function determineFallbackSlot(key: string): string {
+    if (isForegroundElement(key)) {
+        return isInactiveElement(key) ? 'primaryInactiveFg' : 'primaryActiveFg';
+    }
+
+    if (isBackgroundElement(key)) {
+        return isInactiveElement(key) ? 'primaryInactiveBg' : 'primaryActiveBg';
+    }
+
+    if (isInactiveElement(key)) {
+        return 'secondaryInactiveBg';
+    }
+
+    if (isActiveElement(key)) {
+        return 'secondaryActiveBg';
+    }
+
+    return 'tertiaryBg';
+}
+
+function initializeProfileAddMenu() {
+    profileAddMenuButton = document.getElementById('profileAddMenuButton') as HTMLElement | null;
+    profileAddDropdown = document.getElementById('profileAddMenuDropdown') as HTMLElement | null;
+
+    if (!profileAddMenuButton || !profileAddDropdown) {
+        return;
+    }
+
+    if (profileAddMenuButton.dataset.initialized !== 'true') {
+        profileAddMenuButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleProfileAddMenu();
+        });
+        profileAddMenuButton.addEventListener('keydown', handleProfileAddButtonKeydown);
+        profileAddMenuButton.dataset.initialized = 'true';
+    }
+
+    if (profileAddDropdown.dataset.initialized !== 'true') {
+        profileAddDropdown.addEventListener('keydown', handleProfileAddDropdownKeydown);
+        profileAddDropdown.dataset.initialized = 'true';
+    }
+
+    refreshProfileAddMenuOptions();
+    hideProfileAddMenu();
+}
+
+function refreshProfileAddMenuOptions() {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    profileAddDropdown.innerHTML = '';
+
+    const options: Array<{ template: AddProfileTemplate; label: string; description: string }> = [
+        {
+            template: 'empty',
+            label: 'Add empty profile',
+            description: 'Add an empty profile with no assigned mappings.',
+        },
+        {
+            template: 'defaultRepo',
+            label: 'Add default repository profile',
+            description: 'Add a profile with default repository mappings assigned.',
+        },
+        {
+            template: 'defaultBranch',
+            label: 'Add default branch profile',
+            description: 'Add a profile with default branch mappings assigned.',
+        },
+    ];
+
+    if (starredKeys.length > 0) {
+        options.push({
+            template: 'starred',
+            label: 'Add starred profile',
+            description: 'Add a profile with starred key mappings assigned.',
+        });
+    }
+
+    options.forEach((option) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'profile-add-option';
+        button.setAttribute('role', 'menuitem');
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            hideProfileAddMenu();
+            addNewProfile(option.template);
+        });
+        button.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                hideProfileAddMenu();
+                addNewProfile(option.template);
+            }
+        });
+
+        const label = document.createElement('div');
+        label.className = 'profile-add-option-label';
+        label.textContent = option.label;
+        button.appendChild(label);
+
+        const description = document.createElement('div');
+        description.className = 'profile-add-option-description';
+        description.textContent = option.description;
+        button.appendChild(description);
+
+        profileAddDropdown?.appendChild(button);
+    });
+
+    profileAddDropdown?.setAttribute(
+        'aria-hidden',
+        profileAddDropdown.classList.contains('visible') ? 'false' : 'true',
+    );
+}
+
+function toggleProfileAddMenu() {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    if (profileAddDropdown.classList.contains('visible')) {
+        hideProfileAddMenu();
+    } else {
+        showProfileAddMenu();
+    }
+}
+
+function showProfileAddMenu() {
+    if (!profileAddDropdown || !profileAddMenuButton) {
+        return;
+    }
+
+    refreshProfileAddMenuOptions();
+
+    if (!profileAddDropdown.children.length) {
+        return;
+    }
+
+    profileAddDropdown.classList.add('visible');
+    profileAddDropdown.setAttribute('aria-hidden', 'false');
+    profileAddMenuButton.setAttribute('aria-expanded', 'true');
+
+    const firstOption = profileAddDropdown.querySelector('.profile-add-option') as HTMLElement | null;
+    if (firstOption) {
+        firstOption.focus();
+    }
+}
+
+function hideProfileAddMenu() {
+    if (!profileAddDropdown || !profileAddMenuButton) {
+        return;
+    }
+
+    profileAddDropdown.classList.remove('visible');
+    profileAddDropdown.setAttribute('aria-hidden', 'true');
+    profileAddMenuButton.setAttribute('aria-expanded', 'false');
+}
+
+function handleProfileAddButtonKeydown(event: KeyboardEvent) {
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        showProfileAddMenu();
+    } else if (event.key === 'Escape') {
+        hideProfileAddMenu();
+    }
+}
+
+function handleProfileAddDropdownKeydown(event: KeyboardEvent) {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        hideProfileAddMenu();
+        profileAddMenuButton?.focus();
+        return;
+    }
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusNextProfileAddOption(1);
+        return;
+    }
+
+    if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusNextProfileAddOption(-1);
+        return;
+    }
+
+    if (event.key === 'Tab') {
+        hideProfileAddMenu();
+    }
+}
+
+function focusNextProfileAddOption(direction: number) {
+    if (!profileAddDropdown) {
+        return;
+    }
+
+    const options = Array.from(profileAddDropdown.querySelectorAll('.profile-add-option')) as HTMLElement[];
+    if (!options.length) {
+        return;
+    }
+
+    const activeElement = document.activeElement as HTMLElement | null;
+    const currentIndex = activeElement ? options.indexOf(activeElement) : -1;
+
+    let nextIndex = currentIndex + direction;
+
+    if (nextIndex < 0) {
+        nextIndex = options.length - 1;
+    } else if (nextIndex >= options.length) {
+        nextIndex = 0;
+    }
+
+    options[nextIndex].focus();
 }
 
 let paletteGeneratorInitialized = false;

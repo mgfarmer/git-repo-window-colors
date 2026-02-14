@@ -120,54 +120,6 @@ This is a Visual Studio Code extension called "Git Repo Window Colors" that cust
 
 ## Configuration Format
 
-### Repository Rules
-
-Format: `<repo-qualifier>[/<default-branch>]:<primary-color>[/<branch-color>]`
-
-Examples:
-
--   `myrepo:blue` (simple repo coloring)
--   `myrepo/main:blue/green` (with branch colors)
--   `github.com/user/repo:red` (URL matching)
-
-### Branch Rules
-
-Format: `<branch-pattern>:<branch-color>`
-
-Examples:
-
--   `feature-.*:blue` (regex pattern)
--   `bug-.*:red` (bug branches)
--   `main:green` (specific branch)
-
-## VS Code Integration
-
-### Managed Color Properties
-
-The extension manages these VS Code theme properties:
-
--   `activityBar.background/foreground`
--   `titleBar.activeBackground/activeForeground`
--   `titleBar.inactiveBackground/inactiveForeground`
--   `tab.inactiveBackground/activeBackground`
--   `editorGroupHeader.tabsBackground`
--   `statusBar.background`
--   `titleBar.border`
--   `sideBarTitle.background`
-
-### Settings Integration
-
--   Modifies workspace-level `workbench.colorCustomizations`
--   Listens for configuration changes via `onDidChangeConfiguration`
--   Validates color values using JavaScript `Color()` constructor
-
-## Testing & Debugging
-
-### Development Commands
-
--   **F5**: Launch extension debugger
--   **Shift+Cmd+F5**: Reload extension debugger
-
 ### Output Channel
 
 Extension logs to "Git Repo Window Colors" output channel for debugging.

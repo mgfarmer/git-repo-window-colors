@@ -679,6 +679,74 @@ h2 {
     background: var(--vscode-button-hoverBackground);
 }
 
+.profile-add-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.profile-add-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.profile-add-button-text {
+    display: inline-flex;
+    align-items: center;
+}
+
+.profile-add-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--vscode-menu-background);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    min-width: 260px;
+    max-width: 320px;
+    z-index: 1200;
+    padding: 4px 0;
+}
+
+.profile-add-dropdown.visible {
+    display: block;
+}
+
+.profile-add-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    background: transparent;
+    color: var(--vscode-menu-foreground);
+    border: none;
+    padding: 8px 12px;
+    text-align: left;
+    cursor: pointer;
+    font-family: var(--vscode-font-family);
+    font-size: 12px;
+}
+
+.profile-add-option:hover,
+.profile-add-option:focus {
+    background: var(--vscode-menu-selectionBackground);
+    color: var(--vscode-menu-selectionForeground);
+    outline: none;
+}
+
+.profile-add-option-label {
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.profile-add-option-description {
+    font-size: 11px;
+    opacity: 0.75;
+}
+
 /* Copy From button */
 .copy-from-button {
     background: var(--vscode-button-background);
