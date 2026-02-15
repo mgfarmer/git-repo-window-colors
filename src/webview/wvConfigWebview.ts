@@ -956,31 +956,39 @@ window.addEventListener('message', (event) => {
 
 // Track pending configuration changes to avoid race conditions
 function handleConfigurationData(data: any) {
-    // if (data?.repoRules) {
-    //     console.log('[handleConfigurationData] repoRules count:', data.repoRules.length);
-    //     data.repoRules.forEach((rule: any, index: number) => {
-    //         console.log(`[handleConfigurationData] Repo rule ${index}: branchTableName="${rule.branchTableName}"`);
-    //     });
-    // }
-
-    // LOG: Check if workspaceInfo is being received correctly
-
-    // LOG: Check repo rules with detailed color info
-    if (data.repoRules) {
-        data.repoRules.forEach((rule: any, index: number) => {});
-    }
-
-    // LOG: Check branch tables
-    if (data.sharedBranchTables && data.sharedBranchTables['My Branches']) {
-        data.sharedBranchTables['My Branches'].rules.forEach((rule: any, index: number) => {});
-    }
-
-    // LOG: All shared branch tables
-    if (data.sharedBranchTables) {
-        Object.keys(data.sharedBranchTables).forEach((tableName) => {
-            const table = data.sharedBranchTables[tableName];
-            table.rules?.forEach((rule: any, index: number) => {});
+    // Debug logging to track duplicate/early updates
+    try {
+        configDataCounter += 1;
+        const repoSummary = (data.repoRules || []).map((rule: any, idx: number) => {
+            const color = typeof rule.primaryColor === 'string' ? rule.primaryColor : JSON.stringify(rule.primaryColor);
+            return `${idx}:${rule.repoQualifier || '?'}:${color}`;
         });
+        const branchSummary = (() => {
+            const tableEntries = [] as string[];
+            if (data.sharedBranchTables) {
+                for (const [tableName, table] of Object.entries<any>(data.sharedBranchTables)) {
+                    const rules = (table?.rules || []).map((r: any, idx: number) => {
+                        const color = typeof r.color === 'string' ? r.color : JSON.stringify(r.color);
+                        return `${idx}:${r.pattern || '?'}:${color}`;
+                    });
+                    tableEntries.push(`${tableName}=[${rules.join('|')}]`);
+                }
+            }
+            return tableEntries.join('; ');
+        })();
+
+        console.log(
+            '[configData]',
+            { count: configDataCounter, selectedRepoRuleIndex, selectedBranchRuleIndex },
+            'repoRules:',
+            repoSummary,
+            'branchTables:',
+            branchSummary,
+            'matchingIndexes:',
+            data.matchingIndexes,
+        );
+    } catch (err) {
+        console.warn('[configData] logging error', err);
     }
 
     // Always use backend data to ensure rule order and matching indexes are consistent
@@ -4718,15 +4726,23 @@ function moveRule(index: number, ruleType: string, direction: number) {
     rules[index] = rules[newIndex];
     rules[newIndex] = temp;
 
-    // Update selection if we moved a repo rule
-    if (ruleType === 'repo' && selectedRepoRuleIndex === index) {
-        selectedRepoRuleIndex = newIndex;
-    } else if (ruleType === 'repo' && selectedRepoRuleIndex === newIndex) {
-        selectedRepoRuleIndex = index;
+    // Adjust selection to follow the moved item
+    if (ruleType === 'repo') {
+        selectedRepoRuleIndex = adjustIndexAfterMove(selectedRepoRuleIndex, index, newIndex);
+    } else {
+        selectedBranchRuleIndex = adjustIndexAfterMove(selectedBranchRuleIndex, index, newIndex);
     }
 
-    // Send updated configuration - backend will recalculate matching indexes and send back proper update
-    // This will trigger a complete table refresh with correct highlighting
+    // Re-render locally and send preview for the updated order
+    if (ruleType === 'repo') {
+        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
+        renderBranchRulesForSelectedRepo();
+    } else {
+        renderBranchRulesForSelectedRepo();
+    }
+    triggerPreviewForSelection();
+
+    // Send updated configuration - backend will recalc and return canonical state
     sendConfiguration();
 }
 
@@ -5027,6 +5043,7 @@ function updateOtherSetting(setting: string, value: any) {
 // Drag and drop functionality
 let draggedIndex: number = -1;
 let draggedType: string = '';
+let configDataCounter = 0; // Debug: track config messages received
 
 function adjustIndexAfterMove(selectedIndex: number, from: number, to: number): number {
     if (selectedIndex === -1) return selectedIndex;
@@ -5068,6 +5085,37 @@ function getRulesForDrag(ruleType: string) {
     }
 
     return null;
+}
+
+function triggerPreviewForSelection() {
+    if (!previewMode || !currentConfig) return;
+
+    if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
+        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
+        const tableName = selectedRule.branchTableName || '__none__';
+        const branchTable = tableName !== '__none__' ? currentConfig.sharedBranchTables?.[tableName] : null;
+        const hasBranchRules = branchTable?.rules && branchTable.rules.length > 0;
+
+        vscode.postMessage({
+            command: 'previewRepoRule',
+            data: {
+                index: selectedRepoRuleIndex,
+                previewEnabled: true,
+                clearBranchPreview: !(hasBranchRules && selectedBranchRuleIndex >= 0),
+            },
+        });
+
+        if (hasBranchRules && selectedBranchRuleIndex >= 0) {
+            vscode.postMessage({
+                command: 'previewBranchRule',
+                data: {
+                    index: selectedBranchRuleIndex,
+                    tableName,
+                    repoIndex: selectedRepoRuleIndex,
+                },
+            });
+        }
+    }
 }
 
 function handleDragStart(event: DragEvent, index: number, ruleType: string) {
@@ -5164,23 +5212,18 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
         selectedBranchRuleIndex = adjustIndexAfterMove(selectedBranchRuleIndex, draggedIndex, insertIndex);
     }
 
-    // Re-render locally so visual order and previews refresh immediately
+    // Re-render locally for visual order
     if (draggedType === 'repo' && currentConfig?.repoRules) {
         renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
         renderBranchRulesForSelectedRepo();
-        if (selectedRepoRuleIndex >= 0) {
-            selectRepoRule(selectedRepoRuleIndex, { force: true });
-        }
     } else if (draggedType === 'branch') {
         renderBranchRulesForSelectedRepo();
-        if (selectedBranchRuleIndex >= 0) {
-            selectBranchRule(selectedBranchRuleIndex, { force: true });
-        } else if (selectedRepoRuleIndex >= 0) {
-            // Ensure repo preview is refreshed when no branch is selected
-            selectRepoRule(selectedRepoRuleIndex, { force: true });
-        }
     }
 
+    // Send updated preview immediately based on the new selection/order
+    triggerPreviewForSelection();
+
+    // Persist the new order
     sendConfiguration();
 
     // Reset drag state
