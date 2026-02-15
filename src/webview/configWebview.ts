@@ -55,6 +55,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _previewModeEnabled: boolean = false;
     private _registeredTourCommands: Map<string, vscode.Disposable> = new Map();
     private _tourInfo: Map<string, { commandTitle: string }> = new Map();
+    private _lastSentThemeKind: ThemeKind | null = null;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
@@ -1176,6 +1177,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         const themeKind = this._getThemeKind();
+        if (this._lastSentThemeKind === themeKind) {
+            return; // Skip if theme kind did not change
+        }
+        this._lastSentThemeKind = themeKind;
         console.log('[ConfigWebviewProvider] Sending theme change to webview:', themeKind);
         this._panel.webview.postMessage({
             command: 'themeChanged',
