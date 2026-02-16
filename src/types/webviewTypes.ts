@@ -43,7 +43,6 @@ export interface WebviewMessage {
         | 'updateConfig'
         | 'updateThemedColor'
         | 'requestConfig'
-        | 'openColorPicker'
         | 'addRepoRule'
         | 'confirmDelete'
         | 'exportConfig'

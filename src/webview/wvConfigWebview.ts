@@ -2869,19 +2869,17 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
 }
 
 function createColorInputHTML(color: string, ruleType: string, index: number, field: string): string {
-    const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
     const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
     // Handle special 'none' value - show indicator instead of color picker
     const isSpecialNone = color === 'none';
 
-    if (USE_NATIVE_COLOR_PICKER) {
-        const hexColor = isSpecialNone ? '#808080' : getRepresentativeColor(color);
-        const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
-        const noneIndicator = isSpecialNone
-            ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
-            : '';
-        return `
+    const hexColor = isSpecialNone ? '#808080' : getRepresentativeColor(color);
+    const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
+    const noneIndicator = isSpecialNone
+        ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
+        : '';
+    return `
             <div class="color-input-container native-picker${isSpecialNone ? ' is-none' : ''}">
                 ${noneIndicator}
                 <input type="color" 
@@ -2901,29 +2899,6 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                        aria-label="Color text for ${ruleType} rule ${index + 1} ${field}">
             </div>
         `;
-    } else {
-        // For non-native picker, resolve profile names to colors
-        const resolvedColor = isSpecialNone ? 'transparent' : getRepresentativeColor(color);
-        const swatchStyle = isSpecialNone
-            ? 'background-color: transparent; display: flex; align-items: center; justify-content: center;'
-            : `background-color: ${convertColorToValidCSS(resolvedColor) || '#4A90E2'}`;
-        const swatchContent = isSpecialNone ? '⊘' : '';
-        return `
-            <div class="color-input-container${isSpecialNone ? ' is-none' : ''}">
-                <div class="color-swatch" 
-                     style="${swatchStyle}"
-                     data-action="openColorPicker('${ruleType}', ${index}, '${field}')"
-                     data-tooltip="${isSpecialNone ? 'Excluded from coloring' : 'Click to use a color picker, shift-click to choose a random color'}">${swatchContent}</div>
-                <input type="text" 
-                       class="color-input" 
-                       id="${ruleType}-${field}-${index}"
-                       value="${color || ''}" 
-                       placeholder="${placeholder}"
-                       data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
-                       aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
-            </div>
-        `;
-    }
 }
 
 function createReorderControlsHTML(index: number, ruleType: string, totalCount: number, rule: any): string {
@@ -5017,7 +4992,7 @@ function reorderRule(ruleType: string, fromIndex: number, toIndex: number): bool
     const repoSelection = newSelectedRepoIndex >= 0 ? newSelectedRepoIndex : null;
     const tableSelection = selectedTableName && selectedTableName !== '__none__' ? selectedTableName : null;
     const branchSelection = tableSelection && newSelectedBranchIndex >= 0 ? newSelectedBranchIndex : null;
-    sendSelectionUpdateWith(repoSelection, branchSelection, tableSelection, previewMode);
+    sendSelectionUpdateWith(repoSelection, branchSelection, tableSelection, previewMode, false);
 
     vscode.postMessage({
         command: 'updateConfig',
@@ -5338,6 +5313,7 @@ function sendSelectionUpdateWith(
     selectedBranch: number | null,
     selectedBranchTableName: string | null,
     previewModeEnabled: boolean,
+    apply: boolean = true,
 ) {
     vscode.postMessage({
         command: 'updateSelection',
@@ -5346,6 +5322,7 @@ function sendSelectionUpdateWith(
             selectedBranchRuleIndex: selectedBranch,
             selectedBranchTableName,
             previewMode: previewModeEnabled,
+            apply,
         },
     });
 }
@@ -5373,12 +5350,12 @@ function openColorPicker(ruleType: string, index: number, field: string) {
         }
     }
 
-    vscode.postMessage({
-        command: 'openColorPicker',
-        data: {
-            colorPickerData: { ruleType, index, field },
-        },
-    });
+    // vscode.postMessage({
+    //     command: 'openColorPicker',
+    //     data: {
+    //         colorPickerData: { ruleType, index, field },
+    //     },
+    // });
 }
 
 function updateColorInUI(ruleType: string, ruleIndex: number, field: string, color: string) {

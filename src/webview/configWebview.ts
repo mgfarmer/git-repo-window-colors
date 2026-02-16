@@ -13,10 +13,6 @@ import {
 } from '../extension';
 //import { outputChannel } from '../extension';
 
-// Build-time configuration for color picker type
-// Set to false to use VS Code's input dialog, true to use native HTML color picker
-const USE_NATIVE_COLOR_PICKER = true;
-
 // Development mode configuration
 // Set to true to show the Run Tests button for debugging/development
 const DEVELOPMENT_MODE = false;
@@ -120,7 +116,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this._configRefreshTimer = setTimeout(() => {
             this._configRefreshTimer = undefined;
             this._sendConfigurationToWebview();
-        }, 250);
+        }, 200);
     }
 
     public getPreviewRepoRuleIndex(): number | null {
@@ -217,9 +213,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 break;
             case 'updateThemedColor':
                 await this._handleThemedColorUpdate(message.data);
-                break;
-            case 'openColorPicker':
-                this._openColorPicker(message.data.colorPickerData!);
                 break;
             case 'confirmDelete':
                 if (message.data && (message.data as any).type === 'profile') {
@@ -1102,17 +1095,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             }
 
             // Update branch rules
-            if (data.branchRules) {
-                const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
-                    // Always return JSON object format
-                    return {
-                        pattern: rule.pattern,
-                        color: rule.color,
-                        enabled: rule.enabled !== undefined ? rule.enabled : true,
-                    };
-                });
-                updatePromises.push(Promise.resolve(config.update('branchConfigurationList', branchRulesArray, true)));
-            }
+            // if (data.branchRules) {
+            //     const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
+            //         // Always return JSON object format
+            //         return {
+            //             pattern: rule.pattern,
+            //             color: rule.color,
+            //             enabled: rule.enabled !== undefined ? rule.enabled : true,
+            //         };
+            //     });
+            //     updatePromises.push(Promise.resolve(config.update('branchConfigurationList', branchRulesArray, true)));
+            // }
 
             // Update shared branch tables
             if (data.sharedBranchTables) {
@@ -1196,9 +1189,10 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             previewModeFlag && tableName && branchIndex !== null && branchIndex !== undefined
                 ? { index: branchIndex, tableName }
                 : null;
-
         // Apply colors using the updated preview selection (or matching when preview off)
-        vscode.commands.executeCommand('_grwc.internal.applyColors', 'selection change', previewModeFlag);
+        if (data.apply) {
+            vscode.commands.executeCommand('_grwc.internal.applyColors', 'selection change', previewModeFlag);
+        }
     }
 
     private _getSelectionState(
@@ -1857,54 +1851,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         } catch (error) {
             console.error('Failed to generate palette previews:', error);
         }
-    }
-
-    private _openColorPicker(colorPickerData: any): void {
-        // Skip VS Code color picker if using native HTML color picker
-        if (USE_NATIVE_COLOR_PICKER) {
-            // Native color picker handles color selection directly in the webview
-            return;
-        }
-
-        if (!colorPickerData) {
-            vscode.window.showErrorMessage('Invalid color picker data');
-            return;
-        }
-
-        const { ruleType, ruleIndex, colorType } = colorPickerData;
-
-        // Get current color
-        let currentColor = '#0066cc'; // default
-        if (ruleType === 'repo' && this.currentConfig?.repoRules?.[ruleIndex]) {
-            const rule = this.currentConfig.repoRules[ruleIndex];
-            currentColor = colorType === 'primary' ? rule.primaryColor : rule.branchColor || '#0066cc';
-        } else if (ruleType === 'branch' && this.currentConfig?.branchRules?.[ruleIndex]) {
-            currentColor = this.currentConfig.branchRules[ruleIndex].color;
-        }
-
-        // Use VS Code input dialog for color selection
-        vscode.window
-            .showInputBox({
-                prompt: `Enter a color for ${ruleType} rule ${ruleIndex + 1} (${colorType})`,
-                value: currentColor,
-                placeHolder: 'e.g., blue, #FF0000, rgb(255,0,0)',
-            })
-            .then((color: string | undefined) => {
-                if (color !== undefined) {
-                    // Send the new color back to webview
-                    if (this._panel) {
-                        this._panel.webview.postMessage({
-                            command: 'colorPicked',
-                            data: {
-                                ruleType,
-                                ruleIndex,
-                                colorType,
-                                color,
-                            },
-                        });
-                    }
-                }
-            });
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {

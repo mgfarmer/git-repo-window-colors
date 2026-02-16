@@ -64,8 +64,6 @@ export type RepoConfig = {
     profileName?: string;
     enabled?: boolean;
     branchTableName?: string;
-    branchRules?: Array<{ pattern: string; color: PrimaryColorValue; enabled?: boolean }>;
-    // Transient properties set during matching and profile resolution
     branchProfileName?: string;
     profile?: AdvancedProfile;
     branchProfile?: AdvancedProfile;
@@ -145,7 +143,6 @@ export function parseRepoRules(
                 profileName: setting.profileName,
                 enabled: setting.enabled !== undefined ? setting.enabled : true,
                 branchTableName: setting.branchTableName,
-                branchRules: setting.branchRules,
             };
 
             // Validate if needed
