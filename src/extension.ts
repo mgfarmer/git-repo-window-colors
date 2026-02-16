@@ -911,16 +911,21 @@ export async function activate(context: ExtensionContext) {
                 }
                 // Only call doit() if git is initialized and we have repo info
                 // This handles the post-migration case where config changes fire before init()
-                if (gitRepository && gitRepoRemoteFetchUrl) {
-                    console.log('[GRWC] Git ready, calling doit()');
-                    // Check if we should use preview mode - use the tracked checkbox state
-                    const usePreview = configProvider?.isPreviewModeEnabled() ?? false;
-                    doit('settings change', usePreview);
-                    migrationDidRun = false; // Clear flag so init() won't call doit() again
-                    updateStatusBarItem(); // Update status bar when configuration changes
-                } else {
-                    console.log('[GRWC] Git not ready yet, skipping doit() - init() will handle it');
-                }
+                //if (gitRepository && gitRepoRemoteFetchUrl) {
+                // console.log('[GRWC] Git ready, calling doit()');
+                // Check if we should use preview mode - prefer any active preview selection
+                const previewIdx = configProvider?.getPreviewRepoRuleIndex();
+                const previewBranchCtx = configProvider?.getPreviewBranchRuleContext();
+                const usePreview =
+                    (configProvider?.isPreviewModeEnabled() ?? false) ||
+                    previewIdx !== null ||
+                    previewBranchCtx !== null;
+                doit('settings change', usePreview);
+                migrationDidRun = false; // Clear flag so init() won't call doit() again
+                updateStatusBarItem(); // Update status bar when configuration changes
+                // } else {
+                //     console.log('[GRWC] Git not ready yet, skipping doit() - init() will handle it');
+                // }
             }
         }),
     );
@@ -1454,6 +1459,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         outputChannel.appendLine('  Rule: "' + matchedRepoConfig.repoQualifier + '"');
 
         // Check if this rule explicitly excludes from coloring
+        // BUG: This should be deref'ing ThemeColor. If primaryColor is a ThemeColor, it will never equal 'none' and the rule will be applied with incorrect colors instead of being excluded.
         if (matchedRepoConfig.primaryColor === 'none') {
             outputChannel.appendLine('  Rule specifies "none" - excluding from coloring');
             undoColors();

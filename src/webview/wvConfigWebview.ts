@@ -3492,48 +3492,12 @@ function handlePreviewModeChange() {
         hintManager.markShown('previewSelectedRule');
     }
 
+    // Backend will apply or clear preview based on selection update
+    sendSelectionUpdate();
+
     if (previewMode) {
-        // If enabling preview and a rule is selected, send preview message
-        // Prioritize branch rule if selected, otherwise use repo rule
-        if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
-            // Determine which table we're using
-            let tableName = '__none__';
-            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
-                const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-                tableName = selectedRule.branchTableName || '__none__';
-            }
-
-            vscode.postMessage({
-                command: 'previewBranchRule',
-                data: {
-                    index: selectedBranchRuleIndex,
-                    tableName,
-                    repoIndex: selectedRepoRuleIndex,
-                    previewEnabled: true,
-                },
-            });
-        } else if (selectedRepoRuleIndex !== null && selectedRepoRuleIndex !== -1) {
-            vscode.postMessage({
-                command: 'previewRepoRule',
-                data: {
-                    index: selectedRepoRuleIndex,
-                    previewEnabled: true,
-                },
-            });
-        }
-
-        // Show preview toast
         showPreviewToast();
     } else {
-        // If disabling preview, send clear message with preview disabled flag
-        vscode.postMessage({
-            command: 'clearPreview',
-            data: {
-                previewEnabled: false,
-            },
-        });
-
-        // Hide preview toast
         hidePreviewToast();
     }
 
@@ -5069,34 +5033,7 @@ function getRulesForDrag(ruleType: string) {
 }
 
 function triggerPreviewForSelection() {
-    if (!previewMode || !currentConfig) return;
-
-    if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
-        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-        const tableName = selectedRule.branchTableName || '__none__';
-        const branchTable = tableName !== '__none__' ? currentConfig.sharedBranchTables?.[tableName] : null;
-        const hasBranchRules = branchTable?.rules && branchTable.rules.length > 0;
-
-        vscode.postMessage({
-            command: 'previewRepoRule',
-            data: {
-                index: selectedRepoRuleIndex,
-                previewEnabled: true,
-                clearBranchPreview: !(hasBranchRules && selectedBranchRuleIndex >= 0),
-            },
-        });
-
-        if (hasBranchRules && selectedBranchRuleIndex >= 0) {
-            vscode.postMessage({
-                command: 'previewBranchRule',
-                data: {
-                    index: selectedBranchRuleIndex,
-                    tableName,
-                    repoIndex: selectedRepoRuleIndex,
-                },
-            });
-        }
-    }
+    // Deprecated: preview is applied by backend on selection updates
 }
 
 function handleDragStart(event: DragEvent, index: number, ruleType: string) {

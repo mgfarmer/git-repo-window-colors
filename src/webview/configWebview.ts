@@ -120,7 +120,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this._configRefreshTimer = setTimeout(() => {
             this._configRefreshTimer = undefined;
             this._sendConfigurationToWebview();
-        }, 300);
+        }, 250);
     }
 
     public getPreviewRepoRuleIndex(): number | null {
@@ -267,33 +267,28 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 await this._sendHelpContent(message.data.helpType || 'getting-started');
                 break;
             case 'previewRepoRule':
-                this._previewRepoRuleIndex = (message.data as any).index;
-                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
-                // Clear branch preview if requested (avoids double doit() call)
-                if ((message.data as any).clearBranchPreview) {
-                    this._previewBranchRuleContext = null;
-                }
-
-                // Pass preview mode as true
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
-                // _configurationListener will refresh after colorCustomizations update
+                this._updateSelection({
+                    selectedRepoRuleIndex: (message.data as any).index,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: true,
+                });
                 break;
             case 'previewBranchRule':
-                this._previewBranchRuleContext = {
-                    index: (message.data as any).index,
-                    tableName: (message.data as any).tableName || 'Default Rules',
-                };
-                this._previewRepoRuleIndex = (message.data as any).repoIndex ?? null;
-                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
-                // Pass preview mode as true
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
-                // _configurationListener will refresh after colorCustomizations update
+                this._updateSelection({
+                    selectedRepoRuleIndex: (message.data as any).repoIndex ?? null,
+                    selectedBranchRuleIndex: (message.data as any).index,
+                    selectedBranchTableName: (message.data as any).tableName || 'Default Rules',
+                    previewMode: true,
+                });
                 break;
             case 'clearPreview':
-                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
-                // Pass preview mode as false to use matching rules
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview', false);
-                // _configurationListener will refresh after colorCustomizations update
+                this._updateSelection({
+                    selectedRepoRuleIndex: this._selectedRepoRuleIndex,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: false,
+                });
                 break;
             case 'previewProfile':
                 // Apply a profile preview without matching - just use the profile directly
@@ -305,19 +300,20 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 // _configurationListener will refresh after colorCustomizations update
                 break;
             case 'clearProfilePreview':
-                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
-                this._previewRepoRuleIndex = null;
-                this._previewBranchRuleContext = null;
-                // Pass preview mode as false to use matching rules
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared profile preview', false);
-                // _configurationListener will refresh after colorCustomizations update
+                this._updateSelection({
+                    selectedRepoRuleIndex: null,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: false,
+                });
                 break;
             case 'clearBranchPreview':
-                // Clear branch preview context while keeping repo preview active
-                this._previewBranchRuleContext = null;
-                // Reapply colors with the current repo preview but no branch preview
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared branch preview', true);
-                // _configurationListener will refresh after colorCustomizations update
+                this._updateSelection({
+                    selectedRepoRuleIndex: this._selectedRepoRuleIndex,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: true,
+                });
                 break;
             case 'generatePalette':
                 await this._handlePaletteGeneration(message.data.paletteData!);
@@ -1194,17 +1190,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         // Keep preview state aligned with selection when preview mode is enabled
-        if (this._previewModeEnabled || previewModeFlag) {
-            this._previewModeEnabled = true;
-            this._previewRepoRuleIndex = repoIndex;
-            this._previewBranchRuleContext =
-                tableName && branchIndex !== null && branchIndex !== undefined
-                    ? { index: branchIndex, tableName }
-                    : null;
+        this._previewModeEnabled = previewModeFlag;
+        this._previewRepoRuleIndex = previewModeFlag ? repoIndex : null;
+        this._previewBranchRuleContext =
+            previewModeFlag && tableName && branchIndex !== null && branchIndex !== undefined
+                ? { index: branchIndex, tableName }
+                : null;
 
-            // Apply colors using the updated preview selection
-            vscode.commands.executeCommand('_grwc.internal.applyColors', 'selection change', true);
-        }
+        // Apply colors using the updated preview selection (or matching when preview off)
+        vscode.commands.executeCommand('_grwc.internal.applyColors', 'selection change', previewModeFlag);
     }
 
     private _getSelectionState(
