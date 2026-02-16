@@ -78,6 +78,7 @@ let previewMode: boolean = false; // Track if preview mode is enabled
 let profilePreviewMode: boolean = false; // Track if profile preview mode is enabled
 let profileAddMenuButton: HTMLElement | null = null;
 let profileAddDropdown: HTMLElement | null = null;
+let pendingPreviewAfterConfig: boolean = false; // Fire preview after canonical config arrives
 
 // Load checkbox states from localStorage with defaults
 let syncFgBgEnabled = localStorage.getItem('syncFgBgEnabled') !== 'false'; // Default to true
@@ -1073,7 +1074,34 @@ function handleConfigurationData(data: any) {
         }
     }
 
+    // Apply selection from backend-managed state
+    selectedRepoRuleIndex = typeof data.selectedRepoRuleIndex === 'number' ? data.selectedRepoRuleIndex : -1;
+
+    const selectedBranchCtx = data.selectedBranchRuleContext;
+    const repoRuleForSelection =
+        selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]
+            ? currentConfig.repoRules[selectedRepoRuleIndex]
+            : null;
+    const tableForSelection = repoRuleForSelection?.branchTableName || '__none__';
+
+    if (
+        selectedBranchCtx &&
+        selectedBranchCtx.tableName &&
+        selectedBranchCtx.tableName === tableForSelection &&
+        currentConfig.sharedBranchTables?.[tableForSelection]?.rules?.[selectedBranchCtx.index]
+    ) {
+        selectedBranchRuleIndex = selectedBranchCtx.index;
+    } else {
+        selectedBranchRuleIndex = -1;
+    }
+
     renderConfiguration(currentConfig);
+
+    // Fire deferred preview after canonical config applies
+    if (pendingPreviewAfterConfig && previewMode) {
+        pendingPreviewAfterConfig = false;
+        // Backend will reapply on selection update; no local preview dispatch here
+    }
 }
 
 function handleColorPickerResult(data: any) {
@@ -1154,6 +1182,7 @@ function handlePathSimplifiedForPreview(data: any) {
     // Select the newly created rule
     const newRuleIndex = currentConfig.repoRules.length - 1;
     selectedRepoRuleIndex = newRuleIndex;
+    sendSelectionUpdate();
 
     // Send configuration update
     sendConfiguration();
@@ -2234,37 +2263,7 @@ function renderRepoRules(rules: any[], matchingIndex?: number) {
     container.innerHTML = '';
     container.appendChild(table);
 
-    // Initialize selection if needed - only select if there's a matching rule
-    if (selectedRepoRuleIndex === -1 && rules.length > 0) {
-        // Only select if there's a matched workspace rule
-        if (
-            matchingIndex !== undefined &&
-            matchingIndex !== null &&
-            matchingIndex >= 0 &&
-            matchingIndex < rules.length
-        ) {
-            selectedRepoRuleIndex = matchingIndex;
-            renderBranchRulesForSelectedRepo();
-        }
-        // Don't auto-select the first rule when there's no match
-
-        // If preview mode is enabled, trigger preview for the initially selected rule
-        if (previewMode && selectedRepoRuleIndex >= 0) {
-            const selectedRule = rules[selectedRepoRuleIndex];
-            const tableName = selectedRule.branchTableName || '__none__';
-            const branchTable = currentConfig?.sharedBranchTables?.[tableName];
-            const hasBranchRules = tableName !== '__none__' && branchTable?.rules && branchTable.rules.length > 0;
-
-            vscode.postMessage({
-                command: 'previewRepoRule',
-                data: {
-                    index: selectedRepoRuleIndex,
-                    previewEnabled: true,
-                    clearBranchPreview: !hasBranchRules,
-                },
-            });
-        }
-    }
+    // Selection is driven by backend-provided state; do not auto-select here
 }
 
 function createBranchTableDropdown(
@@ -2870,19 +2869,17 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
 }
 
 function createColorInputHTML(color: string, ruleType: string, index: number, field: string): string {
-    const USE_NATIVE_COLOR_PICKER = true; // This should match the build-time config
     const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
     // Handle special 'none' value - show indicator instead of color picker
     const isSpecialNone = color === 'none';
 
-    if (USE_NATIVE_COLOR_PICKER) {
-        const hexColor = isSpecialNone ? '#808080' : getRepresentativeColor(color);
-        const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
-        const noneIndicator = isSpecialNone
-            ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
-            : '';
-        return `
+    const hexColor = isSpecialNone ? '#808080' : getRepresentativeColor(color);
+    const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
+    const noneIndicator = isSpecialNone
+        ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
+        : '';
+    return `
             <div class="color-input-container native-picker${isSpecialNone ? ' is-none' : ''}">
                 ${noneIndicator}
                 <input type="color" 
@@ -2902,29 +2899,6 @@ function createColorInputHTML(color: string, ruleType: string, index: number, fi
                        aria-label="Color text for ${ruleType} rule ${index + 1} ${field}">
             </div>
         `;
-    } else {
-        // For non-native picker, resolve profile names to colors
-        const resolvedColor = isSpecialNone ? 'transparent' : getRepresentativeColor(color);
-        const swatchStyle = isSpecialNone
-            ? 'background-color: transparent; display: flex; align-items: center; justify-content: center;'
-            : `background-color: ${convertColorToValidCSS(resolvedColor) || '#4A90E2'}`;
-        const swatchContent = isSpecialNone ? '⊘' : '';
-        return `
-            <div class="color-input-container${isSpecialNone ? ' is-none' : ''}">
-                <div class="color-swatch" 
-                     style="${swatchStyle}"
-                     data-action="openColorPicker('${ruleType}', ${index}, '${field}')"
-                     data-tooltip="${isSpecialNone ? 'Excluded from coloring' : 'Click to use a color picker, shift-click to choose a random color'}">${swatchContent}</div>
-                <input type="text" 
-                       class="color-input" 
-                       id="${ruleType}-${field}-${index}"
-                       value="${color || ''}" 
-                       placeholder="${placeholder}"
-                       data-action="updateColorRule('${ruleType}', ${index}, '${field}', this.value)"
-                       aria-label="Color for ${ruleType} rule ${index + 1} ${field}">
-            </div>
-        `;
-    }
 }
 
 function createReorderControlsHTML(index: number, ruleType: string, totalCount: number, rule: any): string {
@@ -3493,48 +3467,12 @@ function handlePreviewModeChange() {
         hintManager.markShown('previewSelectedRule');
     }
 
+    // Backend will apply or clear preview based on selection update
+    sendSelectionUpdate();
+
     if (previewMode) {
-        // If enabling preview and a rule is selected, send preview message
-        // Prioritize branch rule if selected, otherwise use repo rule
-        if (selectedBranchRuleIndex !== null && selectedBranchRuleIndex !== -1) {
-            // Determine which table we're using
-            let tableName = '__none__';
-            if (selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]) {
-                const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-                tableName = selectedRule.branchTableName || '__none__';
-            }
-
-            vscode.postMessage({
-                command: 'previewBranchRule',
-                data: {
-                    index: selectedBranchRuleIndex,
-                    tableName,
-                    repoIndex: selectedRepoRuleIndex,
-                    previewEnabled: true,
-                },
-            });
-        } else if (selectedRepoRuleIndex !== null && selectedRepoRuleIndex !== -1) {
-            vscode.postMessage({
-                command: 'previewRepoRule',
-                data: {
-                    index: selectedRepoRuleIndex,
-                    previewEnabled: true,
-                },
-            });
-        }
-
-        // Show preview toast
         showPreviewToast();
     } else {
-        // If disabling preview, send clear message with preview disabled flag
-        vscode.postMessage({
-            command: 'clearPreview',
-            data: {
-                previewEnabled: false,
-            },
-        });
-
-        // Hide preview toast
         hidePreviewToast();
     }
 
@@ -3580,6 +3518,7 @@ function addRepoRule() {
 
     // Always append new rules to the end for predictable behavior
     currentConfig.repoRules.push(newRule);
+    // Keep selection unchanged; backend owns selection state
     sendConfiguration();
 }
 
@@ -3681,6 +3620,8 @@ function selectRepoRule(index: number, options?: { force?: boolean }) {
         selectedRepoRuleIndex = -1;
         selectedBranchRuleIndex = -1;
 
+        sendSelectionUpdate();
+
         // Clear preview when deselecting
         if (previewMode) {
             vscode.postMessage({
@@ -3706,27 +3647,12 @@ function selectRepoRule(index: number, options?: { force?: boolean }) {
         selectedBranchRuleIndex = -1;
     }
 
+    sendSelectionUpdate();
+
     // Clear any regex validation errors when switching rules
     clearRegexValidationError();
 
-    // Send preview command only if preview mode is enabled
-    if (previewMode) {
-        // Check if this repo has no branch table or empty branch table
-        // If so, include clearBranchPreview flag to avoid double doit() calls
-        const selectedRule = currentConfig.repoRules[index];
-        const tableName = selectedRule.branchTableName || '__none__';
-        const branchTable = currentConfig.sharedBranchTables?.[tableName];
-        const hasBranchRules = tableName !== '__none__' && branchTable?.rules && branchTable.rules.length > 0;
-
-        vscode.postMessage({
-            command: 'previewRepoRule',
-            data: {
-                index,
-                previewEnabled: true,
-                clearBranchPreview: !hasBranchRules,
-            },
-        });
-    }
+    // Do not post preview here; backend applies preview on selection updates to avoid flicker
 
     // Re-render repo rules to update selected state and preview styling
     renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
@@ -3786,28 +3712,9 @@ function selectBranchRule(index: number, options?: { force?: boolean }) {
     if (!options?.force && selectedBranchRuleIndex === index) {
         selectedBranchRuleIndex = -1;
 
-        // Clear branch preview when deselecting
-        if (previewMode) {
-            // Revert to just repo rule preview
-            vscode.postMessage({
-                command: 'previewRepoRule',
-                data: {
-                    index: selectedRepoRuleIndex,
-                    previewEnabled: true,
-                    clearBranchPreview: true,
-                },
-            });
+        sendSelectionUpdate();
 
-            // Update toast - still showing preview if repo rule differs from matching
-            const matchingRepoIndex = currentConfig?.matchingIndexes?.repoRule ?? -1;
-            const isPreviewingDifferentRepoRule = selectedRepoRuleIndex !== matchingRepoIndex;
-
-            if (isPreviewingDifferentRepoRule) {
-                showPreviewToast();
-            } else {
-                hidePreviewToast();
-            }
-        }
+        // Preview handled by backend on selection update
 
         // Re-render to show deselected state
         renderBranchRulesForSelectedRepo();
@@ -3816,21 +3723,12 @@ function selectBranchRule(index: number, options?: { force?: boolean }) {
 
     selectedBranchRuleIndex = index;
 
+    sendSelectionUpdate();
+
     // Clear any regex validation errors when switching rules
     clearRegexValidationError();
 
-    // Send preview command only if preview mode is enabled
-    if (previewMode) {
-        vscode.postMessage({
-            command: 'previewBranchRule',
-            data: {
-                index,
-                tableName,
-                repoIndex: selectedRepoRuleIndex,
-            },
-        });
-    } else {
-    }
+    // Preview handled by backend on selection update
 
     // Update toast if preview mode is enabled
     // Show toast only if the selected rules differ from the matching rules
@@ -3862,13 +3760,7 @@ function changeBranchMode(index: number, useGlobal: boolean) {
         selectedBranchRuleIndex = -1;
     }
 
-    // Re-render repo rules to update the dropdown display
-    renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
-
-    // If this is the selected rule, re-render branch rules
-    if (selectedRepoRuleIndex === index) {
-        renderBranchRulesForSelectedRepo();
-    }
+    sendSelectionUpdate();
 
     sendConfiguration();
 }
@@ -3882,10 +3774,9 @@ function changeBranchTable(index: number, tableName: string) {
     // Reset branch rule selection when changing tables so it reinitializes
     if (selectedRepoRuleIndex === index) {
         selectedBranchRuleIndex = -1;
-
-        // Re-render branch rules for this repo only
-        renderBranchRulesForSelectedRepo();
     }
+
+    sendSelectionUpdate();
 
     // Use debounced send like other update functions to prevent race conditions
     debounceValidateAndSend();
@@ -4699,51 +4590,8 @@ function generateRandomColor(ruleType: string, index: number, field: string) {
 function moveRule(index: number, ruleType: string, direction: number) {
     if (!currentConfig) return;
 
-    let rules;
-    if (ruleType === 'repo') {
-        rules = currentConfig.repoRules;
-    } else {
-        // For branch rules, get from the selected table
-        if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
-            const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-            const tableName = selectedRule.branchTableName || '__none__';
-
-            if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
-                rules = currentConfig.sharedBranchTables[tableName].rules;
-            }
-        }
-    }
-
-    if (!rules) return;
-
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= rules.length) {
-        return;
-    }
-
-    // Swap rules
-    const temp = rules[index];
-    rules[index] = rules[newIndex];
-    rules[newIndex] = temp;
-
-    // Adjust selection to follow the moved item
-    if (ruleType === 'repo') {
-        selectedRepoRuleIndex = adjustIndexAfterMove(selectedRepoRuleIndex, index, newIndex);
-    } else {
-        selectedBranchRuleIndex = adjustIndexAfterMove(selectedBranchRuleIndex, index, newIndex);
-    }
-
-    // Re-render locally and send preview for the updated order
-    if (ruleType === 'repo') {
-        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
-        renderBranchRulesForSelectedRepo();
-    } else {
-        renderBranchRulesForSelectedRepo();
-    }
-    triggerPreviewForSelection();
-
-    // Send updated configuration - backend will recalc and return canonical state
-    sendConfiguration();
+    const targetIndex = index + direction;
+    reorderRule(ruleType, index, targetIndex);
 }
 
 function toggleRule(index: number, ruleType: string) {
@@ -5062,16 +4910,16 @@ function adjustIndexAfterMove(selectedIndex: number, from: number, to: number): 
     return selectedIndex;
 }
 
-function getRulesForDrag(ruleType: string) {
+function getRuleContext(ruleType: string): { rules: any[]; tableName?: string } | null {
     if (!currentConfig) return null;
 
     if (ruleType === 'repo') {
-        return currentConfig.repoRules || null;
+        return currentConfig.repoRules ? { rules: currentConfig.repoRules } : null;
     }
 
     // Legacy single branch rules array
-    if (currentConfig.branchRules) {
-        return currentConfig.branchRules;
+    if ((currentConfig as any).branchRules) {
+        return { rules: (currentConfig as any).branchRules };
     }
 
     // Branch table rules scoped to the selected repo rule
@@ -5080,42 +4928,87 @@ function getRulesForDrag(ruleType: string) {
         const tableName = selectedRule.branchTableName || '__none__';
 
         if (tableName !== '__none__' && currentConfig.sharedBranchTables?.[tableName]) {
-            return currentConfig.sharedBranchTables[tableName].rules;
+            return { rules: currentConfig.sharedBranchTables[tableName].rules, tableName };
         }
     }
 
     return null;
 }
 
-function triggerPreviewForSelection() {
-    if (!previewMode || !currentConfig) return;
+function reorderRule(ruleType: string, fromIndex: number, toIndex: number): boolean {
+    const ctx = getRuleContext(ruleType);
+    if (!ctx) return false;
+    const { rules, tableName } = ctx;
 
-    if (selectedRepoRuleIndex >= 0 && currentConfig.repoRules?.[selectedRepoRuleIndex]) {
-        const selectedRule = currentConfig.repoRules[selectedRepoRuleIndex];
-        const tableName = selectedRule.branchTableName || '__none__';
-        const branchTable = tableName !== '__none__' ? currentConfig.sharedBranchTables?.[tableName] : null;
-        const hasBranchRules = branchTable?.rules && branchTable.rules.length > 0;
-
-        vscode.postMessage({
-            command: 'previewRepoRule',
-            data: {
-                index: selectedRepoRuleIndex,
-                previewEnabled: true,
-                clearBranchPreview: !(hasBranchRules && selectedBranchRuleIndex >= 0),
-            },
-        });
-
-        if (hasBranchRules && selectedBranchRuleIndex >= 0) {
-            vscode.postMessage({
-                command: 'previewBranchRule',
-                data: {
-                    index: selectedBranchRuleIndex,
-                    tableName,
-                    repoIndex: selectedRepoRuleIndex,
-                },
-            });
-        }
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= rules.length || toIndex >= rules.length || fromIndex === toIndex) {
+        return false;
     }
+
+    // Build reordered copy without mutating currentConfig so UI waits for backend echo
+    const newRules = [...rules];
+    const [moved] = newRules.splice(fromIndex, 1);
+    newRules.splice(toIndex, 0, moved);
+
+    let newConfig = { ...currentConfig } as any;
+    let newSelectedRepoIndex = selectedRepoRuleIndex;
+    let newSelectedBranchIndex = selectedBranchRuleIndex;
+    let selectedTableName: string | null = tableName || null;
+
+    if (ruleType === 'repo') {
+        newConfig = { ...newConfig, repoRules: newRules };
+
+        newSelectedRepoIndex = adjustIndexAfterMove(selectedRepoRuleIndex, fromIndex, toIndex);
+
+        const selectedRule =
+            newSelectedRepoIndex >= 0 && newSelectedRepoIndex < newConfig.repoRules.length
+                ? newConfig.repoRules[newSelectedRepoIndex]
+                : undefined;
+        selectedTableName = selectedRule ? selectedRule.branchTableName || '__none__' : null;
+        newSelectedBranchIndex = selectedTableName && selectedTableName !== '__none__' ? selectedBranchRuleIndex : -1;
+    } else {
+        if (!tableName || !currentConfig?.sharedBranchTables?.[tableName]) return false;
+
+        const newSharedBranchTables = {
+            ...currentConfig.sharedBranchTables,
+            [tableName]: {
+                ...currentConfig.sharedBranchTables[tableName],
+                rules: newRules,
+            },
+        };
+
+        newConfig = { ...newConfig, sharedBranchTables: newSharedBranchTables };
+        newSelectedBranchIndex = adjustIndexAfterMove(selectedBranchRuleIndex, fromIndex, toIndex);
+        selectedTableName = tableName;
+    }
+
+    // Defer preview until canonical config is echoed back to avoid stale colors
+    pendingPreviewAfterConfig = true;
+
+    // Update local selection indices so follow-up interactions use the right rule before backend echo
+    selectedRepoRuleIndex = newSelectedRepoIndex;
+    selectedBranchRuleIndex = newSelectedBranchIndex;
+
+    // Send updated selection to backend without mutating local UI state
+    const repoSelection = newSelectedRepoIndex >= 0 ? newSelectedRepoIndex : null;
+    const tableSelection = selectedTableName && selectedTableName !== '__none__' ? selectedTableName : null;
+    const branchSelection = tableSelection && newSelectedBranchIndex >= 0 ? newSelectedBranchIndex : null;
+    sendSelectionUpdateWith(repoSelection, branchSelection, tableSelection, previewMode, false);
+
+    vscode.postMessage({
+        command: 'updateConfig',
+        data: newConfig,
+    });
+
+    return true;
+}
+
+function getRulesForDrag(ruleType: string) {
+    const ctx = getRuleContext(ruleType);
+    return ctx ? ctx.rules : null;
+}
+
+function triggerPreviewForSelection() {
+    // Deprecated: preview is applied by backend on selection updates
 }
 
 function handleDragStart(event: DragEvent, index: number, ruleType: string) {
@@ -5184,47 +5077,20 @@ function handleDrop(event: DragEvent, targetIndex: number, targetType: string) {
         return;
     }
 
-    const rules = getRulesForDrag(targetType);
-    if (!rules) return;
+    const ctx = getRuleContext(targetType);
+    if (!ctx) return;
+    const rules = ctx.rules;
 
-    // Remove the dragged item
-    const draggedItem = rules.splice(draggedIndex, 1)[0];
-
-    // Calculate the correct insert position
+    // Calculate desired insert index after removal
     let insertIndex = targetIndex;
-
-    // If we removed an item before the target position, adjust the insert index
     if (draggedIndex < targetIndex) {
         insertIndex = targetIndex - 1;
     }
-
-    // Handle the special case where targetIndex is rules.length (insert at the very end)
     if (targetIndex >= rules.length) {
-        insertIndex = rules.length;
+        insertIndex = rules.length - 1;
     }
 
-    rules.splice(insertIndex, 0, draggedItem);
-
-    // Keep the same rule selected after reordering
-    if (draggedType === 'repo') {
-        selectedRepoRuleIndex = adjustIndexAfterMove(selectedRepoRuleIndex, draggedIndex, insertIndex);
-    } else if (draggedType === 'branch') {
-        selectedBranchRuleIndex = adjustIndexAfterMove(selectedBranchRuleIndex, draggedIndex, insertIndex);
-    }
-
-    // Re-render locally for visual order
-    if (draggedType === 'repo' && currentConfig?.repoRules) {
-        renderRepoRules(currentConfig.repoRules, currentConfig.matchingIndexes?.repoRule);
-        renderBranchRulesForSelectedRepo();
-    } else if (draggedType === 'branch') {
-        renderBranchRulesForSelectedRepo();
-    }
-
-    // Send updated preview immediately based on the new selection/order
-    triggerPreviewForSelection();
-
-    // Persist the new order
-    sendConfiguration();
+    reorderRule(targetType, draggedIndex, insertIndex);
 
     // Reset drag state
     draggedIndex = -1;
@@ -5426,6 +5292,41 @@ function sendConfiguration() {
     });
 }
 
+function sendSelectionUpdate() {
+    const selectedRepo = selectedRepoRuleIndex >= 0 ? selectedRepoRuleIndex : null;
+    const tableName =
+        selectedRepoRuleIndex >= 0 && currentConfig?.repoRules?.[selectedRepoRuleIndex]
+            ? currentConfig.repoRules[selectedRepoRuleIndex].branchTableName || '__none__'
+            : null;
+    const selectedBranch = tableName && tableName !== '__none__' ? selectedBranchRuleIndex : null;
+
+    sendSelectionUpdateWith(
+        selectedRepo,
+        selectedBranch,
+        tableName && tableName !== '__none__' ? tableName : null,
+        previewMode,
+    );
+}
+
+function sendSelectionUpdateWith(
+    selectedRepo: number | null,
+    selectedBranch: number | null,
+    selectedBranchTableName: string | null,
+    previewModeEnabled: boolean,
+    apply: boolean = true,
+) {
+    vscode.postMessage({
+        command: 'updateSelection',
+        data: {
+            selectedRepoRuleIndex: selectedRepo,
+            selectedBranchRuleIndex: selectedBranch,
+            selectedBranchTableName,
+            previewMode: previewModeEnabled,
+            apply,
+        },
+    });
+}
+
 function openColorPicker(ruleType: string, index: number, field: string) {
     // Check if this is a profile-based repo rule
     if (ruleType === 'repo' && field === 'primaryColor') {
@@ -5449,12 +5350,12 @@ function openColorPicker(ruleType: string, index: number, field: string) {
         }
     }
 
-    vscode.postMessage({
-        command: 'openColorPicker',
-        data: {
-            colorPickerData: { ruleType, index, field },
-        },
-    });
+    // vscode.postMessage({
+    //     command: 'openColorPicker',
+    //     data: {
+    //         colorPickerData: { ruleType, index, field },
+    //     },
+    // });
 }
 
 function updateColorInUI(ruleType: string, ruleIndex: number, field: string, color: string) {

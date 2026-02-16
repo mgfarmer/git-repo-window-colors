@@ -43,7 +43,6 @@ export interface WebviewMessage {
         | 'updateConfig'
         | 'updateThemedColor'
         | 'requestConfig'
-        | 'openColorPicker'
         | 'addRepoRule'
         | 'confirmDelete'
         | 'exportConfig'
@@ -69,7 +68,8 @@ export interface WebviewMessage {
         | 'registerTourCommand'
         | 'saveHelpPanelWidth'
         | 'dismissTourLink'
-        | 'startTour';
+        | 'startTour'
+        | 'updateSelection';
     data: {
         repoRules?: RepoRule[];
         branchRules?: BranchRule[];
@@ -127,5 +127,9 @@ export interface WebviewMessage {
         profileName?: string;
         algorithm?: string;
         skipToast?: boolean;
+        // Selection state
+        selectedRepoRuleIndex?: number | null;
+        selectedBranchRuleIndex?: number | null;
+        selectedBranchTableName?: string | null;
     };
 }

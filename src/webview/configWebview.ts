@@ -13,10 +13,6 @@ import {
 } from '../extension';
 //import { outputChannel } from '../extension';
 
-// Build-time configuration for color picker type
-// Set to false to use VS Code's input dialog, true to use native HTML color picker
-const USE_NATIVE_COLOR_PICKER = true;
-
 // Development mode configuration
 // Set to true to show the Run Tests button for debugging/development
 const DEVELOPMENT_MODE = false;
@@ -53,9 +49,15 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     private _previewRepoRuleIndex: number | null = null;
     private _previewBranchRuleContext: { index: number; tableName: string } | null = null;
     private _previewModeEnabled: boolean = false;
+    private _selectedRepoRuleIndex: number | null = null;
+    private _selectedBranchRuleContext: { index: number; tableName: string } | null = null;
+    private _lastMatchingRepoRuleIndex: number = -1;
+    private _lastMatchingBranchRuleIndex: number = -1;
+    private _lastMatchingBranchTableName: string | null = null;
     private _registeredTourCommands: Map<string, vscode.Disposable> = new Map();
     private _tourInfo: Map<string, { commandTitle: string }> = new Map();
     private _lastSentThemeKind: ThemeKind | null = null;
+    private _configRefreshTimer: NodeJS.Timeout | undefined;
 
     constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
         this._extensionUri = extensionUri;
@@ -63,11 +65,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Set up configuration listener once
         this._configurationListener = vscode.workspace.onDidChangeConfiguration((event) => {
-            if (event.affectsConfiguration('windowColors')) {
+            const windowColorsChanged = event.affectsConfiguration('windowColors');
+            const colorCustomizationsChanged = event.affectsConfiguration('workbench.colorCustomizations');
+
+            if (windowColorsChanged) {
+                // || colorCustomizationsChanged) {
                 // Note: We don't refresh for themed color updates because
                 // _handleThemedColorUpdate sends the data directly
-                this._sendConfigurationToWebview();
-            } else if (event.affectsConfiguration('workbench.colorTheme')) {
+                console.log(
+                    '[ConfigWebviewProvider] Configuration changed - windowColorsChanged:',
+                    windowColorsChanged,
+                    'colorCustomizationsChanged:',
+                    colorCustomizationsChanged,
+                );
+                this._debouncedSendConfigurationToWebview();
+            }
+
+            if (event.affectsConfiguration('workbench.colorTheme')) {
                 // Notify webview of theme change
                 this._sendThemeToWebview();
             }
@@ -94,6 +108,17 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
+    private _debouncedSendConfigurationToWebview(): void {
+        if (this._configRefreshTimer) {
+            clearTimeout(this._configRefreshTimer);
+        }
+
+        this._configRefreshTimer = setTimeout(() => {
+            this._configRefreshTimer = undefined;
+            this._sendConfigurationToWebview();
+        }, 50);
+    }
+
     public getPreviewRepoRuleIndex(): number | null {
         return this._previewRepoRuleIndex;
     }
@@ -104,22 +129,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
     public isPreviewModeEnabled(): boolean {
         return this._previewModeEnabled;
-    }
-
-    private async _waitForColorCustomizationsUpdate(): Promise<void> {
-        return new Promise<void>((resolve) => {
-            const disposable = vscode.workspace.onDidChangeConfiguration((event) => {
-                if (event.affectsConfiguration('workbench.colorCustomizations')) {
-                    disposable.dispose();
-                    resolve();
-                }
-            });
-            // Timeout after 1 second in case the event doesn't fire
-            setTimeout(() => {
-                disposable.dispose();
-                resolve();
-            }, 1000);
-        });
     }
 
     public showAndAddRepoRule(extensionUri: vscode.Uri, repoQualifier: string, primaryColor: string = ''): void {
@@ -196,14 +205,14 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             case 'requestConfig':
                 this._sendConfigurationToWebview();
                 break;
+            case 'updateSelection':
+                this._updateSelection(message.data);
+                break;
             case 'updateConfig':
                 await this._updateConfiguration(message.data);
                 break;
             case 'updateThemedColor':
                 await this._handleThemedColorUpdate(message.data);
-                break;
-            case 'openColorPicker':
-                this._openColorPicker(message.data.colorPickerData!);
                 break;
             case 'confirmDelete':
                 if (message.data && (message.data as any).type === 'profile') {
@@ -251,39 +260,28 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 await this._sendHelpContent(message.data.helpType || 'getting-started');
                 break;
             case 'previewRepoRule':
-                this._previewRepoRuleIndex = (message.data as any).index;
-                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
-                // Clear branch preview if requested (avoids double doit() call)
-                if ((message.data as any).clearBranchPreview) {
-                    this._previewBranchRuleContext = null;
-                }
-
-                // Pass preview mode as true
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
-                // Wait for colorCustomizations to update before refreshing
-                await this._waitForColorCustomizationsUpdate();
-                this._sendConfigurationToWebview();
+                this._updateSelection({
+                    selectedRepoRuleIndex: (message.data as any).index,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: true,
+                });
                 break;
             case 'previewBranchRule':
-                this._previewBranchRuleContext = {
-                    index: (message.data as any).index,
-                    tableName: (message.data as any).tableName || 'Default Rules',
-                };
-                this._previewRepoRuleIndex = (message.data as any).repoIndex ?? null;
-                this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
-                // Pass preview mode as true
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview mode', true);
-                // Wait for colorCustomizations to update before refreshing
-                await this._waitForColorCustomizationsUpdate();
-                this._sendConfigurationToWebview();
+                this._updateSelection({
+                    selectedRepoRuleIndex: (message.data as any).repoIndex ?? null,
+                    selectedBranchRuleIndex: (message.data as any).index,
+                    selectedBranchTableName: (message.data as any).tableName || 'Default Rules',
+                    previewMode: true,
+                });
                 break;
             case 'clearPreview':
-                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
-                // Pass preview mode as false to use matching rules
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared preview', false);
-                // Wait for colorCustomizations to update before refreshing
-                await this._waitForColorCustomizationsUpdate();
-                this._sendConfigurationToWebview();
+                this._updateSelection({
+                    selectedRepoRuleIndex: this._selectedRepoRuleIndex,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: false,
+                });
                 break;
             case 'previewProfile':
                 // Apply a profile preview without matching - just use the profile directly
@@ -292,28 +290,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 this._previewModeEnabled = (message.data as any).previewEnabled ?? true;
                 // Pass preview mode as true
                 await vscode.commands.executeCommand('_grwc.internal.applyColors', 'preview profile', true);
-                // Wait for colorCustomizations to update before refreshing
-                await this._waitForColorCustomizationsUpdate();
-                this._sendConfigurationToWebview();
+                // _configurationListener will refresh after colorCustomizations update
                 break;
             case 'clearProfilePreview':
-                this._previewModeEnabled = (message.data as any)?.previewEnabled ?? false;
-                this._previewRepoRuleIndex = null;
-                this._previewBranchRuleContext = null;
-                // Pass preview mode as false to use matching rules
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared profile preview', false);
-                // Wait for colorCustomizations to update before refreshing
-                await this._waitForColorCustomizationsUpdate();
-                this._sendConfigurationToWebview();
+                this._updateSelection({
+                    selectedRepoRuleIndex: null,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: false,
+                });
                 break;
             case 'clearBranchPreview':
-                // Clear branch preview context while keeping repo preview active
-                this._previewBranchRuleContext = null;
-                // Reapply colors with the current repo preview but no branch preview
-                await vscode.commands.executeCommand('_grwc.internal.applyColors', 'cleared branch preview', true);
-                // Wait for colorCustomizations to update before refreshing
-                await this._waitForColorCustomizationsUpdate();
-                this._sendConfigurationToWebview();
+                this._updateSelection({
+                    selectedRepoRuleIndex: this._selectedRepoRuleIndex,
+                    selectedBranchRuleIndex: null,
+                    selectedBranchTableName: null,
+                    previewMode: true,
+                });
                 break;
             case 'generatePalette':
                 await this._handlePaletteGeneration(message.data.paletteData!);
@@ -366,7 +359,12 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             return;
         }
 
-        console.log('[_sendConfigurationToWebview] Called from:', new Error().stack?.split('\n')[2]?.trim());
+        console.log(
+            '[_sendConfigurationToWebview]',
+            new Date().toISOString(),
+            'Called from:',
+            new Error().stack?.split('\n')[2]?.trim(),
+        );
 
         const repoRules = this._getRepoRules();
         const sharedBranchTables = this._getSharedBranchTables();
@@ -459,6 +457,23 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             };
         }
 
+        const selection = this._getSelectionState(
+            repoRules,
+            sharedBranchTables,
+            matchingRepoRuleIndex,
+            matchingBranchRuleIndex,
+        );
+        this._selectedRepoRuleIndex = selection.repoRuleIndex;
+        this._selectedBranchRuleContext = selection.branchRuleContext;
+
+        // Track latest matching info so the next refresh can tell if the user was following the match
+        this._lastMatchingRepoRuleIndex = matchingRepoRuleIndex;
+        this._lastMatchingBranchRuleIndex = matchingBranchRuleIndex;
+        this._lastMatchingBranchTableName =
+            matchingRepoRuleIndex >= 0 && repoRules[matchingRepoRuleIndex]
+                ? repoRules[matchingRepoRuleIndex].branchTableName || '__none__'
+                : null;
+
         const msgData = {
             ...this.currentConfig,
             workspaceInfo,
@@ -482,6 +497,8 @@ export class ConfigWebviewProvider implements vscode.Disposable {
             },
             previewRepoRuleIndex: this._previewRepoRuleIndex,
             previewBranchRuleContext: this._previewBranchRuleContext,
+            selectedRepoRuleIndex: selection.repoRuleIndex,
+            selectedBranchRuleContext: selection.branchRuleContext,
         };
 
         console.log('[_sendConfigurationToWebview] Sending workspaceInfo to webview:', workspaceInfo);
@@ -1065,34 +1082,30 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         try {
+            // windowColors is not registered as a root object, so we must update individual properties
             const config = vscode.workspace.getConfiguration('windowColors');
             const updatePromises: Promise<void>[] = [];
 
-            // Update repository rules
+            const deepEqual = (a: any, b: any): boolean => {
+                try {
+                    return JSON.stringify(a) === JSON.stringify(b);
+                } catch {
+                    return a === b;
+                }
+            };
+
             if (data.repoRules) {
                 const repoRulesArray = data.repoRules.map((rule: RepoRule) => {
                     const formatted = this._formatRepoRule(rule);
                     return formatted;
                 });
-                updatePromises.push(Promise.resolve(config.update('repoRules', repoRulesArray, true)));
+                const currentRepoRules = config.get('repoRules');
+                if (!deepEqual(currentRepoRules, repoRulesArray)) {
+                    updatePromises.push(Promise.resolve(config.update('repoRules', repoRulesArray, true)));
+                }
             }
 
-            // Update branch rules
-            if (data.branchRules) {
-                const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
-                    // Always return JSON object format
-                    return {
-                        pattern: rule.pattern,
-                        color: rule.color,
-                        enabled: rule.enabled !== undefined ? rule.enabled : true,
-                    };
-                });
-                updatePromises.push(Promise.resolve(config.update('branchConfigurationList', branchRulesArray, true)));
-            }
-
-            // Update shared branch tables
             if (data.sharedBranchTables) {
-                // Log any rules with profileName set
                 Object.entries(data.sharedBranchTables).forEach(([tableName, table]: [string, any]) => {
                     table.rules?.forEach((rule: any, index: number) => {
                         if (rule.profileName) {
@@ -1102,53 +1115,152 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         }
                     });
                 });
-                updatePromises.push(
-                    Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
-                );
+                const currentSharedTables = config.get('sharedBranchTables');
+                if (!deepEqual(currentSharedTables, data.sharedBranchTables)) {
+                    updatePromises.push(
+                        Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
+                    );
+                }
             }
 
-            // Update advanced profiles
             if (data.advancedProfiles) {
-                updatePromises.push(Promise.resolve(config.update('advancedProfiles', data.advancedProfiles, true)));
+                const currentAdvancedProfiles = config.get('advancedProfiles');
+                if (!deepEqual(currentAdvancedProfiles, data.advancedProfiles)) {
+                    updatePromises.push(
+                        Promise.resolve(config.update('advancedProfiles', data.advancedProfiles, true)),
+                    );
+                }
             }
 
-            // Update other settings
             if (data.otherSettings) {
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
-                    let value = settings[key as keyof OtherSettings];
+                    const rawValue = settings[key as keyof OtherSettings];
+                    let value = rawValue;
 
-                    // Ensure proper type coercion to prevent writing "true"/"false" strings
-                    // instead of actual boolean values
                     if (key === 'activityBarColorKnob') {
-                        // Ensure number type
-                        value = typeof value === 'string' ? parseInt(value, 10) : value;
+                        value = typeof rawValue === 'string' ? parseInt(rawValue, 10) : rawValue;
                     } else {
-                        // All other settings are booleans - ensure boolean type
-                        if (typeof value === 'string') {
-                            value = value === 'true';
+                        if (typeof rawValue === 'string') {
+                            value = rawValue === 'true';
                         } else {
-                            value = Boolean(value);
+                            value = Boolean(rawValue);
                         }
                     }
 
-                    updatePromises.push(Promise.resolve(config.update(key, value, true)));
+                    const currentValue = config.get(key);
+                    if (!deepEqual(currentValue, value)) {
+                        updatePromises.push(Promise.resolve(config.update(key, value, true)));
+                    }
                 });
             }
 
+            //const startTime = performance.now();
             await Promise.all(updatePromises);
-            console.log('[GRWC] Configuration saved, waiting 100ms for propagation...');
-
-            // Wait a bit for VS Code to propagate the configuration changes
-            // The onDidChangeConfiguration event will automatically call doit() to apply colors
-            await new Promise((resolve) => setTimeout(resolve, 100));
-
-            // Refresh the webview to recalculate matching indexes
-            this._sendConfigurationToWebview();
+            //const endTime = performance.now();
+            // console.log(
+            //     `[_updateConfiguration] Promise.all() took ${(endTime - startTime).toFixed(2)}ms; updates applied: ${updatePromises.length}`,
+            // );
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);
         }
+    }
+
+    private _updateSelection(data: any): void {
+        const repoIndex = typeof data.selectedRepoRuleIndex === 'number' ? data.selectedRepoRuleIndex : null;
+        const branchIndex = typeof data.selectedBranchRuleIndex === 'number' ? data.selectedBranchRuleIndex : null;
+        const tableName = data.selectedBranchTableName ?? null;
+        const previewModeFlag = data.previewMode === true;
+
+        this._selectedRepoRuleIndex = repoIndex;
+
+        if (tableName && branchIndex !== null && branchIndex !== undefined) {
+            this._selectedBranchRuleContext = { index: branchIndex, tableName };
+        } else {
+            this._selectedBranchRuleContext = null;
+        }
+
+        // Keep preview state aligned with selection when preview mode is enabled
+        this._previewModeEnabled = previewModeFlag;
+        this._previewRepoRuleIndex = previewModeFlag ? repoIndex : null;
+        this._previewBranchRuleContext =
+            previewModeFlag && tableName && branchIndex !== null && branchIndex !== undefined
+                ? { index: branchIndex, tableName }
+                : null;
+        // Apply colors using the updated preview selection (or matching when preview off)
+        if (data.apply) {
+            vscode.commands.executeCommand('_grwc.internal.applyColors', 'selection change', previewModeFlag);
+        }
+    }
+
+    private _getSelectionState(
+        repoRules: RepoRule[],
+        sharedBranchTables: { [key: string]: { rules: BranchRule[] } },
+        matchingRepoRuleIndex: number,
+        matchingBranchRuleIndex: number,
+    ): { repoRuleIndex: number; branchRuleContext: { index: number; tableName: string } | null } {
+        const isValidRepo = (idx: number | null): idx is number => idx !== null && idx >= 0 && idx < repoRules.length;
+
+        const prevMatchingRepoIndex = this._lastMatchingRepoRuleIndex;
+        const followedPrevMatchingRepo =
+            prevMatchingRepoIndex !== -1 && this._selectedRepoRuleIndex === prevMatchingRepoIndex;
+
+        let repoRuleIndex = isValidRepo(this._selectedRepoRuleIndex)
+            ? (this._selectedRepoRuleIndex as number)
+            : isValidRepo(matchingRepoRuleIndex)
+              ? matchingRepoRuleIndex
+              : -1;
+
+        // If the user was following the previously-matched repo rule, keep them aligned to the new match
+        if (
+            followedPrevMatchingRepo &&
+            isValidRepo(matchingRepoRuleIndex) &&
+            matchingRepoRuleIndex !== prevMatchingRepoIndex
+        ) {
+            repoRuleIndex = matchingRepoRuleIndex;
+        }
+
+        // If selection points to a repo that no longer exists, clear it
+        if (!isValidRepo(repoRuleIndex)) {
+            repoRuleIndex = -1;
+        }
+
+        // Resolve branch selection within the selected repo's table
+        let branchRuleContext: { index: number; tableName: string } | null = null;
+
+        const tableName = repoRuleIndex >= 0 ? repoRules[repoRuleIndex].branchTableName || '__none__' : '__none__';
+        const branchRules = tableName !== '__none__' ? sharedBranchTables[tableName]?.rules || [] : [];
+        const isValidBranch = (idx: number | null): idx is number =>
+            idx !== null && idx >= 0 && idx < branchRules.length;
+
+        const prevMatchingTableName = this._lastMatchingBranchTableName || '__none__';
+        const followedPrevMatchingBranch =
+            followedPrevMatchingRepo &&
+            this._selectedBranchRuleContext &&
+            this._selectedBranchRuleContext.tableName === prevMatchingTableName &&
+            this._selectedBranchRuleContext.index === this._lastMatchingBranchRuleIndex;
+
+        // If the matching repo/table changed and the user was following the match, move the branch selection too
+        if (
+            tableName !== '__none__' &&
+            followedPrevMatchingBranch &&
+            isValidBranch(matchingBranchRuleIndex) &&
+            (matchingBranchRuleIndex !== this._lastMatchingBranchRuleIndex || tableName !== prevMatchingTableName)
+        ) {
+            branchRuleContext = { index: matchingBranchRuleIndex, tableName };
+        } else if (
+            tableName !== '__none__' &&
+            this._selectedBranchRuleContext &&
+            this._selectedBranchRuleContext.tableName === tableName &&
+            isValidBranch(this._selectedBranchRuleContext.index)
+        ) {
+            branchRuleContext = { index: this._selectedBranchRuleContext.index, tableName };
+        } else if (tableName !== '__none__' && isValidBranch(matchingBranchRuleIndex)) {
+            branchRuleContext = { index: matchingBranchRuleIndex, tableName };
+        }
+
+        return { repoRuleIndex, branchRuleContext };
     }
 
     /**
@@ -1740,54 +1852,6 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private _openColorPicker(colorPickerData: any): void {
-        // Skip VS Code color picker if using native HTML color picker
-        if (USE_NATIVE_COLOR_PICKER) {
-            // Native color picker handles color selection directly in the webview
-            return;
-        }
-
-        if (!colorPickerData) {
-            vscode.window.showErrorMessage('Invalid color picker data');
-            return;
-        }
-
-        const { ruleType, ruleIndex, colorType } = colorPickerData;
-
-        // Get current color
-        let currentColor = '#0066cc'; // default
-        if (ruleType === 'repo' && this.currentConfig?.repoRules?.[ruleIndex]) {
-            const rule = this.currentConfig.repoRules[ruleIndex];
-            currentColor = colorType === 'primary' ? rule.primaryColor : rule.branchColor || '#0066cc';
-        } else if (ruleType === 'branch' && this.currentConfig?.branchRules?.[ruleIndex]) {
-            currentColor = this.currentConfig.branchRules[ruleIndex].color;
-        }
-
-        // Use VS Code input dialog for color selection
-        vscode.window
-            .showInputBox({
-                prompt: `Enter a color for ${ruleType} rule ${ruleIndex + 1} (${colorType})`,
-                value: currentColor,
-                placeHolder: 'e.g., blue, #FF0000, rgb(255,0,0)',
-            })
-            .then((color: string | undefined) => {
-                if (color !== undefined) {
-                    // Send the new color back to webview
-                    if (this._panel) {
-                        this._panel.webview.postMessage({
-                            command: 'colorPicked',
-                            data: {
-                                ruleType,
-                                ruleIndex,
-                                colorType,
-                                color,
-                            },
-                        });
-                    }
-                }
-            });
-    }
-
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Get the CSS file URI
         const cssUri = webview.asWebviewUri(
@@ -2193,6 +2257,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
     }
 
     public dispose(): void {
+        if (this._configRefreshTimer) {
+            clearTimeout(this._configRefreshTimer);
+            this._configRefreshTimer = undefined;
+        }
+
         this._onPanelDisposed();
 
         // Dispose configuration listener explicitly
