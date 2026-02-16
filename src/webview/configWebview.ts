@@ -116,7 +116,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         this._configRefreshTimer = setTimeout(() => {
             this._configRefreshTimer = undefined;
             this._sendConfigurationToWebview();
-        }, 200);
+        }, 50);
     }
 
     public getPreviewRepoRuleIndex(): number | null {
@@ -1082,34 +1082,30 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
 
         try {
+            // windowColors is not registered as a root object, so we must update individual properties
             const config = vscode.workspace.getConfiguration('windowColors');
             const updatePromises: Promise<void>[] = [];
 
-            // Update repository rules
+            const deepEqual = (a: any, b: any): boolean => {
+                try {
+                    return JSON.stringify(a) === JSON.stringify(b);
+                } catch {
+                    return a === b;
+                }
+            };
+
             if (data.repoRules) {
                 const repoRulesArray = data.repoRules.map((rule: RepoRule) => {
                     const formatted = this._formatRepoRule(rule);
                     return formatted;
                 });
-                updatePromises.push(Promise.resolve(config.update('repoRules', repoRulesArray, true)));
+                const currentRepoRules = config.get('repoRules');
+                if (!deepEqual(currentRepoRules, repoRulesArray)) {
+                    updatePromises.push(Promise.resolve(config.update('repoRules', repoRulesArray, true)));
+                }
             }
 
-            // Update branch rules
-            // if (data.branchRules) {
-            //     const branchRulesArray = data.branchRules.map((rule: BranchRule | any) => {
-            //         // Always return JSON object format
-            //         return {
-            //             pattern: rule.pattern,
-            //             color: rule.color,
-            //             enabled: rule.enabled !== undefined ? rule.enabled : true,
-            //         };
-            //     });
-            //     updatePromises.push(Promise.resolve(config.update('branchConfigurationList', branchRulesArray, true)));
-            // }
-
-            // Update shared branch tables
             if (data.sharedBranchTables) {
-                // Log any rules with profileName set
                 Object.entries(data.sharedBranchTables).forEach(([tableName, table]: [string, any]) => {
                     table.rules?.forEach((rule: any, index: number) => {
                         if (rule.profileName) {
@@ -1119,49 +1115,52 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                         }
                     });
                 });
-                updatePromises.push(
-                    Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
-                );
+                const currentSharedTables = config.get('sharedBranchTables');
+                if (!deepEqual(currentSharedTables, data.sharedBranchTables)) {
+                    updatePromises.push(
+                        Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
+                    );
+                }
             }
 
-            // Update advanced profiles
             if (data.advancedProfiles) {
-                updatePromises.push(Promise.resolve(config.update('advancedProfiles', data.advancedProfiles, true)));
+                const currentAdvancedProfiles = config.get('advancedProfiles');
+                if (!deepEqual(currentAdvancedProfiles, data.advancedProfiles)) {
+                    updatePromises.push(
+                        Promise.resolve(config.update('advancedProfiles', data.advancedProfiles, true)),
+                    );
+                }
             }
 
-            // Update other settings
             if (data.otherSettings) {
                 const settings = data.otherSettings as OtherSettings;
                 Object.keys(settings).forEach((key) => {
-                    let value = settings[key as keyof OtherSettings];
+                    const rawValue = settings[key as keyof OtherSettings];
+                    let value = rawValue;
 
-                    // Ensure proper type coercion to prevent writing "true"/"false" strings
-                    // instead of actual boolean values
                     if (key === 'activityBarColorKnob') {
-                        // Ensure number type
-                        value = typeof value === 'string' ? parseInt(value, 10) : value;
+                        value = typeof rawValue === 'string' ? parseInt(rawValue, 10) : rawValue;
                     } else {
-                        // All other settings are booleans - ensure boolean type
-                        if (typeof value === 'string') {
-                            value = value === 'true';
+                        if (typeof rawValue === 'string') {
+                            value = rawValue === 'true';
                         } else {
-                            value = Boolean(value);
+                            value = Boolean(rawValue);
                         }
                     }
 
-                    updatePromises.push(Promise.resolve(config.update(key, value, true)));
+                    const currentValue = config.get(key);
+                    if (!deepEqual(currentValue, value)) {
+                        updatePromises.push(Promise.resolve(config.update(key, value, true)));
+                    }
                 });
             }
 
+            //const startTime = performance.now();
             await Promise.all(updatePromises);
-            console.log('[GRWC] Configuration saved, waiting 100ms for propagation...');
-
-            // Wait a bit for VS Code to propagate the configuration changes
-            // The onDidChangeConfiguration event will automatically call doit() to apply colors
-            //await new Promise((resolve) => setTimeout(resolve, 100));
-
-            // Refresh the webview to recalculate matching indexes
-            //this._sendConfigurationToWebview();
+            //const endTime = performance.now();
+            // console.log(
+            //     `[_updateConfiguration] Promise.all() took ${(endTime - startTime).toFixed(2)}ms; updates applied: ${updatePromises.length}`,
+            // );
         } catch (error) {
             console.error('Failed to update configuration:', error);
             vscode.window.showErrorMessage('Failed to update configuration: ' + (error as Error).message);
