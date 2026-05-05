@@ -159,7 +159,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         // Create new panel
         this._panel = vscode.window.createWebviewPanel(
             'grwcConfig', // Identifies the type of the webview
-            'Git Repo Window Colors Configuration', // Title of the panel displayed to the user
+            'GitHueMan Configuration', // Title of the panel displayed to the user
             column || vscode.ViewColumn.One, // Editor column to show the new webview panel in
             {
                 // Enable javascript in the webview
@@ -1892,7 +1892,7 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 connect-src ${webview.cspSource};">
             
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Git Repo Window Colors Configuration</title>
+            <title>GitHueMan Configuration</title>
             <link href="${codiconUri}" rel="stylesheet">
             <link href="${cssUri}" rel="stylesheet">
             <link href="${helpCssUri}" rel="stylesheet">

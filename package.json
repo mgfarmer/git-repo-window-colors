@@ -1,9 +1,9 @@
 {
     "name": "git-repo-window-colors",
-    "displayName": "Git Repo Window Colors",
+    "displayName": "GitHueMan",
     "description": "Visually distinguish VS Code windows with configurable and automatic coloring based on repository, branch, or local folder. Supports customizable rules, reusable color profiles, and it works with your preferred theme, because you are in control.",
-    "icon": "img/grwc-icon.png",
-    "version": "1.5.21",
+    "icon": "img/GitHueManIcon.png",
+    "version": "1.5.26",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -44,48 +44,48 @@
             {
                 "command": "windowColors.colorize",
                 "title": "Colorize this repo",
-                "category": "GRWC"
+                "category": "GitHueMan"
             },
             {
                 "command": "windowColors.decolorize",
                 "title": "Decolorize this repo",
-                "category": "GRWC"
+                "category": "GitHueMan"
             },
             {
                 "command": "windowColors.openConfig",
                 "title": "Open Configuration",
-                "category": "GRWC"
+                "category": "GitHueMan"
             },
             {
                 "command": "windowColors.clearFirstTimeFlag",
                 "title": "Clear First Time Flag (Debug)",
-                "category": "GRWC"
+                "category": "GitHueMan"
             },
             {
                 "command": "windowColors.exportConfig",
                 "title": "Export Configuration",
-                "category": "GRWC"
+                "category": "GitHueMan"
             },
             {
                 "command": "windowColors.importConfig",
                 "title": "Import Configuration",
-                "category": "GRWC"
+                "category": "GitHueMan"
             },
             {
                 "command": "windowColors.startTour",
                 "title": "Start Tour...",
-                "category": "GRWC"
+                "category": "GitHueMan"
             },
             {
                 "command": "windowColors.resetHintFlags",
                 "title": "Show Hints Again",
-                "category": "GRWC"
+                "category": "GitHueMan"
             }
         ],
         "configuration": [
             {
                 "type": "object",
-                "title": "Git Repo Window Colors",
+                "title": "GitHueMan",
                 "properties": {
                     "windowColors.repoRules": {
                         "order": 1,

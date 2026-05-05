@@ -1,14 +1,14 @@
-# Copilot Instructions for Git Repo Window Colors VS Code Extension
+# Copilot Instructions for GitHueMan VS Code Extension
 
 ## Repository Overview
 
-This is a Visual Studio Code extension called "Git Repo Window Colors" that customizes VS Code window colors (title bar, activity bar, tabs, status bar) based on the git repository name and current branch. The extension helps users visually differentiate between multiple VS Code windows when working on different repositories or branches.
+This is a Visual Studio Code extension called "GitHueMan" (formerly "Git Repo Window Colors" / GRWC) that customizes VS Code window colors (title bar, activity bar, tabs, status bar) based on the git repository name and current branch. The extension helps users visually differentiate between multiple VS Code windows when working on different repositories or branches.
 
 **Latest Update**: The extension now features a comprehensive webview-based configuration interface with drag-and-drop rule management, built-in color pickers, comprehensive testing, and full accessibility support.
 
 ## Key Information
 
--   **Extension Name**: Git Repo Window Colors
+-   **Extension Name**: GitHueMan
 -   **Publisher**: KevinMills
 -   **Current Version**: 1.2.0
 -   **Repository**: mgfarmer/git-repo-window-colors
@@ -122,7 +122,7 @@ This is a Visual Studio Code extension called "Git Repo Window Colors" that cust
 
 ### Output Channel
 
-Extension logs to "Git Repo Window Colors" output channel for debugging.
+Extension logs to "GitHueMan" output channel for debugging.
 
 ### Error Handling
 

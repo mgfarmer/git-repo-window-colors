@@ -14,3 +14,9 @@ node_modules/**
 **/*.psd
 features/
 copilot-instructions.md
+scripts/
+.serena/
+.mocharc.cjs
+TODO.md
+CLAUDE.md
+.github/

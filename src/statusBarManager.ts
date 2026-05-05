@@ -76,7 +76,7 @@ export function shouldShowStatusBar(
  * @returns Appropriate tooltip text
  */
 export function getStatusBarTooltip(rules: RepoConfig[] | undefined, context: WorkspaceContext | undefined): string {
-    const baseTooltip = 'Git Repo Window Colors';
+    const baseTooltip = 'GitHueMan';
 
     // No context - use generic tooltip
     if (!context || (!context.repoUrl && !context.workspaceFolder)) {

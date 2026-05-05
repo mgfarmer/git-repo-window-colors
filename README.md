@@ -1,4 +1,6 @@
-# Git Repo Window Colors
+# GitHueMan
+
+> 📢 **Note:** GRWC (Git Repo Window Colors) is now **GitHueMan** - same great extension, better name!
 
 **Never lose track of which repository you're working in again.**
 
@@ -330,11 +332,11 @@ Quick access to essential functions:
 
 | Command | Purpose |
 |---------|---------|
-| `GRWC: Open Configuration` | Open full configuration UI *(recommended)* |
-| `GRWC: Colorize this repo` | Quick-add current repository with a random color |
-| `GRWC: Decolorize this repo` | Remove the rule that colorizes for current repository |
-| `GRWC: Export Configuration` | Export all settings to JSON file |
-| `GRWC: Import Configuration` | Import settings from JSON file |
+| `GitHueMan: Open Configuration` | Open full configuration UI *(recommended)* |
+| `GitHueMan: Colorize this repo` | Quick-add current repository with a random color |
+| `GitHueMan: Decolorize this repo` | Remove the rule that colorizes for current repository |
+| `GitHueMan: Export Configuration` | Export all settings to JSON file |
+| `GitHueMan: Import Configuration` | Import settings from JSON file |
 
 ---
 
@@ -405,7 +407,7 @@ Perfect for **team collaboration** and **standardizing workspace colors** across
 
 ## 🛠️ Troubleshooting
 
-**Colors not applying?** Check the "Git Repo Window Colors" output channel for diagnostic information.
+**Colors not applying?** Check the "GitHueMan" output channel for diagnostic information.
 
 **Multiple windows same color?** Ensure your repository qualifiers are specific enough to differentiate repositories.  Being able to have a rule that colors multiple repositories is a FEATURE!  For instance, if you work in multiple orgs you can color each org differently.
 
@@ -413,7 +415,7 @@ Perfect for **team collaboration** and **standardizing workspace colors** across
 
 ## 💬 Support
 
-**Found a bug?** Include output from the "Git Repo Window Colors" output channel in your issue report.
+**Found a bug?** Include output from the "GitHueMan" output channel in your issue report.
 
 **Feature request?** We're always looking to make developers more productive!
 
@@ -431,6 +433,6 @@ Perfect for **team collaboration** and **standardizing workspace colors** across
 >
 ---
 
-*Transform your workflow. Install Git Repo Window Colors today and never lose track of your projects again.*
+*Transform your workflow. Install GitHueMan today and never lose track of your projects again.*
 
 If this extension saves you time and frustration, consider [buying me a coffee](https://www.buymeacoffee.com/KevinMills) ☕

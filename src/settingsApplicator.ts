@@ -14,7 +14,7 @@ export interface SettingsApplicatorLogger {
 }
 
 /**
- * List of all color keys managed by the Git Repo Window Colors extension
+ * List of all color keys managed by the GitHueMan extension
  * These colors may be set, modified, or removed by the extension
  */
 export const MANAGED_COLORS = [

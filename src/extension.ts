@@ -272,7 +272,7 @@ function createStatusBarItem(context: ExtensionContext): void {
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     statusBarItem.command = 'windowColors.statusBarClick';
     statusBarItem.text = '$(symbol-color)';
-    statusBarItem.tooltip = 'Git Repo Window Colors - Click to configure';
+    statusBarItem.tooltip = 'GitHueMan - Click to configure';
     context.subscriptions.push(statusBarItem);
 }
 
@@ -541,7 +541,17 @@ async function migrateConfigurationToJson(context: ExtensionContext): Promise<vo
             }
 
             // ===== STEP 4: Write migrated configuration =====
-            await config.update('repoRules', migratedRepoList, vscode.ConfigurationTarget.Global);
+            // Guard: only write repoRules if the old source had data, OR if repoRules is currently empty.
+            // This prevents re-running migration (e.g. when globalState is cleared in a debug session)
+            // from wiping already-migrated repoRules with an empty list.
+            const existingRepoRules = config.get('repoRules', []) as any[];
+            if (repoConfigList.length > 0 || existingRepoRules.length === 0) {
+                await config.update('repoRules', migratedRepoList, vscode.ConfigurationTarget.Global);
+            } else {
+                outputChannel.appendLine(
+                    `  - Skipping repoRules write: source was empty but ${existingRepoRules.length} rules already exist (migration re-run protection)`,
+                );
+            }
             await config.update('branchConfigurationList', migratedBranchList, vscode.ConfigurationTarget.Global);
             await config.update('sharedBranchTables', sharedBranchTables, vscode.ConfigurationTarget.Global);
 
@@ -645,7 +655,7 @@ async function checkConfiguration(context: ExtensionContext): Promise<boolean> {
 }
 
 export async function activate(context: ExtensionContext) {
-    outputChannel = vscode.window.createOutputChannel('Git Repo Window Colors');
+    outputChannel = vscode.window.createOutputChannel('GitHueMan');
 
     if (await checkConfiguration(context)) {
         outputChannel.appendLine('This extension is disabled until application restart.');
@@ -1109,7 +1119,7 @@ async function checkAndAskToColorizeRepo(): Promise<void> {
         case "No, don't ask again":
             // Disable the setting
             await workspace.getConfiguration('windowColors').update('askToColorizeRepoWhenOpened', false, true);
-            vscode.window.showInformationMessage('You can re-enable this in the Git Repo Window Colors configuration.');
+            vscode.window.showInformationMessage('You can re-enable this in the GitHueMan configuration.');
             break;
         case 'Not now':
         default:
@@ -1470,9 +1480,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         if (!usePreviewMode && repoRuleErrors.has(repoRuleIndex)) {
             const errorMsg = repoRuleErrors.get(repoRuleIndex);
             outputChannel.appendLine(`  ERROR: Matched repo rule has validation error: ${errorMsg}`);
-            vscode.window.showErrorMessage(
-                `Git Repo Window Colors: The matched repository rule has an error: ${errorMsg}`,
-            );
+            vscode.window.showErrorMessage(`GitHueMan: The matched repository rule has an error: ${errorMsg}`);
         }
 
         // Get advanced profiles for profile name extraction
@@ -1952,7 +1960,7 @@ async function exportConfiguration(): Promise<void> {
         const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Month is 0-indexed
         const day = now.getDate().toString().padStart(2, '0');
         const dateStamp = `${year}${month}${day}`;
-        const defaultFilename = `git-repo-window-colors-config-${dateStamp}.json`;
+        const defaultFilename = `githue-man-config-${dateStamp}.json`;
 
         // Show save dialog
         const saveUri = await vscode.window.showSaveDialog({
@@ -1961,7 +1969,7 @@ async function exportConfiguration(): Promise<void> {
                 'JSON Files': ['json'],
                 'All Files': ['*'],
             },
-            title: 'Export Git Repo Window Colors Configuration',
+            title: 'Export GitHueMan Configuration',
         });
 
         if (!saveUri) {
@@ -2001,7 +2009,7 @@ async function importConfiguration(): Promise<void> {
                 'JSON Files': ['json'],
                 'All Files': ['*'],
             },
-            title: 'Import Git Repo Window Colors Configuration',
+            title: 'Import GitHueMan Configuration',
         });
 
         if (!openUri || openUri.length === 0) {
@@ -2022,7 +2030,7 @@ async function importConfiguration(): Promise<void> {
 
         // Show confirmation dialog
         const action = await vscode.window.showWarningMessage(
-            'This will replace your current Git Repo Window Colors configuration. Do you want to continue?',
+            'This will replace your current GitHueMan configuration. Do you want to continue?',
             { modal: true },
             'Import and Replace',
             'Merge with Current',
