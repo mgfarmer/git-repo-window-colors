@@ -369,6 +369,11 @@
                                             "color"
                                         ]
                                     }
+                                },
+                                "autoAddNewBranches": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "description": "When enabled, automatically adds a rule with a dissimilar color for any branch not already matched by existing rules in this table"
                                 }
                             },
                             "required": [

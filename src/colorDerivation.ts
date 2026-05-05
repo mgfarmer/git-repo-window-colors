@@ -217,3 +217,64 @@ export function resolveThemedColor(themedColor: ThemedColor | 'none', currentThe
 
     return undefined;
 }
+
+/**
+ * Generate a random color that is visually dissimilar to a set of existing colors.
+ *
+ * Uses HSL hue-gap strategy: finds the largest angular gap among existing hues
+ * on the color wheel and places the new hue in the center of that gap.
+ *
+ * @param existingHexColors - Array of hex color strings already in use
+ * @returns Hex color string (e.g. "#3a7f5c")
+ */
+export function generateDissimilarColor(existingHexColors: string[]): string {
+    const saturation = 65; // moderate saturation, vivid but not neon
+    const lightness = 45; // works well on dark title bars
+
+    // Extract hues from existing colors, filtering out achromatic colors
+    const hues: number[] = [];
+    for (const hex of existingHexColors) {
+        try {
+            const [h, s] = chroma(hex).hsl();
+            // Only consider chromatic colors (saturation > 5%)
+            if (s > 0.05 && !isNaN(h)) {
+                hues.push(h);
+            }
+        } catch {
+            // skip invalid colors
+        }
+    }
+
+    let newHue: number;
+
+    if (hues.length === 0) {
+        // No existing colors — pick a random hue
+        newHue = Math.random() * 360;
+    } else {
+        // Sort hues and find the largest angular gap
+        hues.sort((a, b) => a - b);
+
+        let maxGap = 0;
+        let gapStart = 0;
+
+        for (let i = 0; i < hues.length - 1; i++) {
+            const gap = hues[i + 1] - hues[i];
+            if (gap > maxGap) {
+                maxGap = gap;
+                gapStart = hues[i];
+            }
+        }
+
+        // Check wrap-around gap (last hue to first hue + 360)
+        const wrapGap = 360 - hues[hues.length - 1] + hues[0];
+        if (wrapGap > maxGap) {
+            maxGap = wrapGap;
+            gapStart = hues[hues.length - 1];
+        }
+
+        // Place new hue in the middle of the largest gap
+        newHue = (gapStart + maxGap / 2) % 360;
+    }
+
+    return chroma.hsl(newHue, saturation / 100, lightness / 100).hex();
+}

@@ -797,9 +797,11 @@ export class ConfigWebviewProvider implements vscode.Disposable {
         }
     }
 
-    private _getSharedBranchTables(): { [key: string]: { rules: BranchRule[] } } {
+    private _getSharedBranchTables(): { [key: string]: { rules: BranchRule[]; autoAddNewBranches?: boolean } } {
         const config = vscode.workspace.getConfiguration('windowColors');
-        const sharedTables = config.get<{ [key: string]: { rules: BranchRule[] } } | undefined>('sharedBranchTables');
+        const sharedTables = config.get<
+            { [key: string]: { rules: BranchRule[]; autoAddNewBranches?: boolean } } | undefined
+        >('sharedBranchTables');
 
         // If sharedBranchTables doesn't exist, initialize with empty Default Rules table
         if (!sharedTables || Object.keys(sharedTables).length === 0) {
@@ -810,17 +812,18 @@ export class ConfigWebviewProvider implements vscode.Disposable {
 
         // Normalize all branch rule colors to ThemedColor objects
         const themeKind = this._getThemeKind();
-        const normalizedTables: { [key: string]: { rules: BranchRule[] } } = {};
+        const normalizedTables: { [key: string]: { rules: BranchRule[]; autoAddNewBranches?: boolean } } = {};
 
         for (const [tableName, table] of Object.entries(sharedTables)) {
             normalizedTables[tableName] = {
                 rules: table.rules.map((rule) => ({
                     ...rule,
                     color:
-                        rule.color === 'none' || rule.profileName
+                        rule.color === 'none' || rule.color === 'repo' || rule.profileName
                             ? rule.color
                             : this._normalizeColorToThemedColor(rule.color, themeKind),
                 })),
+                autoAddNewBranches: table.autoAddNewBranches,
             };
         }
 
@@ -832,10 +835,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
      * If already a ThemedColor object, return as-is.
      * If a string, convert to ThemedColor.
      */
-    private _normalizeColorToThemedColor(color: any, themeKind: ThemeKind): ThemedColor | 'none' {
-        // Handle 'none' special value
+    private _normalizeColorToThemedColor(color: any, themeKind: ThemeKind): ThemedColor | 'none' | 'repo' {
+        // Handle special values
         if (color === 'none') {
             return 'none';
+        }
+        if (color === 'repo') {
+            return 'repo';
         }
 
         // If it's already looks like a ThemedColor, return as-is
@@ -1117,6 +1123,13 @@ export class ConfigWebviewProvider implements vscode.Disposable {
                 });
                 const currentSharedTables = config.get('sharedBranchTables');
                 if (!deepEqual(currentSharedTables, data.sharedBranchTables)) {
+                    // Log what's being overwritten for auto-add debugging
+                    Object.entries(data.sharedBranchTables).forEach(([tableName, table]: [string, any]) => {
+                        const currentTable = (currentSharedTables as any)?.[tableName];
+                        console.log(
+                            `[_updateConfiguration] [AUTO-ADD DEBUG] Writing table '${tableName}': incoming ruleCount=${table.rules?.length ?? 0}, current ruleCount=${currentTable?.rules?.length ?? 0}`,
+                        );
+                    });
                     updatePromises.push(
                         Promise.resolve(config.update('sharedBranchTables', data.sharedBranchTables, true)),
                     );

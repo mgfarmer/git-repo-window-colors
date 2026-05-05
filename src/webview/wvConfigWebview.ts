@@ -2871,16 +2871,20 @@ function createBranchRuleRowHTML(rule: any, index: number, totalCount: number): 
 function createColorInputHTML(color: string, ruleType: string, index: number, field: string): string {
     const placeholder = 'e.g., blue, #4A90E2, MyProfile';
 
-    // Handle special 'none' value - show indicator instead of color picker
+    // Handle special 'none' and 'repo' values - show indicator instead of color picker
     const isSpecialNone = color === 'none';
+    const isSpecialRepo = color === 'repo';
+    const isSpecialValue = isSpecialNone || isSpecialRepo;
 
-    const hexColor = isSpecialNone ? '#808080' : getRepresentativeColor(color);
-    const colorPickerDisplay = isSpecialNone ? 'style="display: none;"' : '';
+    const hexColor = isSpecialValue ? '#808080' : getRepresentativeColor(color);
+    const colorPickerDisplay = isSpecialValue ? 'style="display: none;"' : '';
     const noneIndicator = isSpecialNone
         ? '<span class="none-indicator" data-tooltip="Excluded from coloring">⊘</span>'
-        : '';
+        : isSpecialRepo
+          ? '<span class="none-indicator" data-tooltip="Uses repository color for this branch">⟲</span>'
+          : '';
     return `
-            <div class="color-input-container native-picker${isSpecialNone ? ' is-none' : ''}">
+            <div class="color-input-container native-picker${isSpecialValue ? ' is-none' : ''}">
                 ${noneIndicator}
                 <input type="color" 
                        class="native-color-input" 
@@ -3984,6 +3988,7 @@ function renderBranchRulesForSelectedRepo() {
                 </div>
             `;
         }
+        removeAutoAddCheckbox();
         return;
     }
 
@@ -4005,6 +4010,7 @@ function renderBranchRulesForSelectedRepo() {
         // Hide the Copy From and Add buttons when no table is selected
         updateCopyFromButton(false);
         updateBranchAddButton(false);
+        removeAutoAddCheckbox();
         renderBranchRules([], undefined, selectedRepoRuleIndex);
         return;
     }
@@ -4022,7 +4028,55 @@ function renderBranchRulesForSelectedRepo() {
     updateCopyFromButton(true);
     updateBranchAddButton(true);
 
+    // Render auto-add checkbox
+    renderAutoAddCheckbox(tableName, branchTable);
+
     renderBranchRules(branchRules, currentConfig.matchingIndexes?.branchRule, selectedRepoRuleIndex);
+}
+
+function removeAutoAddCheckbox() {
+    const el = document.getElementById('autoAddBranchCheckboxContainer');
+    if (el) {
+        el.remove();
+    }
+}
+
+function renderAutoAddCheckbox(tableName: string, branchTable: any) {
+    const containerId = 'autoAddBranchCheckboxContainer';
+    let container = document.getElementById(containerId);
+
+    // Create container if it doesn't exist
+    if (!container) {
+        container = document.createElement('div');
+        container.id = containerId;
+        container.style.padding = '4px 8px';
+        container.style.fontSize = '12px';
+
+        // Insert before branchRulesContent
+        const rulesContent = document.getElementById('branchRulesContent');
+        if (rulesContent && rulesContent.parentElement) {
+            rulesContent.parentElement.insertBefore(container, rulesContent);
+        }
+    }
+
+    const checked = branchTable?.autoAddNewBranches ? 'checked' : '';
+    container.innerHTML = `
+        <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+            <input type="checkbox" ${checked} id="autoAddNewBranchesCheckbox"
+                   style="cursor: pointer;" />
+            <span>Auto-add rules for new branches</span>
+        </label>
+    `;
+
+    const checkbox = container.querySelector('#autoAddNewBranchesCheckbox') as HTMLInputElement;
+    if (checkbox) {
+        checkbox.addEventListener('change', () => {
+            if (currentConfig?.sharedBranchTables?.[tableName]) {
+                currentConfig.sharedBranchTables[tableName].autoAddNewBranches = checkbox.checked;
+                sendConfiguration();
+            }
+        });
+    }
 }
 
 function renderBranchRulesHeader(tableName: string) {
@@ -4336,8 +4390,16 @@ function copyBranchRulesFrom(
 function updateColorRule(ruleType: string, index: number, field: string, value: string) {
     if (!currentConfig) return;
 
+    // Special values ('none', 'repo') are stored as plain strings, not themed colors
+    const isSpecialValue = value === 'none' || value === 'repo';
+
     // For color fields (primaryColor or color), send themed color update to extension
-    if ((field === 'primaryColor' || field === 'color') && value && !currentConfig.advancedProfiles?.[value]) {
+    if (
+        (field === 'primaryColor' || field === 'color') &&
+        value &&
+        !isSpecialValue &&
+        !currentConfig.advancedProfiles?.[value]
+    ) {
         //Send themed color update message
         const messageData: any = {
             type: ruleType,
@@ -5847,10 +5909,12 @@ function handleColorInputAutoComplete(input: HTMLInputElement) {
 
     // 1. Add Special section (only for non-palette inputs)
     if (!isPaletteSlot) {
-        // Check if 'none' matches the filter
-        if (value.length === 0 || 'none'.includes(value)) {
+        // Check if 'none' or 'repo' matches the filter
+        const specialValues = ['none', 'repo'];
+        const matchingSpecials = specialValues.filter((v) => value.length === 0 || v.includes(value));
+        if (matchingSpecials.length > 0) {
             matches.push('__SPECIAL_HEADER__'); // Special marker for "Special" header
-            matches.push('none'); // Special value to exclude from coloring
+            matches.push(...matchingSpecials);
         }
     }
 
@@ -5969,12 +6033,20 @@ function showAutoCompleteDropdown(input: HTMLInputElement, suggestions: string[]
         // Add color preview or special indicator
         const isProfile = currentConfig?.advancedProfiles && currentConfig.advancedProfiles[suggestion];
         const isSpecialNone = suggestion === 'none';
+        const isSpecialRepo = suggestion === 'repo';
         if (isSpecialNone) {
             // Add special indicator for 'none'
             const indicator = document.createElement('span');
             indicator.className = 'special-indicator';
             indicator.textContent = ' ⊘';
             indicator.title = 'Exclude from coloring';
+            item.appendChild(indicator);
+        } else if (isSpecialRepo) {
+            // Add special indicator for 'repo'
+            const indicator = document.createElement('span');
+            indicator.className = 'special-indicator';
+            indicator.textContent = ' ⟲';
+            indicator.title = 'Use repository color';
             item.appendChild(indicator);
         } else if (!isProfile) {
             const preview = document.createElement('span');

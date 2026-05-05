@@ -26,8 +26,8 @@ export interface RepoConfigRule {
 export interface BranchConfigRule {
     /** Regex pattern to match branch name */
     pattern: string;
-    /** Branch color (themed color, profile name, or 'none' to skip coloring) */
-    color: ThemedColor | 'none';
+    /** Branch color (themed color, profile name, 'none' to skip, or 'repo' to use repo color) */
+    color: ThemedColor | 'none' | 'repo';
     /** Whether this rule is enabled (default: true) */
     enabled?: boolean;
 }
@@ -38,6 +38,8 @@ export interface BranchConfigRule {
 export interface BranchTable {
     /** Array of branch rules in this table */
     rules: BranchConfigRule[];
+    /** When true, automatically add a rule for any unmatched branch with a dissimilar color */
+    autoAddNewBranches?: boolean;
 }
 
 /**

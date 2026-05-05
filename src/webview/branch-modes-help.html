@@ -146,11 +146,73 @@
             <li><strong>Get Branch Table:</strong> Look up the branch table referenced by that repository rule</li>
             <li><strong>Search Rules:</strong> Process branch rules in order within that table</li>
             <li><strong>Apply First Match:</strong> Use the first rule whose pattern matches your current branch</li>
+            <li><strong>Auto-Add (if enabled):</strong> If no rule matched and auto-add is enabled, create a new rule for this branch</li>
         </ol>
 
         <div class="note">
             <strong>Important:</strong> Branch rules are processed in order. The <strong>first</strong> matching 
             pattern is used, and subsequent matches are ignored.
+        </div>
+
+        <h2>Special Color Values</h2>
+
+        <p>
+            In addition to normal colors (hex, named colors, etc.) and profile names, branch rules support
+            two special values:
+        </p>
+
+        <ul>
+            <li><strong><code>none</code></strong> <span style="opacity:0.7">⊘</span> — Excludes the branch from coloring.
+                Only the repository color applies; no branch-specific color override is used.</li>
+            <li><strong><code>repo</code></strong> <span style="opacity:0.7">⟲</span> — Uses the repository's base color
+                for this branch. Useful when you want the rule to exist (e.g., to prevent auto-add from creating one)
+                but still apply the repo color rather than a unique branch color.</li>
+        </ul>
+
+        <p>
+            These special values appear in the color dropdown's "Special Values" section and are indicated with
+            icons in the color swatch area.
+        </p>
+
+        <h2>Auto-Add New Branch Rules</h2>
+
+        <p>
+            Each branch table has an optional <strong>"Auto-add rules for new branches"</strong> checkbox,
+            shown above the branch rules list. When enabled, the extension will automatically create a new rule
+            whenever you switch to a branch that doesn't already match any existing rule in the table.
+        </p>
+
+        <h3>How Auto-Add Works</h3>
+        <ol>
+            <li>Enable the <strong>"Auto-add rules for new branches"</strong> checkbox on the desired branch table</li>
+            <li>Switch to (or open a workspace on) a branch with no matching rule</li>
+            <li>The extension automatically adds a new rule using the exact branch name as the pattern</li>
+            <li>The assigned color is randomly generated to be visually distinct from all other colors already in the table</li>
+            <li>The new rule is saved to your settings and will be used on future visits to that branch</li>
+        </ol>
+
+        <h3>Use Cases</h3>
+        <ul>
+            <li><strong>Rapid prototyping:</strong> Working across many short-lived feature branches without
+                configuring each one manually. Every branch gets its own unique color automatically.</li>
+            <li><strong>Large teams:</strong> When team members create branches frequently and you want instant
+                visual differentiation without manual setup.</li>
+            <li><strong>Catch-all safety net:</strong> Define explicit rules for important branches
+                (main, develop, release) at the top of the table, then let auto-add handle everything else.</li>
+            <li><strong>Discovery workflow:</strong> Let the extension build your branch table organically,
+                then refine auto-generated rules later (broaden patterns to regexes, adjust colors, or
+                change specific ones to <code>none</code> or <code>repo</code>).</li>
+        </ul>
+
+        <div class="tip">
+            <strong>Tip:</strong> Auto-added rules use the exact branch name as the pattern. You can later 
+            edit them to use regex patterns (e.g., change <code>feature/login-page</code> to 
+            <code>feature/.*</code>) for broader matching.
+        </div>
+
+        <div class="tip">
+            <strong>Tip:</strong> The generated color is chosen to be maximally distinct (in hue) from existing 
+            colors in the table, so branches remain easy to tell apart at a glance.
         </div>
 
         <h2>Best Practices</h2>

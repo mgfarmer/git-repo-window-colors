@@ -144,7 +144,7 @@ Configure colors for specific repositories. Rules are matched in priority order:
 Create patterns that work across ALL repositories:
 
 - **Pattern:** Regular expression matching branch names
-- **Color:** Applied when pattern matches (can be a simple color OR a profile name)
+- **Color:** Applied when pattern matches (can be a simple color, a profile name, or a special value)
 
 **Examples:**
 
@@ -156,6 +156,37 @@ Just like Repo Rules, you can tune the color to your preferences.
 
 Unlike Repo Rules, which use a simple string.includes() pattern, Branch Rules are regular expressions
 able to match any complex branch naming strategy.
+
+#### Special Color Values
+
+Branch rules support two special color values in addition to normal colors and profile names:
+
+- **`none`** ⊘ — Excludes the branch from coloring entirely. Only the repository color applies; no branch-specific color override is used.
+- **`repo`** ⟲ — Explicitly uses the repository color for this branch. Useful when you want a branch rule to exist (e.g., to prevent auto-add from creating one) but still use the repo's base color.
+
+### Auto-Add New Branch Rules
+
+Each branch table has an optional **"Auto-add rules for new branches"** checkbox. When enabled, any time you switch to a branch that doesn't already have a matching rule in the table, the extension automatically creates a new rule for that branch with a randomly generated color that is visually distinct from the other colors already in the table.
+
+**How it works:**
+
+1. Enable the checkbox on a branch table (in the Branch Rules section of the Rules tab, or in the Branch Tables tab)
+2. Switch to a branch that has no matching rule
+3. A new rule is automatically added with the exact branch name and a dissimilar color
+4. The rule persists in your settings for future use
+
+**Use Cases:**
+
+- **Rapid prototyping** — Working across many short-lived feature branches without manually configuring each one. Every branch gets its own unique color automatically.
+- **Large teams** — When team members create branches frequently and you want instant visual differentiation without manual setup.
+- **Catch-all safety net** — Combine with explicit rules for important branches (main, develop, release) and let auto-add handle everything else. Place your explicit rules first (they take priority), and auto-add fills in the gaps.
+- **Discovery workflow** — Let the extension build your branch table organically as you work, then refine the auto-generated rules later (rename patterns to regexes, adjust colors, or set specific ones to `none` or `repo`).
+
+**Tips:**
+
+- Auto-added rules use the exact branch name as the pattern. You can later edit them to use regex patterns for broader matching.
+- The generated color is chosen to be maximally distinct from existing colors in the table, so branches remain easy to tell apart at a glance.
+- If you want a branch to simply inherit the repo color instead of getting a unique one, edit its auto-generated rule and set the color to `repo`.
 
 ---
 

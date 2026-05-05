@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { ColorThemeKind, ExtensionContext, window, workspace } from 'vscode';
 import { resolveProfile } from './profileResolver';
 import { AdvancedProfile, ThemeKind, ThemedColor } from './types/advancedModeTypes';
-import { resolveThemedColor, createThemedColor } from './colorDerivation';
+import { resolveThemedColor, createThemedColor, generateDissimilarColor } from './colorDerivation';
 import { BranchRule } from './types/webviewTypes';
 import { ConfigWebviewProvider } from './webview/configWebview';
 import { matchesLocalFolderPattern } from './pathUtils';
@@ -35,6 +35,9 @@ import {
 } from './gitOperations';
 
 let currentBranch: undefined | string = undefined;
+
+// Track branches already auto-added this session to prevent duplicate writes from overlapping doit() calls
+const autoAddedBranches = new Set<string>();
 
 // Flag to track that migration ran and changed configuration
 // When true, init() should skip calling doit() because the config change event will handle it
@@ -1595,6 +1598,15 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                             '  [PREVIEW MODE] Branch rule specifies "none" - skipping branch color',
                         );
                         // Don't set branchProfile or branchColor
+                    } else if (selectedRule.color === 'repo') {
+                        // Special 'repo' value - use repo color for branch
+                        outputChannel.appendLine(
+                            '  [PREVIEW MODE] Branch rule specifies "repo" - using repo color for branch',
+                        );
+                        branchColor = repoColor;
+                        if (matchedRepoConfig && branchColor) {
+                            matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                        }
                     } else {
                         // It's a themed color - create temporary branch profile
                         const theme = window.activeColorTheme.kind;
@@ -1640,6 +1652,9 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
             }
 
             const branchTable = sharedBranchTables[tableName];
+            outputChannel.appendLine(
+                `  [AUTO-ADD DEBUG] Branch table "${tableName}": exists=${!!branchTable}, ruleCount=${branchTable?.rules?.length ?? 0}, autoAdd=${(branchTable as any)?.autoAddNewBranches ?? 'N/A'}`,
+            );
             if (branchTable && branchTable.rules && branchTable.rules.length > 0) {
                 outputChannel.appendLine(
                     `  Checking branch rules from table "${tableName}" (${branchTable.rules.length} rules)`,
@@ -1648,13 +1663,18 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                 for (const rule of branchTable.rules) {
                     // Skip disabled rules
                     if (rule.enabled === false) {
+                        outputChannel.appendLine(`    [AUTO-ADD DEBUG] Skipping disabled rule: "${rule.pattern}"`);
                         continue;
                     }
 
                     if (rule.pattern === '') {
+                        outputChannel.appendLine(`    [AUTO-ADD DEBUG] Skipping empty pattern rule`);
                         continue;
                     }
 
+                    outputChannel.appendLine(
+                        `    [AUTO-ADD DEBUG] Testing pattern "${rule.pattern}" against branch "${currentBranch}": ${currentBranch?.match(rule.pattern) ? 'MATCH' : 'no match'}`,
+                    );
                     if (currentBranch?.match(rule.pattern)) {
                         // Log the matched rule for debugging
                         outputChannel.appendLine(
@@ -1679,11 +1699,23 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                             }
                             matchedRepoConfig.branchProfile = advancedProfiles[rule.profileName];
                         } else if (rule.color === 'none') {
-                            // Special 'none' value - skip branch coloring
+                            // Special 'none' value - skip branch coloring entirely
                             outputChannel.appendLine(
                                 `  Branch rule matched in "${tableName}": "${rule.pattern}" specifies "none" - skipping branch color`,
                             );
                             // Don't set branchProfile or branchColor, but still count as a match
+                        } else if (rule.color === 'repo') {
+                            // Special 'repo' value - use repo color for the branch element (activity bar)
+                            outputChannel.appendLine(
+                                `  Branch rule matched in "${tableName}": "${rule.pattern}" specifies "repo" - using repo color for branch`,
+                            );
+                            outputChannel.appendLine(
+                                `  [REPO DEBUG] isSimpleMode=${matchedRepoConfig?.isSimpleMode}, repoColor=${repoColor?.hex()}, matchedRepoConfig=${!!matchedRepoConfig}`,
+                            );
+                            branchColor = repoColor;
+                            if (matchedRepoConfig && branchColor) {
+                                matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                            }
                         } else {
                             // It's a simple color - create temporary branch profile
                             const theme = window.activeColorTheme.kind;
@@ -1714,16 +1746,133 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
     }
 
     if (!branchMatch) {
-        if (repoColor === undefined && (!matchedRepoConfig || !matchedRepoConfig.profile)) {
-            outputChannel.appendLine('  No branch rule matched');
-        } else {
-            outputChannel.appendLine('  No branch rule matched, using repo color for branch color');
-            branchColor = repoColor;
+        outputChannel.appendLine(
+            `  [AUTO-ADD DEBUG] No branch match. currentBranch="${currentBranch}", matchedRepoConfig=${!!matchedRepoConfig}, branchTableName="${matchedRepoConfig?.branchTableName}"`,
+        );
+        // Check if the branch table has autoAddNewBranches enabled
+        let autoAdded = false;
+        if (currentBranch && matchedRepoConfig && matchedRepoConfig.branchTableName !== '__none__') {
+            const config = workspace.getConfiguration('windowColors');
+            // Deep-clone: config.get() returns a frozen object, mutations like push() silently fail
+            const tables = JSON.parse(JSON.stringify(config.get('sharedBranchTables') || {})) as {
+                [key: string]: { rules: any[]; autoAddNewBranches?: boolean };
+            };
+            const tName = matchedRepoConfig.branchTableName || 'Default Rules';
+            const table = tables[tName];
+            outputChannel.appendLine(
+                `  [AUTO-ADD DEBUG] Fresh read: table "${tName}" exists=${!!table}, ruleCount=${table?.rules?.length ?? 0}, autoAdd=${table?.autoAddNewBranches}`,
+            );
+            if (table?.rules) {
+                for (const r of table.rules) {
+                    outputChannel.appendLine(
+                        `    [AUTO-ADD DEBUG] Existing rule: pattern="${r.pattern}", enabled=${r.enabled}`,
+                    );
+                }
+            }
 
-            // In simple mode, create a default branch profile for activity bar coloring
-            if (matchedRepoConfig && matchedRepoConfig.isSimpleMode && branchColor) {
-                outputChannel.appendLine('  Creating default branch profile for activity bar in simple mode');
-                matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+            if (table && table.autoAddNewBranches) {
+                // In-memory guard: prevent duplicate auto-adds from overlapping doit() calls
+                const autoAddKey = `${tName}::${currentBranch}`;
+                if (autoAddedBranches.has(autoAddKey)) {
+                    outputChannel.appendLine(
+                        `  Auto-add: already added "${currentBranch}" this session (in-memory guard)`,
+                    );
+                } else {
+                    // Check if a rule already matches this branch (guard against race conditions)
+                    const alreadyMatched = table.rules.some((r: any) => {
+                        if (r.enabled === false || !r.pattern) return false;
+                        try {
+                            return currentBranch!.match(r.pattern) !== null;
+                        } catch {
+                            return false;
+                        }
+                    });
+
+                    if (alreadyMatched) {
+                        outputChannel.appendLine(
+                            `  Auto-add: rule already exists for "${currentBranch}" in table "${tName}" (race guard)`,
+                        );
+                        autoAddedBranches.add(autoAddKey);
+                    } else {
+                        outputChannel.appendLine(
+                            `  Auto-adding branch rule for "${currentBranch}" in table "${tName}"`,
+                        );
+
+                        // Collect existing colors from the table
+                        const existingColors: string[] = [];
+                        for (const r of table.rules) {
+                            if (r.color && r.color !== 'none') {
+                                // Extract a hex color from ThemedColor or string
+                                const theme = window.activeColorTheme.kind;
+                                const themeKind = getThemeKind(theme);
+                                const resolved = resolveThemedColor(r.color, themeKind);
+                                if (resolved) {
+                                    existingColors.push(resolved);
+                                }
+                            }
+                        }
+
+                        // Generate a dissimilar color and create a ThemedColor
+                        const newHex = generateDissimilarColor(existingColors);
+                        const theme = window.activeColorTheme.kind;
+                        const themeKind = getThemeKind(theme);
+                        const themedColor = createThemedColor(newHex, themeKind);
+
+                        // Escape regex special chars in the branch name for exact match
+                        const escapedBranch = currentBranch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const newRule = {
+                            pattern: `^${escapedBranch}$`,
+                            color: themedColor,
+                            enabled: true,
+                        };
+
+                        // Append the new rule to the table
+                        table.rules.push(newRule);
+                        await config.update('sharedBranchTables', tables, vscode.ConfigurationTarget.Global);
+                        outputChannel.appendLine(`  Auto-added rule: pattern="^${escapedBranch}$", color="${newHex}"`);
+
+                        // Verify the write persisted
+                        const verifyTables = workspace
+                            .getConfiguration('windowColors')
+                            .get<any>('sharedBranchTables', {});
+                        const verifyTable = verifyTables[tName];
+                        outputChannel.appendLine(
+                            `  [AUTO-ADD DEBUG] Post-write verify: table "${tName}" ruleCount=${verifyTable?.rules?.length ?? 0}`,
+                        );
+                        if (verifyTable?.rules?.length > 0) {
+                            const lastRule = verifyTable.rules[verifyTable.rules.length - 1];
+                            outputChannel.appendLine(
+                                `  [AUTO-ADD DEBUG] Last rule in table: pattern="${lastRule.pattern}"`,
+                            );
+                        }
+                        // Use the new color for this invocation
+                        branchColor = Color(newHex);
+                        if (!matchedRepoConfig) {
+                            matchedRepoConfig = {
+                                repoQualifier: '',
+                                primaryColor: 'none',
+                            };
+                        }
+                        matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                        autoAddedBranches.add(autoAddKey);
+                        autoAdded = true;
+                    }
+                }
+            }
+        }
+
+        if (!autoAdded) {
+            if (repoColor === undefined && (!matchedRepoConfig || !matchedRepoConfig.profile)) {
+                outputChannel.appendLine('  No branch rule matched');
+            } else {
+                outputChannel.appendLine('  No branch rule matched, using repo color for branch color');
+                branchColor = repoColor;
+
+                // In simple mode, create a default branch profile for activity bar coloring
+                if (matchedRepoConfig && matchedRepoConfig.isSimpleMode && branchColor) {
+                    outputChannel.appendLine('  Creating default branch profile for activity bar in simple mode');
+                    matchedRepoConfig.branchProfile = createBranchTempProfile(branchColor);
+                }
             }
         }
     }

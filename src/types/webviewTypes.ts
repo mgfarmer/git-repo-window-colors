@@ -21,7 +21,7 @@ export interface RepoRule {
 
 export interface BranchRule {
     pattern: string;
-    color: ThemedColor | 'none';
+    color: ThemedColor | 'none' | 'repo';
     profileName?: string;
     enabled?: boolean;
 }
