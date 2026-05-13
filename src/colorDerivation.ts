@@ -227,9 +227,22 @@ export function resolveThemedColor(themedColor: ThemedColor | 'none', currentThe
  * @param existingHexColors - Array of hex color strings already in use
  * @returns Hex color string (e.g. "#3a7f5c")
  */
-export function generateDissimilarColor(existingHexColors: string[]): string {
-    const saturation = 65; // moderate saturation, vivid but not neon
-    const lightness = 45; // works well on dark title bars
+export function generateDissimilarColor(existingHexColors: string[], baseColorHex?: string): string {
+    let saturation = 65; // moderate saturation, vivid but not neon
+    let lightness = 45; // works well on dark title bars
+
+    // If a base color is provided, derive S and L from it
+    if (baseColorHex) {
+        try {
+            const [, s, l] = chroma(baseColorHex).hsl();
+            if (!isNaN(s) && !isNaN(l)) {
+                saturation = s * 100;
+                lightness = l * 100;
+            }
+        } catch {
+            // fall back to defaults
+        }
+    }
 
     // Extract hues from existing colors, filtering out achromatic colors
     const hues: number[] = [];

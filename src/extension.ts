@@ -1813,7 +1813,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
                         }
 
                         // Generate a dissimilar color and create a ThemedColor
-                        const newHex = generateDissimilarColor(existingColors);
+                        const newHex = generateDissimilarColor(existingColors, repoColor?.hex());
                         const theme = window.activeColorTheme.kind;
                         const themeKind = getThemeKind(theme);
                         const themedColor = createThemedColor(newHex, themeKind);
