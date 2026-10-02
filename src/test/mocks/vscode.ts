@@ -128,12 +128,16 @@ const mockGitExtension = {
 
 // ========== Theme Mocking ==========
 let mockColorThemeKind = 2; // Default: Dark
+const colorThemeListeners = new Set<(theme: { kind: ColorThemeKind }) => void>();
 
 /**
  * Set mock color theme (test helper)
  */
 export function __setMockColorTheme(kind: ColorThemeKind) {
     mockColorThemeKind = kind;
+    for (const listener of colorThemeListeners) {
+        listener({ kind: mockColorThemeKind as ColorThemeKind });
+    }
 }
 
 /**
@@ -141,6 +145,7 @@ export function __setMockColorTheme(kind: ColorThemeKind) {
  */
 export function __resetMockColorTheme() {
     mockColorThemeKind = 2; // Dark
+    colorThemeListeners.clear();
 }
 
 // ========== Event Emitters ==========
@@ -278,8 +283,8 @@ export const window = {
         return { kind: mockColorThemeKind };
     },
     onDidChangeActiveColorTheme: (callback: any) => {
-        // Return a disposable that does nothing
-        return { dispose: () => {} };
+        colorThemeListeners.add(callback);
+        return { dispose: () => colorThemeListeners.delete(callback) };
     },
     createOutputChannel: (name: string): MockOutputChannel => {
         const channel = new MockOutputChannel();

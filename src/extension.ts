@@ -143,6 +143,14 @@ function clearSimpleModeProfileCache(): void {
     outputChannel.appendLine('[Cache] Cleared simple mode profile cache');
 }
 
+function shouldUsePreviewMode(): boolean {
+    return (
+        (configProvider?.isPreviewModeEnabled() ?? false) ||
+        configProvider?.getPreviewRepoRuleIndex() !== null ||
+        configProvider?.getPreviewBranchRuleContext() !== null
+    );
+}
+
 /**
  * Creates a temporary AdvancedProfile for repo colors (title bar, tabs, status bar).
  * This handles simple mode repo rules by converting them to profiles.
@@ -897,8 +905,7 @@ export async function activate(context: ExtensionContext) {
             if (
                 e.affectsConfiguration('windowColors') ||
                 e.affectsConfiguration('window.titleBarStyle') ||
-                e.affectsConfiguration('window.customTitleBarVisibility') ||
-                e.affectsConfiguration('workbench.colorTheme')
+                e.affectsConfiguration('window.customTitleBarVisibility')
             ) {
                 console.log('[GRWC] Configuration affects windowColors or theme');
                 // Clear simple mode profile cache when color settings change
@@ -907,8 +914,7 @@ export async function activate(context: ExtensionContext) {
                     e.affectsConfiguration('windowColors.colorStatusBar') ||
                     e.affectsConfiguration('windowColors.colorInactiveTitlebar') ||
                     e.affectsConfiguration('windowColors.applyBranchColorToTabsAndStatusBar') ||
-                    e.affectsConfiguration('windowColors.activityBarColorKnob') ||
-                    e.affectsConfiguration('workbench.colorTheme')
+                    e.affectsConfiguration('windowColors.activityBarColorKnob')
                 ) {
                     clearSimpleModeProfileCache();
                 }
@@ -916,20 +922,24 @@ export async function activate(context: ExtensionContext) {
                 // This handles the post-migration case where config changes fire before init()
                 //if (gitRepository && gitRepoRemoteFetchUrl) {
                 // console.log('[GRWC] Git ready, calling doit()');
-                // Check if we should use preview mode - prefer any active preview selection
-                const previewIdx = configProvider?.getPreviewRepoRuleIndex();
-                const previewBranchCtx = configProvider?.getPreviewBranchRuleContext();
-                const usePreview =
-                    (configProvider?.isPreviewModeEnabled() ?? false) ||
-                    previewIdx !== null ||
-                    previewBranchCtx !== null;
-                doit('settings change', usePreview);
+                doit('settings change', shouldUsePreviewMode());
                 migrationDidRun = false; // Clear flag so init() won't call doit() again
                 updateStatusBarItem(); // Update status bar when configuration changes
                 // } else {
                 //     console.log('[GRWC] Git not ready yet, skipping doit() - init() will handle it');
                 // }
             }
+        }),
+    );
+
+    // Unlike the workbench.colorTheme config event, this fires after window.activeColorTheme is updated,
+    // and it also covers auto-detected OS color scheme switches.
+    context.subscriptions.push(
+        window.onDidChangeActiveColorTheme(() => {
+            console.log('[GRWC] Active color theme changed');
+            clearSimpleModeProfileCache();
+            doit('theme change', shouldUsePreviewMode());
+            updateStatusBarItem();
         }),
     );
 

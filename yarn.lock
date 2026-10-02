@@ -556,6 +556,11 @@
   resolved "https://registry.npmjs.org/@vscode/codicons/-/codicons-0.0.44.tgz"
   integrity sha512-F7qPRumUK3EHjNdopfICLGRf3iNPoZQt+McTHAn4AlOWPB3W2kL4H0S7uqEqbyZ6rCxaeDjpAn3MCUnwTu/VJQ==
 
+"@vscode/vsce-sign-linux-x64@2.0.6":
+  version "2.0.6"
+  resolved "https://registry.npmjs.org/@vscode/vsce-sign-linux-x64/-/vsce-sign-linux-x64-2.0.6.tgz"
+  integrity sha512-/olerl1A4sOqdP+hjvJ1sbQjKN07Y3DVnxO4gnbn/ahtQvFrdhUi0G1VsZXDNjfqmXw57DmPi5ASnj/8PGZhAA==
+
 "@vscode/vsce-sign@^2.0.0":
   version "2.0.9"
   resolved "https://registry.npmjs.org/@vscode/vsce-sign/-/vsce-sign-2.0.9.tgz"
