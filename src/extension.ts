@@ -21,8 +21,9 @@ import {
     RepoConfig,
 } from './ruleParser';
 import { findMatchingRepoRule, WorkspaceContext } from './ruleMatching';
-import { applyColors, removeAllManagedColors, SettingsApplicatorLogger } from './settingsApplicator';
+import { applyColors, removeAllManagedColors, isEmptySettingsJson, SettingsApplicatorLogger } from './settingsApplicator';
 import { getStatusBarState, StatusBarConfig } from './statusBarManager';
+import { PAUSE_INDEFINITE, computePauseUntil, isPaused, getPauseMenuLabel, getPauseTooltip } from './pauseState';
 import {
     isGitExtensionAvailable,
     getWorkspaceRepository,
@@ -80,6 +81,11 @@ export function __resetModuleStateForTesting(): void {
     branchRuleErrors.clear();
     gitRepoRemoteFetchUrl = '';
     simpleModeProfileCache.clear();
+    pauseUntil = undefined;
+    if (pauseTimer) {
+        clearTimeout(pauseTimer);
+        pauseTimer = undefined;
+    }
     // Note: gitExt, gitApi, gitRepository, outputChannel, statusBarItem, configProvider
     // are set during activation and should be mocked by tests as needed
 }
@@ -275,6 +281,15 @@ let gitRepoRemoteFetchUrl: string = '';
 let configProvider: ConfigWebviewProvider;
 let statusBarItem: vscode.StatusBarItem;
 
+// Pause state: see pauseState.ts for the meaning of pauseUntil values
+const PAUSE_STATE_KEY = 'grwc.pauseUntil';
+const DEFAULT_PAUSE_MINUTES = 5;
+// setTimeout overflows above ~24.8 days, so longer pauses re-arm in chunks
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+let extensionContext: ExtensionContext | undefined;
+let pauseUntil: number | undefined = undefined;
+let pauseTimer: NodeJS.Timeout | undefined = undefined;
+
 // Cache for temporary profiles generated from simple mode colors
 let simpleModeProfileCache: Map<string, AdvancedProfile> = new Map();
 
@@ -289,6 +304,14 @@ function createStatusBarItem(context: ExtensionContext): void {
 
 function updateStatusBarItem(): void {
     if (!statusBarItem) return;
+
+    if (isColoringPaused()) {
+        statusBarItem.text = '$(debug-pause)';
+        statusBarItem.tooltip = getPauseTooltip(pauseUntil!);
+        statusBarItem.show();
+        return;
+    }
+    statusBarItem.text = '$(symbol-color)';
 
     // Get current workspace context
     const context: WorkspaceContext | undefined = getWorkspaceContextForStatusBar();
@@ -312,6 +335,68 @@ function updateStatusBarItem(): void {
     } else {
         statusBarItem.hide();
     }
+}
+
+function isColoringPaused(): boolean {
+    return isPaused(pauseUntil, Date.now());
+}
+
+function getPauseDurationMinutes(): number {
+    return getNumberSetting('pauseDurationMinutes') ?? DEFAULT_PAUSE_MINUTES;
+}
+
+function schedulePauseExpiry(): void {
+    if (pauseTimer) {
+        clearTimeout(pauseTimer);
+        pauseTimer = undefined;
+    }
+    if (pauseUntil === undefined || pauseUntil === PAUSE_INDEFINITE) {
+        return;
+    }
+    const remaining = Math.max(0, Math.min(pauseUntil - Date.now(), MAX_TIMEOUT_MS));
+    pauseTimer = setTimeout(() => {
+        pauseTimer = undefined;
+        if (isColoringPaused()) {
+            schedulePauseExpiry();
+        } else {
+            restoreColoring();
+        }
+    }, remaining);
+}
+
+function loadPauseState(context: ExtensionContext): void {
+    const saved = context.workspaceState.get<number>(PAUSE_STATE_KEY);
+    if (saved === undefined) {
+        return;
+    }
+    if (isPaused(saved, Date.now())) {
+        pauseUntil = saved;
+        outputChannel.appendLine('Coloring is paused (restored from previous session).');
+        schedulePauseExpiry();
+    } else {
+        context.workspaceState.update(PAUSE_STATE_KEY, undefined);
+    }
+}
+
+async function pauseColoring(): Promise<void> {
+    pauseUntil = computePauseUntil(getPauseDurationMinutes(), Date.now());
+    await extensionContext?.workspaceState.update(PAUSE_STATE_KEY, pauseUntil);
+    schedulePauseExpiry();
+    outputChannel.appendLine('\nColoring paused.');
+    await undoColors();
+    updateStatusBarItem();
+}
+
+async function restoreColoring(): Promise<void> {
+    if (pauseTimer) {
+        clearTimeout(pauseTimer);
+        pauseTimer = undefined;
+    }
+    pauseUntil = undefined;
+    await extensionContext?.workspaceState.update(PAUSE_STATE_KEY, undefined);
+    outputChannel.appendLine('\nColoring restored.');
+    doit('restore from pause', shouldUsePreviewMode());
+    updateStatusBarItem();
 }
 
 /**
@@ -665,6 +750,7 @@ export async function activate(context: ExtensionContext) {
 
     // Create status bar item
     createStatusBarItem(context);
+    extensionContext = context;
 
     // Register the configuration webview provider early so it's available regardless of workspace state
     configProvider = new ConfigWebviewProvider(context.extensionUri, context);
@@ -861,6 +947,9 @@ export async function activate(context: ExtensionContext) {
         }),
     );
 
+    // Restore any pause carried over from a previous session before the first doit()
+    loadPauseState(context);
+
     // Register status bar click command with smart behavior
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.statusBarClick', async () => {
@@ -869,10 +958,45 @@ export async function activate(context: ExtensionContext) {
                 configList = new Array<RepoConfig>();
             }
 
-            // Open the configuration editor (preview mode will show if no rule matches)
-            configProvider.show(context.extensionUri);
+            const items: { label: string; action: 'open' | 'pause' | 'restore' }[] = [
+                { label: '$(symbol-color) Open Color Editor', action: 'open' },
+                isColoringPaused()
+                    ? { label: '$(debug-start) Restore coloring', action: 'restore' }
+                    : { label: `$(debug-pause) ${getPauseMenuLabel(getPauseDurationMinutes())}`, action: 'pause' },
+            ];
+            const selected = await vscode.window.showQuickPick(items, { placeHolder: 'Git Repo Window Colors' });
+            if (selected?.action === 'open') {
+                // Open the configuration editor (preview mode will show if no rule matches)
+                configProvider.show(context.extensionUri);
+            } else if (selected?.action === 'pause') {
+                await pauseColoring();
+            } else if (selected?.action === 'restore') {
+                await restoreColoring();
+            }
         }),
     );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.pauseColoring', async () => {
+            await pauseColoring();
+        }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.restoreColoring', async () => {
+            if (isColoringPaused()) {
+                await restoreColoring();
+            }
+        }),
+    );
+
+    context.subscriptions.push({
+        dispose: () => {
+            if (pauseTimer) {
+                clearTimeout(pauseTimer);
+            }
+        },
+    });
 
     // Register internal commands for branch table management
     context.subscriptions.push(
@@ -1224,13 +1348,48 @@ async function getMatchingRepoRule(repoConfigList: Array<RepoConfig> | undefined
     return findMatchingRepoRule(repoConfigList, context);
 }
 
-function undoColors() {
-    outputChannel.appendLine('Removing managed color for this workspace.');
-    const currentSettings = workspace.getConfiguration('workbench').get('colorCustomizations') as
+async function undoColors() {
+    const currentSettings = workspace.getConfiguration('workbench').inspect('colorCustomizations')?.workspaceValue as
         | Record<string, string>
         | undefined;
-    const cleanedSettings = removeAllManagedColors(currentSettings);
-    workspace.getConfiguration('workbench').update('colorCustomizations', cleanedSettings, false);
+    // VS Code creates settings.json (as "{}") on any update(), even one that removes a missing key,
+    // so only write when there is something to remove.
+    if (currentSettings !== undefined) {
+        const cleanedSettings = removeAllManagedColors(currentSettings);
+        const remaining = Object.keys(cleanedSettings).length;
+        if (remaining > 0) {
+            if (remaining < Object.keys(currentSettings).length) {
+                outputChannel.appendLine('Removing managed color for this workspace.');
+                await workspace.getConfiguration('workbench').update('colorCustomizations', cleanedSettings, false);
+            }
+            return;
+        }
+        outputChannel.appendLine('Removing managed color for this workspace.');
+        await workspace.getConfiguration('workbench').update('colorCustomizations', undefined, false);
+    }
+    await deleteSettingsFileIfEmpty();
+}
+
+/**
+ * Delete .vscode/settings.json if removing colorCustomizations left it as just `{}`.
+ * Multi-root workspaces keep workspace settings in the .code-workspace file, so they are skipped.
+ */
+async function deleteSettingsFileIfEmpty() {
+    if (workspace.workspaceFile || !workspace.workspaceFolders || workspace.workspaceFolders.length !== 1) {
+        return;
+    }
+    const settingsPath = path.join(workspace.workspaceFolders[0].uri.fsPath, '.vscode', 'settings.json');
+    try {
+        if (!(await fs.pathExists(settingsPath))) {
+            return;
+        }
+        if (isEmptySettingsJson(await fs.readFile(settingsPath, 'utf8'))) {
+            await fs.remove(settingsPath);
+            outputChannel.appendLine('Removed empty ' + settingsPath);
+        }
+    } catch (error) {
+        outputChannel.appendLine('Could not remove empty settings file: ' + error);
+    }
 }
 
 // ========== Branch Table Management Functions ==========
@@ -1384,6 +1543,11 @@ function findBestTableForNewRepoRule(selectedRepoRuleIndex: number | undefined):
 // ========== End Branch Table Management Functions ==========
 
 async function doit(reason: string, usePreviewMode: boolean = false) {
+    // Leave branch polling running while paused so currentBranch stays fresh for restore
+    if (isColoringPaused()) {
+        outputChannel.appendLine('\nColorizer triggered by ' + reason + ' - skipped, coloring is paused');
+        return;
+    }
     if (intervalId) {
         stopBranchPoll();
     }
@@ -1475,7 +1639,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         // BUG: This should be deref'ing ThemeColor. If primaryColor is a ThemeColor, it will never equal 'none' and the rule will be applied with incorrect colors instead of being excluded.
         if (matchedRepoConfig.primaryColor === 'none') {
             outputChannel.appendLine('  Rule specifies "none" - excluding from coloring');
-            undoColors();
+            await undoColors();
             return;
         }
 
@@ -1902,7 +2066,7 @@ async function doit(reason: string, usePreviewMode: boolean = false) {
         // No color specified, so do nothing
         outputChannel.appendLine('  No color configuration data specified for this repo or branch.');
         if (getBooleanSetting('removeManagedColors')) {
-            undoColors();
+            await undoColors();
         }
         return;
     }

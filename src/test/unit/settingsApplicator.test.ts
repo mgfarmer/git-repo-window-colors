@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { applyColors, removeAllManagedColors, MANAGED_COLORS } from '../../settingsApplicator';
+import { applyColors, removeAllManagedColors, isEmptySettingsJson, MANAGED_COLORS } from '../../settingsApplicator';
 
 describe('settingsApplicator', () => {
     describe('MANAGED_COLORS', () => {
@@ -296,6 +296,20 @@ describe('settingsApplicator', () => {
             const result = applyColors(undefined, newColors);
 
             expect(result.setCount).to.equal(4); // Only non-undefined values
+        });
+    });
+
+    describe('isEmptySettingsJson', () => {
+        it('should treat an empty object as empty, ignoring whitespace', () => {
+            expect(isEmptySettingsJson('{}')).to.be.true;
+            expect(isEmptySettingsJson('{\n}\n')).to.be.true;
+            expect(isEmptySettingsJson('  {  \r\n\t}  ')).to.be.true;
+        });
+
+        it('should not treat files with settings or comments as empty', () => {
+            expect(isEmptySettingsJson('{ "editor.tabSize": 2 }')).to.be.false;
+            expect(isEmptySettingsJson('{\n  // keep me\n}')).to.be.false;
+            expect(isEmptySettingsJson('')).to.be.false;
         });
     });
 });

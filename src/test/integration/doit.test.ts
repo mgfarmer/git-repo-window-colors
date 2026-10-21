@@ -4,6 +4,10 @@
  */
 
 import { expect } from 'chai';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as sinon from 'sinon';
 import * as vscode from '../mocks/vscode';
 import {
     __resetAllMocks,
@@ -396,6 +400,107 @@ describe('doit() Integration Tests', () => {
 
             // "none" color should result in no colors being applied (or colors being removed)
             expect(countSetColors(workspace)).to.equal(0);
+        });
+
+        async function decolorWith(existingColors: Record<string, string> | undefined) {
+            setupMockEnvironment({
+                repoUrl: 'https://github.com/testorg/testrepo',
+                branch: 'main',
+                theme: 'dark',
+                config: {
+                    ...DEFAULT_CONFIG,
+                    repoRules: [{ repoQualifier: 'github.com/testorg/testrepo', primaryColor: 'none', enabled: true }],
+                },
+            });
+            __setMockConfigValue('workbench', 'colorCustomizations', existingColors);
+            __initializeModuleForTesting(vscode.window.createOutputChannel('Test Output'), createMockGitRepository());
+            await __doitForTesting('test', false);
+        }
+
+        it('should remove the colorCustomizations wrapper when decoloring leaves it empty', async () => {
+            await decolorWith({ 'titleBar.activeBackground': '#3B82F6' });
+
+            expect(__getMockConfigValue('workbench', 'colorCustomizations')).to.be.undefined;
+        });
+
+        it('should keep unmanaged colors when decoloring', async () => {
+            await decolorWith({ 'titleBar.activeBackground': '#3B82F6', 'editor.background': '#000000' });
+
+            expect(__getMockConfigValue('workbench', 'colorCustomizations')).to.deep.equal({
+                'editor.background': '#000000',
+            });
+        });
+
+        describe('when decoloring has nothing to remove', () => {
+            let updateSpy: sinon.SinonSpy;
+
+            beforeEach(() => {
+                const configPrototype = Object.getPrototypeOf(vscode.workspace.getConfiguration('workbench'));
+                updateSpy = sinon.spy(configPrototype, 'update');
+            });
+
+            afterEach(() => {
+                updateSpy.restore();
+            });
+
+            // Any update() makes VS Code create .vscode/settings.json, so none may happen
+            it('should not write settings when there are no workspace color customizations', async () => {
+                await decolorWith(undefined);
+
+                expect(updateSpy.called).to.be.false;
+            });
+
+            it('should not write settings when only unmanaged colors exist', async () => {
+                await decolorWith({ 'editor.background': '#000000' });
+
+                expect(updateSpy.called).to.be.false;
+            });
+        });
+
+        describe('settings.json cleanup', () => {
+            let tmpDir: string;
+            let settingsFile: string;
+
+            async function decolorInFolder(settingsContent: string) {
+                fs.mkdirSync(path.join(tmpDir, '.vscode'));
+                fs.writeFileSync(settingsFile, settingsContent);
+                setupMockEnvironment({
+                    repoUrl: 'https://github.com/testorg/testrepo',
+                    branch: 'main',
+                    theme: 'dark',
+                    config: {
+                        ...DEFAULT_CONFIG,
+                        repoRules: [
+                            { repoQualifier: 'github.com/testorg/testrepo', primaryColor: 'none', enabled: true },
+                        ],
+                    },
+                });
+                __setMockConfigValue('workbench', 'colorCustomizations', undefined);
+                __setMockWorkspaceFolders([{ uri: { fsPath: tmpDir }, name: 'tmp', index: 0 }]);
+                __initializeModuleForTesting(vscode.window.createOutputChannel('Test Output'), createMockGitRepository());
+                await __doitForTesting('test', false);
+            }
+
+            beforeEach(() => {
+                tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'grwc-test-'));
+                settingsFile = path.join(tmpDir, '.vscode', 'settings.json');
+            });
+
+            afterEach(() => {
+                fs.rmSync(tmpDir, { recursive: true, force: true });
+            });
+
+            it('should delete a settings.json that is only an empty object', async () => {
+                await decolorInFolder('{\n}\n');
+
+                expect(fs.existsSync(settingsFile)).to.be.false;
+            });
+
+            it('should keep a settings.json that has other content', async () => {
+                await decolorInFolder('{\n    "editor.tabSize": 2\n}\n');
+
+                expect(fs.existsSync(settingsFile)).to.be.true;
+            });
         });
     });
 

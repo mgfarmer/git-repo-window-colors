@@ -32,12 +32,20 @@ export function __setMockConfigValue(section: string, key: string, value: any) {
 }
 
 // ========== Configuration API ==========
+// Schema defaults that real VS Code returns from get() when no value is set
+const configDefaults: { [section: string]: { [key: string]: any } } = {
+    workbench: { colorCustomizations: {} },
+};
+
 class MockConfiguration {
     constructor(private section: string) {}
 
     get<T>(key: string, defaultValue?: T): T {
         const value = configStore[this.section]?.[key];
-        return value !== undefined ? value : (defaultValue as T);
+        if (value !== undefined) {
+            return value;
+        }
+        return defaultValue !== undefined ? defaultValue : configDefaults[this.section]?.[key];
     }
 
     has(key: string): boolean {
@@ -342,6 +350,7 @@ export const workspace = {
         return mockWorkspaceFolders;
     },
     getWorkspaceFolder: (uri: any) => mockWorkspaceFolders[0],
+    workspaceFile: undefined as any,
     onDidChangeConfiguration: configChangeEmitter.event,
     fs: {
         readFile: (uri: any) => Promise.resolve(new Uint8Array()),

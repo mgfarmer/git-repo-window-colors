@@ -80,6 +80,16 @@
                 "command": "windowColors.resetHintFlags",
                 "title": "Show Hints Again",
                 "category": "GRWC"
+            },
+            {
+                "command": "windowColors.pauseColoring",
+                "title": "Pause Coloring",
+                "category": "GRWC"
+            },
+            {
+                "command": "windowColors.restoreColoring",
+                "title": "Restore Coloring",
+                "category": "GRWC"
             }
         ],
         "configuration": [
@@ -439,6 +449,14 @@
                         "type": "boolean",
                         "default": true,
                         "description": "When enabled, the extension will ask if you'd like to colorize a repository when opening a workspace folder on a repository that doesn't match any existing rules.",
+                        "scope": "window"
+                    },
+                    "windowColors.pauseDurationMinutes": {
+                        "order": 28,
+                        "type": "integer",
+                        "default": 5,
+                        "minimum": 0,
+                        "description": "Number of minutes that 'Pause coloring' (from the status bar icon menu) removes this window's colors before restoring them automatically. Set to 0 to pause until manually restored.",
                         "scope": "window"
                     },
                     "windowColors.previewSelectedRepoRule": {

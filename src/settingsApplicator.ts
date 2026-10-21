@@ -195,3 +195,11 @@ export function removeAllManagedColors(currentSettings: Record<string, string> |
 
     return filtered;
 }
+
+/**
+ * Check whether a settings.json file's text is an empty JSON object (ignoring whitespace).
+ * Files containing comments or any other content are not considered empty.
+ */
+export function isEmptySettingsJson(text: string): boolean {
+    return text.replace(/\s/g, '') === '{}';
+}

@@ -136,11 +136,12 @@ export function expectColorInRange(
 }
 
 /**
- * Verify that managed colors are either set or explicitly undefined
+ * Verify that managed colors are either set or explicitly undefined.
+ * A missing colorCustomizations object is valid: decoloring removes it when empty.
  */
 export function expectManagedColorsValid(workspaceConfig: any) {
     const colorCustomizations = workspaceConfig?.['workbench']?.['colorCustomizations'];
-    expect(colorCustomizations, 'colorCustomizations should exist').to.exist;
+    if (colorCustomizations === undefined) return;
 
     // All values should be strings (hex colors) or undefined
     for (const key of Object.keys(colorCustomizations)) {

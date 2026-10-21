@@ -25,7 +25,7 @@ Transform your VS Code experience by applying distinctive colors to your workspa
 
 - Optional status bar icon (palette symbol)
 - Configurable visibility: show always or only when no rules match
-- One-click access to configuration editor
+- One-click menu to open the configuration editor or temporarily pause coloring
 
 ---
 
@@ -109,7 +109,7 @@ When you select any repository rule or branch rule in the configuration editor, 
 1. **Install** the extension from VS Code marketplace
 2. **Open a git repo** the extension will ask if you want to colorize this repo. (Hint: Answer 'Yes')
 3. **Done!** Your workspace now has a unique color identity
-4. **Open the Config Editor** Click the palette icon in the status bar
+4. **Open the Config Editor** Click the palette icon in the status bar and choose **Open Color Editor**
 5. **More!** Tune the color to your liking, click on the color swatch
 
 ### 2. Recommended VS Code Settings
@@ -382,7 +382,8 @@ Quick access to essential functions:
   - Always visible for Git repositories, or
   - Only visible when no repository rules match (helps identify unconfigured repos)
   - Hidden for non-Git workspaces automatically
-- **One-Click Access** - Click the status icon to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it using a random color that you can then tune.
+- **One-Click Access** - Click the status icon and choose **Open Color Editor** to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it using a random color that you can then tune.
+- **Pause Coloring** - Click the status icon and choose **Pause coloring** to temporarily remove this window's colors (for example, while screen sharing). Colors return automatically after `windowColors.pauseDurationMinutes` minutes (default 5; set to 0 to pause until restored), or immediately when you choose **Restore coloring** from the same menu. While paused the icon changes to a pause symbol, and the pause survives a window reload.
 - **Contextual Information** - Tooltip shows current repository status
 
 ### Multi-Element Coloring
