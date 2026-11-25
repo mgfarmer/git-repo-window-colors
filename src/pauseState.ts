@@ -35,11 +35,21 @@ export function getPauseMenuLabel(durationMinutes: number): string {
     return `Pause coloring for ${durationMinutes} minute${durationMinutes === 1 ? '' : 's'}`;
 }
 
-export function getPauseTooltip(pauseUntil: number): string {
+export function getPauseTooltip(pauseUntil: number, now: number): string {
     const base = 'Git Repo Window Colors - Coloring paused';
     if (pauseUntil === PAUSE_INDEFINITE) {
         return `${base} until restored`;
     }
-    const time = new Date(pauseUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    return `${base} until ${time}`;
+    // Relative time avoids showing the remote extension host's timezone
+    const totalMinutes = Math.max(1, Math.ceil((pauseUntil - now) / 60_000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const parts: string[] = [];
+    if (hours > 0) {
+        parts.push(`${hours} hr`);
+    }
+    if (minutes > 0) {
+        parts.push(`${minutes} min`);
+    }
+    return `${base} - resumes in ${parts.join(' ')}`;
 }

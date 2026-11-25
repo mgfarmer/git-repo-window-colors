@@ -64,15 +64,27 @@ describe('pauseState', () => {
 
     describe('getPauseTooltip', () => {
         it('describes an indefinite pause', () => {
-            expect(getPauseTooltip(PAUSE_INDEFINITE)).to.equal(
+            expect(getPauseTooltip(PAUSE_INDEFINITE, now)).to.equal(
                 'Git Repo Window Colors - Coloring paused until restored',
             );
         });
 
-        it('includes the resume time for a timed pause', () => {
-            const until = new Date(2026, 0, 1, 10, 42).getTime();
-            const expectedTime = new Date(until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-            expect(getPauseTooltip(until)).to.equal(`Git Repo Window Colors - Coloring paused until ${expectedTime}`);
+        it('rounds the remaining time up to whole minutes', () => {
+            expect(getPauseTooltip(now + 4 * 60_000 + 1, now)).to.equal(
+                'Git Repo Window Colors - Coloring paused - resumes in 5 min',
+            );
+            expect(getPauseTooltip(now + 1, now)).to.equal(
+                'Git Repo Window Colors - Coloring paused - resumes in 1 min',
+            );
+        });
+
+        it('includes hours for long pauses', () => {
+            expect(getPauseTooltip(now + 65 * 60_000, now)).to.equal(
+                'Git Repo Window Colors - Coloring paused - resumes in 1 hr 5 min',
+            );
+            expect(getPauseTooltip(now + 120 * 60_000, now)).to.equal(
+                'Git Repo Window Colors - Coloring paused - resumes in 2 hr',
+            );
         });
     });
 });

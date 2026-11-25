@@ -280,12 +280,11 @@ let gitRepository: any;
 let gitRepoRemoteFetchUrl: string = '';
 let configProvider: ConfigWebviewProvider;
 let statusBarItem: vscode.StatusBarItem;
+let pauseStatusBarItem: vscode.StatusBarItem;
 
 // Pause state: see pauseState.ts for the meaning of pauseUntil values
 const PAUSE_STATE_KEY = 'grwc.pauseUntil';
 const DEFAULT_PAUSE_MINUTES = 5;
-// setTimeout overflows above ~24.8 days, so longer pauses re-arm in chunks
-const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 let extensionContext: ExtensionContext | undefined;
 let pauseUntil: number | undefined = undefined;
 let pauseTimer: NodeJS.Timeout | undefined = undefined;
@@ -300,15 +299,39 @@ function createStatusBarItem(context: ExtensionContext): void {
     statusBarItem.text = '$(symbol-color)';
     statusBarItem.tooltip = 'Git Repo Window Colors - Click to configure';
     context.subscriptions.push(statusBarItem);
+
+    // Lower priority places it immediately to the right of the primary icon
+    pauseStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+    pauseStatusBarItem.command = 'windowColors.togglePauseColoring';
+    context.subscriptions.push(pauseStatusBarItem);
+}
+
+function updatePauseStatusBarItem(primaryVisible: boolean): void {
+    if (!pauseStatusBarItem) return;
+
+    if (!primaryVisible || !(getBooleanSetting('showPauseStatusIcon') ?? false)) {
+        pauseStatusBarItem.hide();
+        return;
+    }
+    if (isColoringPaused()) {
+        pauseStatusBarItem.text = '$(debug-start)';
+        pauseStatusBarItem.tooltip = 'Restore coloring';
+    } else {
+        pauseStatusBarItem.text = '$(debug-pause)';
+        pauseStatusBarItem.tooltip = getPauseMenuLabel(getPauseDurationMinutes());
+    }
+    pauseStatusBarItem.show();
 }
 
 function updateStatusBarItem(): void {
     if (!statusBarItem) return;
 
     if (isColoringPaused()) {
-        statusBarItem.text = '$(debug-pause)';
-        statusBarItem.tooltip = getPauseTooltip(pauseUntil!);
+        const showPauseIcon = getBooleanSetting('showPauseStatusIcon') ?? false;
+        statusBarItem.text = showPauseIcon ? '$(debug-pause)' : '$(symbol-color)';
+        statusBarItem.tooltip = getPauseTooltip(pauseUntil!, Date.now());
         statusBarItem.show();
+        updatePauseStatusBarItem(true);
         return;
     }
     statusBarItem.text = '$(symbol-color)';
@@ -335,6 +358,7 @@ function updateStatusBarItem(): void {
     } else {
         statusBarItem.hide();
     }
+    updatePauseStatusBarItem(state.visible);
 }
 
 function isColoringPaused(): boolean {
@@ -353,15 +377,17 @@ function schedulePauseExpiry(): void {
     if (pauseUntil === undefined || pauseUntil === PAUSE_INDEFINITE) {
         return;
     }
-    const remaining = Math.max(0, Math.min(pauseUntil - Date.now(), MAX_TIMEOUT_MS));
+    // Wake at each minute boundary of the remaining time so the tooltip countdown stays current
+    const remaining = Math.max(0, pauseUntil - Date.now());
     pauseTimer = setTimeout(() => {
         pauseTimer = undefined;
         if (isColoringPaused()) {
+            updateStatusBarItem();
             schedulePauseExpiry();
         } else {
             restoreColoring();
         }
-    }, remaining);
+    }, remaining % 60_000 || Math.min(remaining, 60_000));
 }
 
 function loadPauseState(context: ExtensionContext): void {
@@ -950,28 +976,20 @@ export async function activate(context: ExtensionContext) {
     // Restore any pause carried over from a previous session before the first doit()
     loadPauseState(context);
 
-    // Register status bar click command with smart behavior
+    // Register status bar click command
     context.subscriptions.push(
         vscode.commands.registerCommand('windowColors.statusBarClick', async () => {
-            let configList = getRepoConfigList(false);
-            if (configList === undefined) {
-                configList = new Array<RepoConfig>();
-            }
+            // Open the configuration editor (preview mode will show if no rule matches)
+            configProvider.show(context.extensionUri);
+        }),
+    );
 
-            const items: { label: string; action: 'open' | 'pause' | 'restore' }[] = [
-                { label: '$(symbol-color) Open Color Editor', action: 'open' },
-                isColoringPaused()
-                    ? { label: '$(debug-start) Restore coloring', action: 'restore' }
-                    : { label: `$(debug-pause) ${getPauseMenuLabel(getPauseDurationMinutes())}`, action: 'pause' },
-            ];
-            const selected = await vscode.window.showQuickPick(items, { placeHolder: 'Git Repo Window Colors' });
-            if (selected?.action === 'open') {
-                // Open the configuration editor (preview mode will show if no rule matches)
-                configProvider.show(context.extensionUri);
-            } else if (selected?.action === 'pause') {
-                await pauseColoring();
-            } else if (selected?.action === 'restore') {
+    context.subscriptions.push(
+        vscode.commands.registerCommand('windowColors.togglePauseColoring', async () => {
+            if (isColoringPaused()) {
                 await restoreColoring();
+            } else {
+                await pauseColoring();
             }
         }),
     );

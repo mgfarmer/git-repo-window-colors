@@ -25,7 +25,8 @@ Transform your VS Code experience by applying distinctive colors to your workspa
 
 - Optional status bar icon (palette symbol)
 - Configurable visibility: show always or only when no rules match
-- One-click menu to open the configuration editor or temporarily pause coloring
+- One-click access to the configuration editor
+- Optional pause icon to temporarily remove coloring
 
 ---
 
@@ -382,8 +383,8 @@ Quick access to essential functions:
   - Always visible for Git repositories, or
   - Only visible when no repository rules match (helps identify unconfigured repos)
   - Hidden for non-Git workspaces automatically
-- **One-Click Access** - Click the status icon and choose **Open Color Editor** to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it using a random color that you can then tune.
-- **Pause Coloring** - Click the status icon and choose **Pause coloring** to temporarily remove this window's colors (for example, while screen sharing). Colors return automatically after `windowColors.pauseDurationMinutes` minutes (default 5; set to 0 to pause until restored), or immediately when you choose **Restore coloring** from the same menu. While paused the icon changes to a pause symbol, and the pause survives a window reload.
+- **One-Click Access** - Click the status icon to open the configuration editor instantly, if the current repository is not configured a new rule will be created for it using a random color that you can then tune.
+- **Pause Coloring** - Run **GRWC: Pause Coloring** from the Command Palette to temporarily remove this window's colors (for example, while screen sharing). Enable `windowColors.showPauseStatusIcon` to add a pause button next to the status icon instead (off by default). Colors return automatically after `windowColors.pauseDurationMinutes` minutes (default 5; set to 0 to pause until restored), or immediately when you run **GRWC: Restore Coloring** or click the pause button (which shows a play symbol while paused). While paused the status icon's tooltip counts down the minutes until coloring resumes (and the icon changes to a pause symbol when the pause button is enabled), and the pause survives a window reload.
 - **Contextual Information** - Tooltip shows current repository status
 
 ### Multi-Element Coloring

@@ -456,7 +456,14 @@
                         "type": "integer",
                         "default": 5,
                         "minimum": 0,
-                        "description": "Number of minutes that 'Pause coloring' (from the status bar icon menu) removes this window's colors before restoring them automatically. Set to 0 to pause until manually restored.",
+                        "description": "Number of minutes that 'Pause Coloring' removes this window's colors before restoring them automatically. Set to 0 to pause until manually restored.",
+                        "scope": "window"
+                    },
+                    "windowColors.showPauseStatusIcon": {
+                        "order": 28,
+                        "type": "boolean",
+                        "default": false,
+                        "description": "When checked, a pause button is shown next to the status bar icon to pause or restore coloring with one click.",
                         "scope": "window"
                     },
                     "windowColors.previewSelectedRepoRule": {
