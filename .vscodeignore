@@ -1,5 +1,7 @@
 .vscode/**
 .vscode-test/**
+.github/workflows/**
+.github/PUBLISHING.md
 out/test/**
 out/**/*.map
 !out/webview/*.css

@@ -3,7 +3,7 @@
     "displayName": "Git Repo Window Colors",
     "description": "Visually distinguish VS Code windows with configurable and automatic coloring based on repository, branch, or local folder. Supports customizable rules, reusable color profiles, and it works with your preferred theme, because you are in control.",
     "icon": "img/grwc-icon.png",
-    "version": "1.5.33",
+    "version": "1.5.34",
     "preview": true,
     "publisher": "KevinMills",
     "author": {
@@ -614,9 +614,7 @@
         "watch": "webpack --mode development --watch",
         "vscode:prepublish": "yarn run compile",
         "package": "vsce package --yarn",
-        "publish-release": "yarn version --patch --no-git-tag-version && yarn vsce publish",
         "prepublish": "",
-        "publish-prerelease": "yarn version --patch --no-git-tag-version && yarn vsce publish --pre-release",
         "test": "npm run test:all",
         "test:all": "TS_NODE_PROJECT=src/test/tsconfig.json mocha",
         "test:unit": "TS_NODE_PROJECT=src/test/tsconfig.json mocha 'src/test/unit/**/*.test.ts'",

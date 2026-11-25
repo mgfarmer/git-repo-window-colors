@@ -1,0 +1,37 @@
+name: Publish extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Marketplace release channel
+        required: true
+        type: choice
+        default: release
+        options:
+          - release
+          - pre-release
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Publish release
+        if: inputs.channel == 'release'
+        run: npx --yes --package=@vscode/vsce@4.1.1 vsce publish --oidc
+      - name: Publish pre-release
+        if: inputs.channel == 'pre-release'
+        run: npx --yes --package=@vscode/vsce@4.1.1 vsce publish --oidc --pre-release
