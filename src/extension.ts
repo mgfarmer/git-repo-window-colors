@@ -323,13 +323,30 @@ function updatePauseStatusBarItem(primaryVisible: boolean): void {
     pauseStatusBarItem.show();
 }
 
+// Status bar tooltip with a clickable pause/restore link below the given text
+function buildStatusBarTooltip(text: string): vscode.MarkdownString {
+    const md = new vscode.MarkdownString();
+    md.supportThemeIcons = true;
+    md.isTrusted = { enabledCommands: ['windowColors.pauseColoring', 'windowColors.restoreColoring'] };
+    md.appendText(text);
+    md.appendMarkdown('\n\n---\n\n');
+    if (isColoringPaused()) {
+        md.appendMarkdown('[$(debug-start) Restore coloring](command:windowColors.restoreColoring)');
+    } else {
+        md.appendMarkdown(
+            `[$(debug-pause) ${getPauseMenuLabel(getPauseDurationMinutes())}](command:windowColors.pauseColoring)`,
+        );
+    }
+    return md;
+}
+
 function updateStatusBarItem(): void {
     if (!statusBarItem) return;
 
     if (isColoringPaused()) {
         const showPauseIcon = getBooleanSetting('showPauseStatusIcon') ?? false;
         statusBarItem.text = showPauseIcon ? '$(debug-pause)' : '$(symbol-color)';
-        statusBarItem.tooltip = getPauseTooltip(pauseUntil!, Date.now());
+        statusBarItem.tooltip = buildStatusBarTooltip(getPauseTooltip(pauseUntil!, Date.now()));
         statusBarItem.show();
         updatePauseStatusBarItem(true);
         return;
@@ -352,7 +369,7 @@ function updateStatusBarItem(): void {
     const state = getStatusBarState(rules, context, config);
 
     // Apply state to VS Code status bar item
-    statusBarItem.tooltip = state.tooltip;
+    statusBarItem.tooltip = buildStatusBarTooltip(state.tooltip);
     if (state.visible) {
         statusBarItem.show();
     } else {

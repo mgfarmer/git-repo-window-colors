@@ -266,6 +266,20 @@ export enum StatusBarAlignment {
     Right = 2,
 }
 
+export class MarkdownString {
+    value = '';
+    supportThemeIcons?: boolean;
+    isTrusted?: boolean | { readonly enabledCommands: readonly string[] };
+    appendText(value: string): MarkdownString {
+        this.value += value;
+        return this;
+    }
+    appendMarkdown(value: string): MarkdownString {
+        this.value += value;
+        return this;
+    }
+}
+
 // Thenable type alias for compatibility
 export type Thenable<T> = Promise<T>;
 
@@ -430,7 +444,7 @@ export interface OutputChannel {
 
 export interface StatusBarItem {
     text: string;
-    tooltip?: string;
+    tooltip?: string | MarkdownString;
     command?: string;
     alignment?: StatusBarAlignment;
     priority?: number;
